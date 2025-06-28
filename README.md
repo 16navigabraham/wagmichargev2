@@ -1,4 +1,3 @@
-
 # 🔋 Crypto to Airtime Application
 
 **Status:** 🚧 *In Active Development*
@@ -41,7 +40,7 @@ This application bridges the gap between decentralized finance and everyday util
 
 ## 📦 File Structure Preview
 
-```
+\`\`\`
 
 src/
 ├── components/
@@ -49,7 +48,7 @@ src/
 │   ├── ui/           # Reusable UI elements
 │   └── features/     # Feature-specific components
 
-```
+\`\`\`
 
 ---
 
@@ -112,4 +111,4 @@ Frontend Engineer | React & Web3
 
 > ⚠️ This is a **work-in-progress** project. Contributions and feedback are welcome once the initial beta is released.
 
-```
+\`\`\`
