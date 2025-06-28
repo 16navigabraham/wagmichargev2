@@ -1,30 +1,115 @@
-# Wagmi charge v2 clone
 
-*Automatically synced with your [v0.dev](https://v0.dev) deployments*
+# 🔋 Crypto to Airtime Application
 
-[![Deployed on Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?style=for-the-badge&logo=vercel)](https://vercel.com/qasim-rokeebs-projects/v0-wagmi-charge-v2-clone)
-[![Built with v0](https://img.shields.io/badge/Built%20with-v0.dev-black?style=for-the-badge)](https://v0.dev/chat/projects/d6YGkRIHXSV)
+**Status:** 🚧 *In Active Development*
 
-## Overview
+A full-featured platform that enables users to seamlessly convert cryptocurrency into airtime, pay utility bills, and manage digital assets — all through a secure and intuitive interface. Built with scalability, compliance, and user experience at its core.
 
-This repository will stay in sync with your deployed chats on [v0.dev](https://v0.dev).
-Any changes you make to your deployed app will be automatically pushed to this repository from [v0.dev](https://v0.dev).
+---
 
-## Deployment
+## 📌 Project Overview
 
-Your project is live at:
+This application bridges the gap between decentralized finance and everyday utility needs for users in Africa, starting with Nigeria. It enables:
 
-**[https://vercel.com/qasim-rokeebs-projects/v0-wagmi-charge-v2-clone](https://vercel.com/qasim-rokeebs-projects/v0-wagmi-charge-v2-clone)**
+- Crypto-to-airtime conversions
+- Utility payments (TV, electricity, data)
+- Real-time wallet management
+- A secure, modern frontend experience
 
-## Build your app
+---
 
-Continue building your app on:
+## 🏗️ Architecture Summary
 
-**[https://v0.dev/chat/projects/d6YGkRIHXSV](https://v0.dev/chat/projects/d6YGkRIHXSV)**
+### 🔧 Backend (Microservices)
 
-## How It Works
+- **Authentication Service**: JWT, 2FA, KYC/AML
+- **Crypto Payment Engine**: Multi-chain, smart contracts, real-time rates
+- **Utility Gateway**: MTN, Airtel, Glo, 9mobile + DSTV, Startimes, etc.
+- **Database Stack**: PostgreSQL + Redis + MongoDB
+- **Security**: PCI DSS, encryption, audit logs
 
-1. Create and modify your project using [v0.dev](https://v0.dev)
-2. Deploy your chats from the v0 interface
-3. Changes are automatically pushed to this repository
-4. Vercel deploys the latest version from this repository
+### 🖥️ Frontend Stack
+
+- **Framework**: React 18 + TypeScript
+- **Styling**: Tailwind CSS
+- **Mobile**: React Native (shared business logic)
+- **State Management**: Redux Toolkit + RTK Query
+- **Build Tool**: Vite
+- **Charting**: Chart.js for crypto trends
+
+---
+
+## 📦 File Structure Preview
+
+```
+
+src/
+├── components/
+│   ├── layout/       # Header, Sidebar, Footer
+│   ├── ui/           # Reusable UI elements
+│   └── features/     # Feature-specific components
+
+```
+
+---
+
+## ⚙️ Key Features (Frontend)
+
+- 🔐 Wallet connection (MetaMask, WalletConnect)
+- 💱 Real-time crypto to fiat exchange
+- 📱 Utility bill & airtime payments
+- 📊 Conversion calculator with fee breakdown
+- 📡 WebSocket-powered updates
+- 🌗 Dark/light theme & mobile responsiveness
+- 🧪 Full test suite (Unit, E2E, UAT in progress)
+
+---
+
+## 🔐 Security
+
+- Secure token handling with httpOnly cookies
+- Real-time fraud detection & biometric auth
+- Transaction limits and confirmation flows
+
+---
+
+## 🚀 Deployment & DevOps
+
+- CI/CD via GitHub Actions
+- Environment configs for staging & production
+- CDN delivery and monitoring via Sentry, Vitals
+
+---
+
+## 📈 What's Next?
+
+> This project is actively being built. Upcoming milestones:
+
+- [ ] Integrate crypto wallet transactions
+- [ ] Airtime purchase live testing (MTN/Airtel)
+- [ ] Real-time rate locking mechanism
+- [ ] Production-grade API deployments
+- [ ] Cross-platform mobile support
+
+---
+
+## 🧪 Testing Strategy
+
+- Component tests (React Testing Library)
+- Integration flows
+- E2E tests via Cypress
+- Accessibility + performance audits
+
+---
+
+## 👨‍💻 Author
+
+**Qasim Rokeeb**  
+Frontend Engineer | React & Web3  
+[GitHub](https://github.com/Qasim-Rokeeb)
+
+---
+
+> ⚠️ This is a **work-in-progress** project. Contributions and feedback are welcome once the initial beta is released.
+
+```
