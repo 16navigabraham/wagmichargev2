@@ -9,10 +9,31 @@ const portfolioData = {
   change24h: 156.78,
   changePercent: 5.83,
   balances: [
-    { symbol: "BTC", name: "Bitcoin", balance: 0.0234, value: 1234.56, change: 2.34 },
-    { symbol: "ETH", name: "Ethereum", balance: 0.8765, value: 987.65, change: -1.23 },
-    { symbol: "BNB", name: "BNB", balance: 12.34, value: 456.78, change: 4.56 },
-    { symbol: "MATIC", name: "Polygon", balance: 234.56, value: 168.33, change: 8.91 },
+    {
+      symbol: "BTC",
+      name: "Bitcoin",
+      balance: 0.0234,
+      value: 1234.56,
+      change: 2.34,
+      color: "from-orange-500 to-yellow-600",
+    },
+    {
+      symbol: "ETH",
+      name: "Ethereum",
+      balance: 0.8765,
+      value: 987.65,
+      change: -1.23,
+      color: "from-blue-500 to-purple-600",
+    },
+    { symbol: "BNB", name: "BNB", balance: 12.34, value: 456.78, change: 4.56, color: "from-yellow-500 to-orange-600" },
+    {
+      symbol: "MATIC",
+      name: "Polygon",
+      balance: 234.56,
+      value: 168.33,
+      change: 8.91,
+      color: "from-purple-500 to-pink-600",
+    },
   ],
 }
 
@@ -20,10 +41,10 @@ export function PortfolioOverview() {
   const isPositive = portfolioData.changePercent > 0
 
   return (
-    <Card>
+    <Card className="shadow-lg border-2 hover:shadow-xl transition-shadow">
       <CardHeader>
         <CardTitle className="flex items-center space-x-2">
-          <Wallet className="h-5 w-5" />
+          <Wallet className="h-5 w-5 text-blue-600" />
           <span>Portfolio Overview</span>
         </CardTitle>
         <CardDescription>Your cryptocurrency holdings and performance</CardDescription>
@@ -52,9 +73,14 @@ export function PortfolioOverview() {
 
           <div className="grid gap-4 md:grid-cols-2">
             {portfolioData.balances.map((crypto) => (
-              <div key={crypto.symbol} className="flex items-center justify-between p-3 rounded-lg border">
+              <div
+                key={crypto.symbol}
+                className="flex items-center justify-between p-3 rounded-lg border-2 hover:border-blue-200 dark:hover:border-blue-800 transition-colors bg-gradient-to-r from-white to-gray-50 dark:from-gray-800 dark:to-gray-900"
+              >
                 <div className="flex items-center space-x-3">
-                  <div className="h-8 w-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center">
+                  <div
+                    className={`h-8 w-8 rounded-full bg-gradient-to-r ${crypto.color} flex items-center justify-center shadow-md`}
+                  >
                     <span className="text-white font-bold text-xs">{crypto.symbol.slice(0, 2)}</span>
                   </div>
                   <div>

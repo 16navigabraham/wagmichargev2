@@ -6,24 +6,45 @@ import { TrendingUp, TrendingDown, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 const marketData = [
-  { symbol: "BTC", name: "Bitcoin", price: 52847.32, change: 2.34, volume: "28.5B" },
-  { symbol: "ETH", name: "Ethereum", price: 3247.89, change: -1.23, volume: "15.2B" },
-  { symbol: "BNB", name: "BNB", price: 387.45, change: 4.56, volume: "2.8B" },
-  { symbol: "MATIC", name: "Polygon", price: 0.8234, change: 8.91, volume: "1.2B" },
-  { symbol: "ADA", name: "Cardano", price: 0.4567, change: -3.21, volume: "890M" },
-  { symbol: "SOL", name: "Solana", price: 98.76, change: 6.78, volume: "1.8B" },
+  {
+    symbol: "BTC",
+    name: "Bitcoin",
+    price: 52847.32,
+    change: 2.34,
+    volume: "28.5B",
+    color: "from-orange-500 to-yellow-600",
+  },
+  {
+    symbol: "ETH",
+    name: "Ethereum",
+    price: 3247.89,
+    change: -1.23,
+    volume: "15.2B",
+    color: "from-blue-500 to-purple-600",
+  },
+  { symbol: "BNB", name: "BNB", price: 387.45, change: 4.56, volume: "2.8B", color: "from-yellow-500 to-orange-600" },
+  {
+    symbol: "MATIC",
+    name: "Polygon",
+    price: 0.8234,
+    change: 8.91,
+    volume: "1.2B",
+    color: "from-purple-500 to-pink-600",
+  },
+  { symbol: "ADA", name: "Cardano", price: 0.4567, change: -3.21, volume: "890M", color: "from-blue-500 to-cyan-600" },
+  { symbol: "SOL", name: "Solana", price: 98.76, change: 6.78, volume: "1.8B", color: "from-purple-500 to-indigo-600" },
 ]
 
 export function MarketData() {
   return (
-    <Card>
+    <Card className="shadow-lg border-2 hover:shadow-xl transition-shadow">
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
             <CardTitle>Market Data</CardTitle>
             <CardDescription>Live cryptocurrency prices and 24h changes</CardDescription>
           </div>
-          <Button variant="outline" size="sm">
+          <Button variant="outline" size="sm" className="hover:bg-blue-50 dark:hover:bg-blue-900 bg-transparent">
             <RefreshCw className="h-4 w-4 mr-2" />
             Refresh
           </Button>
@@ -35,9 +56,14 @@ export function MarketData() {
             const isPositive = crypto.change > 0
 
             return (
-              <div key={crypto.symbol} className="flex items-center justify-between p-3 rounded-lg border">
+              <div
+                key={crypto.symbol}
+                className="flex items-center justify-between p-3 rounded-lg border-2 hover:border-blue-200 dark:hover:border-blue-800 transition-colors bg-gradient-to-r from-white to-gray-50 dark:from-gray-800 dark:to-gray-900"
+              >
                 <div className="flex items-center space-x-3">
-                  <div className="h-10 w-10 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center">
+                  <div
+                    className={`h-10 w-10 rounded-full bg-gradient-to-r ${crypto.color} flex items-center justify-center shadow-md`}
+                  >
                     <span className="text-white font-bold text-sm">{crypto.symbol.slice(0, 2)}</span>
                   </div>
                   <div>

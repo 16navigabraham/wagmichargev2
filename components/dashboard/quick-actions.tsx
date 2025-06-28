@@ -15,7 +15,7 @@ const actions = [
 
 export function QuickActions() {
   return (
-    <Card>
+    <Card className="shadow-lg border-2 hover:shadow-xl transition-shadow">
       <CardHeader>
         <CardTitle>Quick Actions</CardTitle>
         <CardDescription>Common tasks and services</CardDescription>
@@ -26,11 +26,13 @@ export function QuickActions() {
             <Button
               key={action.name}
               variant="outline"
-              className="h-auto p-4 flex flex-col items-center space-y-2 hover:bg-muted/50 bg-transparent"
+              className="h-auto p-4 flex flex-col items-center space-y-2 hover:bg-gradient-to-r hover:from-blue-50 hover:to-purple-50 dark:hover:from-blue-900 dark:hover:to-purple-900 bg-transparent border-2 hover:border-blue-200 dark:hover:border-blue-800 transition-all group"
               asChild
             >
               <a href={action.href}>
-                <div className={`h-8 w-8 rounded-lg bg-gradient-to-r ${action.color} flex items-center justify-center`}>
+                <div
+                  className={`h-8 w-8 rounded-lg bg-gradient-to-r ${action.color} flex items-center justify-center shadow-md group-hover:scale-110 transition-transform`}
+                >
                   <action.icon className="h-4 w-4 text-white" />
                 </div>
                 <span className="text-xs font-medium text-center">{action.name}</span>
