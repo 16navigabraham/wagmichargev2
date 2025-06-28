@@ -447,7 +447,7 @@ export function LandingPage() {
           </div>
 
           <div className="border-t mt-8 pt-8 text-center text-muted-foreground">
-            <p>© 2024 wagmi charge v2. All rights reserved.</p>
+            <p> © {new Date().getFullYear()} wagmi charge v2. All rights reserved.</p>
           </div>
         </div>
       </footer>
