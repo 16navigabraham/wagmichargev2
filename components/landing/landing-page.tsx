@@ -396,61 +396,60 @@ export function LandingPage() {
           </form>
         </div>
       </section>
-
-      {/* Footer */}
-      <footer className="border-t bg-white/90 backdrop-blur-sm dark:bg-gray-900/90 py-12 px-4">
-        <div className="container mx-auto">
-          <div className="grid md:grid-cols-4 gap-8">
-            <div>
-              <div className="flex items-center space-x-2 mb-4">
-                <div className="h-8 w-8 rounded-lg bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center shadow-lg">
-                  <span className="text-white font-bold text-sm">W</span>
-                </div>
-                <span className="font-bold text-xl bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                  wagmi charge v2
-                </span>
+    {/* Footer Section */}
+    <footer className="bg-white/90 dark:bg-gray-900/90 border-t mt-12">
+      <div className="container mx-auto">
+        <div className="grid md:grid-cols-4 gap-8">
+          <div>
+            <div className="flex items-center space-x-2 mb-4">
+              <div className="h-8 w-8 rounded-lg bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center shadow-lg">
+                <span className="text-white font-bold text-sm">W</span>
               </div>
-              <p className="text-muted-foreground leading-relaxed">
-                The easiest way to convert cryptocurrency to pay for everyday utilities in Nigeria.
-              </p>
+              <span className="font-bold text-xl bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                wagmi charge v2
+              </span>
             </div>
-
-            <div>
-              <h3 className="font-semibold mb-4">Services</h3>
-              <ul className="space-y-2 text-muted-foreground">
-                <li className="hover:text-foreground transition-colors cursor-pointer">Airtime Top-up</li>
-                <li className="hover:text-foreground transition-colors cursor-pointer">TV Subscriptions</li>
-                <li className="hover:text-foreground transition-colors cursor-pointer">Electricity Bills</li>
-                <li className="hover:text-foreground transition-colors cursor-pointer">Internet Services</li>
-              </ul>
-            </div>
-
-            <div>
-              <h3 className="font-semibold mb-4">Support</h3>
-              <ul className="space-y-2 text-muted-foreground">
-                <li className="hover:text-foreground transition-colors cursor-pointer">Help Center</li>
-                <li className="hover:text-foreground transition-colors cursor-pointer">Contact Us</li>
-                <li className="hover:text-foreground transition-colors cursor-pointer">API Documentation</li>
-                <li className="hover:text-foreground transition-colors cursor-pointer">Status Page</li>
-              </ul>
-            </div>
-
-            <div>
-              <h3 className="font-semibold mb-4">Legal</h3>
-              <ul className="space-y-2 text-muted-foreground">
-                <li className="hover:text-foreground transition-colors cursor-pointer">Privacy Policy</li>
-                <li className="hover:text-foreground transition-colors cursor-pointer">Terms of Service</li>
-                <li className="hover:text-foreground transition-colors cursor-pointer">Cookie Policy</li>
-                <li className="hover:text-foreground transition-colors cursor-pointer">Compliance</li>
-              </ul>
-            </div>
+            <p className="text-muted-foreground leading-relaxed">
+              The easiest way  to pay for everyday utilities with cryptocurrency .
+            </p>
           </div>
 
-          <div className="border-t mt-8 pt-8 text-center text-muted-foreground">
-            <p> © {new Date().getFullYear()} wagmi charge v2. All rights reserved.</p>
+          <div>
+            <h3 className="font-semibold mb-4">Services</h3>
+            <ul className="space-y-2 text-muted-foreground">
+              <li className="hover:text-foreground transition-colors cursor-pointer">Airtime Top-up</li>
+              <li className="hover:text-foreground transition-colors cursor-pointer">TV Subscriptions</li>
+              <li className="hover:text-foreground transition-colors cursor-pointer">Electricity Bills</li>
+              <li className="hover:text-foreground transition-colors cursor-pointer">Internet Services</li>
+            </ul>
+          </div>
+
+          <div>
+            <h3 className="font-semibold mb-4">Support</h3>
+            <ul className="space-y-2 text-muted-foreground">
+              <li className="hover:text-foreground transition-colors cursor-pointer">Help Center</li>
+              <li className="hover:text-foreground transition-colors cursor-pointer">Contact Us</li>
+              <li className="hover:text-foreground transition-colors cursor-pointer">API Documentation</li>
+              <li className="hover:text-foreground transition-colors cursor-pointer">Status Page</li>
+            </ul>
+          </div>
+
+          <div>
+            <h3 className="font-semibold mb-4">Legal</h3>
+            <ul className="space-y-2 text-muted-foreground">
+              <li className="hover:text-foreground transition-colors cursor-pointer">Privacy Policy</li>
+              <li className="hover:text-foreground transition-colors cursor-pointer">Terms of Service</li>
+              <li className="hover:text-foreground transition-colors cursor-pointer">Cookie Policy</li>
+              <li className="hover:text-foreground transition-colors cursor-pointer">Compliance</li>
+            </ul>
           </div>
         </div>
-      </footer>
+
+        <div className="border-t mt-8 pt-8 text-center text-muted-foreground">
+          <p> © {new Date().getFullYear()} wagmi charge v2. All rights reserved.</p>
+        </div>
+      </div>
+    </footer>
     </div>
   )
 }
