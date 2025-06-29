@@ -107,6 +107,11 @@ src/
 Frontend Engineer | React & Web3  
 [GitHub](https://github.com/Qasim-Rokeeb)
 
+**Abraham Navigator**  
+Frontend Engineer | React & Solidity  
+[GitHub](https://github.com/16navigabraham/)
+
+
 ---
 
 > ⚠️ This is a **work-in-progress** project. Contributions and feedback are welcome once the initial beta is released.
