@@ -3,17 +3,43 @@
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Dashboard } from "@/components/dashboard/dashboard"
+import { LandingPage } from "@/components/landing/landing-page"
 
-export default function Home() {
+export default function Landing() {
+  const { ready, authenticated, login } = usePrivy()
   const router = useRouter()
 
   useEffect(() => {
-    // Check if user has signed up (in a real app, this would be proper authentication)
-    const userEmail = localStorage.getItem("userEmail")
-    if (!userEmail) {
-      router.push("/landing")
+    if (ready && authenticated) {
+      router.replace("/dashboard")
     }
-  }, [router])
+  }, [ready, authenticated, router])
 
-  return <Dashboard />
+  return (
+    <div>
+      <LandingPage />
+      <div style={{ marginTop: 32, textAlign: "center" }}>
+        <button
+          onClick={login}
+          style={{
+            padding: "12px 24px",
+            fontSize: "16px",
+            borderRadius: "6px",
+            background: "#111",
+            color: "#fff",
+            border: "none",
+            cursor: "pointer"
+          }}
+          disabled={!ready || authenticated}
+        >
+          {authenticated ? "Logged in" : "Login / Sign up"}
+        </button>
+      </div>
+    </div>
+  )
 }
+
+function usePrivy(): { ready: any; authenticated: any; login: any } {
+  throw new Error("Function not implemented.")
+}
+
