@@ -2,8 +2,8 @@
 
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Dashboard } from "@/components/dashboard/dashboard"
 import { LandingPage } from "@/components/landing/landing-page"
+import { usePrivy } from "@privy-io/react-auth"
 
 export default function Landing() {
   const { ready, authenticated, login } = usePrivy()
@@ -18,7 +18,7 @@ export default function Landing() {
   return (
     <div>
       <LandingPage />
-      <div style={{ marginTop: 32, textAlign: "center" }}>
+      <div>
         <button
           onClick={login}
           style={{
@@ -38,8 +38,4 @@ export default function Landing() {
     </div>
   )
 }
-
-function usePrivy(): { ready: any; authenticated: any; login: any } {
-  throw new Error("Function not implemented.")
-}
-
+       
