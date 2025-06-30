@@ -296,34 +296,13 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
           <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
             Join thousands of users who are already converting their cryptocurrency to pay for everyday services
           </p>
-          <Button onClick={() => setShowModal(true)} variant="default">
+          <Button
+            onClick={() => window.open("https://docs.google.com/forms/d/e/1FAIpQLSfJwqjdrbTqc6utB9R9ZtRhcpkuBD2AP_S8U_forsFFb1s1Yw/viewform", "_blank")}
+            variant="default"
+          >
             Join the Waitlist
           </Button>
         </div>
-
-        {showModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-white dark:bg-gray-900 p-6 rounded-xl shadow-xl max-w-2xl w-full relative animate-fade-in">
-              <button
-                className="absolute top-3 right-3 text-gray-500 hover:text-gray-800 dark:hover:text-white"
-                onClick={() => setShowModal(false)}
-              >
-                <X className="h-5 w-5" />
-              </button>
-              <iframe
-                src="https://docs.google.com/forms/d/e/1FAIpQLSfJwqjdrbTqc6utB9R9ZtRhcpkuBD2AP_S8U_forsFFb1s1Yw/viewform?embedded=true"
-                width="100%"
-                height="700"
-                frameBorder="0"
-                marginHeight={0}
-                marginWidth={0}
-                className="rounded-lg"
-              >
-                Loading…
-              </iframe>
-            </div>
-          </div>
-        )}
       </section>
 
       {/* Footer Section */}

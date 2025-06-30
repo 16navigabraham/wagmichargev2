@@ -1,19 +1,19 @@
-"use client"
+"use client";
 
-import { useEffect } from "react"
-import { useRouter } from "next/navigation"
-import { Dashboard } from "@/components/dashboard/dashboard"
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { Dashboard } from "@/components/dashboard/dashboard";
 
-export default function Home() {
-  const router = useRouter()
+export default function DashboardPage() {
+  const router = useRouter();
 
   useEffect(() => {
     // Check if user has signed up (in a real app, this would be proper authentication)
-    const userEmail = localStorage.getItem("userEmail")
+    const userEmail = typeof window !== "undefined" ? localStorage.getItem("userEmail") : null;
     if (!userEmail) {
-      router.push("/landing")
+      router.replace("/landing");
     }
-  }, [router])
+  }, [router]);
 
-  return <Dashboard />
+  return <Dashboard />;
 }

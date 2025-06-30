@@ -2,15 +2,14 @@ import type React from "react"
 import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
-import { ThemeProvider } from "@/components/theme-provider"
-import { PrivyProvider } from "@privy-io/react-auth"
+import { ClientProviders } from "@/components/ClientProviders"
 
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
   title: "wagmi charge v2 - Crypto to Utilities",
   description: "Convert cryptocurrency to pay for airtime, TV subscriptions, electricity bills, and more",
-    generator: 'v0.dev'
+  generator: 'v0.dev'
 }
 
 export default function RootLayout({
@@ -19,11 +18,12 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <PrivyProvider appId={process.env.NEXT_PUBLIC_PRIVY_APP_ID!}>
-      <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+    <html lang="en" className={inter.className}>
+      <body>
+        <ClientProviders>
           {children}
-        </ThemeProvider>
-    </PrivyProvider>
+        </ClientProviders>
+      </body>
+    </html>
   )
 }
-    
