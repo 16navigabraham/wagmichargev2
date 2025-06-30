@@ -5,7 +5,7 @@ import { PortfolioOverview } from "./portfolio-overview"
 import { QuickActions } from "./quick-actions"
 import { RecentTransactions } from "./recent-transactions"
 import { MarketData } from "./market-data"
-import { WalletConnection } from "./wallet-connection"
+// import { WalletConnection } from "./wallet-connection"
 
 export function Dashboard() {
   return (
@@ -20,9 +20,9 @@ export function Dashboard() {
           <div className="lg:col-span-3">
             <PortfolioOverview />
           </div>
-          <div>
+          {/* <div>
             <WalletConnection />
-          </div>
+          </div> */}
         </div>
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
