@@ -1,69 +1,69 @@
-// "use client"
+"use client"
 
-// import { useState } from "react"
-// import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-// import { Button } from "@/components/ui/button"
-// import { Badge } from "@/components/ui/badge"
-// import { Wallet, CheckCircle, AlertCircle, ExternalLink } from "lucide-react"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Wallet, CheckCircle, ExternalLink, Link2, Unlink } from "lucide-react"
+import { getExplorerConfig } from "@/lib/explorer"
 
-// const wallets = [
-//   { name: "MetaMask", connected: true, address: "0x1234...5678" },
-//   { name: "Trust Wallet", connected: false, address: null },
-//   { name: "WalletConnect", connected: false, address: null },
-// ]
-
-// export function WalletConnection() {
-//   const [connecting, setConnecting] = useState<string | null>(null)
-
-//   const handleConnect = async (walletName: string) => {
-//     setConnecting(walletName)
-//     // Simulate connection delay
-//     await new Promise((resolve) => setTimeout(resolve, 2000))
-//     setConnecting(null)
-//   }
-
-//   return (
-//     <Card>
-//       <CardHeader>
-//         <CardTitle className="flex items-center space-x-2">
-//           <Wallet className="h-5 w-5" />
-//           <span>Wallet Connection</span>
-//         </CardTitle>
-//         <CardDescription>Connect your crypto wallets</CardDescription>
-//       </CardHeader>
-//       <CardContent>
-//         <div className="space-y-3">
-//           {wallets.map((wallet) => (
-//             <div key={wallet.name} className="flex items-center justify-between p-3 rounded-lg border">
-//               <div className="flex items-center space-x-3">
-//                 <div className="h-8 w-8 rounded-full bg-gradient-to-r from-orange-500 to-red-600 flex items-center justify-center">
-//                   <Wallet className="h-4 w-4 text-white" />
-//                 </div>
-//                 <div>
-//                   <div className="font-medium">{wallet.name}</div>
-//                   {wallet.connected && wallet.address && (
-//                     <div className="text-sm text-muted-foreground flex items-center space-x-1">
-//                       <span>{wallet.address}</span>
-//                       <ExternalLink className="h-3 w-3" />
-//                     </div>
-//                   )}
-//                 </div>
-//               </div>
-//               <div className="flex items-center space-x-2">
-//                 {wallet.connected ? (
-//                   <Badge variant="default" className="flex items-center space-x-1">
-//                     <CheckCircle className="h-3 w-3" />
-//                     <span>Connected</span>
-//                   </Badge>
-//                 ) : (
-//                   <Button
-//                     size="sm"
-//                     variant="outline"
-//                     onClick={() => handleConnect(wallet.name)}
-//                     disabled={connecting === wallet.name}
-//                   >
-//                     {connecting === wallet.name ? "Connecting..." : "Connect"}
-//                   </Button>
+export function WalletConnection({ wallets, linkWallet, unlinkWallet, connectedWallet }: {
+  wallets: any[],
+  linkWallet: () => void,
+  unlinkWallet: (address: string) => void,
+  connectedWallet: any
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center space-x-2">
+          <Wallet className="h-5 w-5" />
+          <span>Wallet Connection</span>
+        </CardTitle>
+        <CardDescription>Connect your crypto wallets</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-3">
+          {wallets && wallets.length > 0 ? (
+            wallets.map((wallet) => {
+              const explorer = wallet.chain ? getExplorerConfig(wallet.chain).explorer : "https://etherscan.io"
+              return (
+                <div key={wallet.address} className="flex items-center justify-between p-3 rounded-lg border">
+                  <div className="flex items-center space-x-3">
+                    <div className="h-8 w-8 rounded-full bg-gradient-to-r from-orange-500 to-red-600 flex items-center justify-center">
+                      <Wallet className="h-4 w-4 text-white" />
+                    </div>
+                    <div>
+                      <div className="font-medium">{wallet.connectorType}</div>
+                      <div className="text-sm text-muted-foreground flex items-center space-x-1">
+                        <span>{wallet.address}</span>
+                        <a href={`${explorer}/address/${wallet.address}`} target="_blank" rel="noopener noreferrer">
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Badge variant="default" className="flex items-center space-x-1">
+                      <CheckCircle className="h-3 w-3" />
+                      <span>Connected</span>
+                    </Badge>
+                    <Button size="sm" variant="outline" onClick={() => unlinkWallet(wallet.address)}>
+                      <Unlink className="h-3 w-3 mr-1" /> Disconnect
+                    </Button>
+                  </div>
+                </div>
+              )
+            })
+          ) : (
+            <Button size="sm" variant="outline" onClick={linkWallet}>
+              <Link2 className="h-4 w-4 mr-1" /> Connect Wallet
+            </Button>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
 //                 )}
 //               </div>
 //             </div>
