@@ -1,107 +1,141 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { TrendingUp, TrendingDown, DollarSign, Wallet } from "lucide-react"
+import { DollarSign, Wallet } from "lucide-react"
 
-const portfolioData = {
-  totalValue: 2847.32,
-  change24h: 156.78,
-  changePercent: 5.83,
-  balances: [
-    {
-      symbol: "BTC",
-      name: "Bitcoin",
-      balance: 0.0234,
-      value: 1234.56,
-      change: 2.34,
-      color: "from-orange-500 to-yellow-600",
-    },
-    {
-      symbol: "ETH",
-      name: "Ethereum",
-      balance: 0.8765,
-      value: 987.65,
-      change: -1.23,
-      color: "from-blue-500 to-purple-600",
-    },
-    { symbol: "BNB", name: "BNB", balance: 12.34, value: 456.78, change: 4.56, color: "from-yellow-500 to-orange-600" },
-    {
-      symbol: "MATIC",
-      name: "Polygon",
-      balance: 234.56,
-      value: 168.33,
-      change: 8.91,
-      color: "from-purple-500 to-pink-600",
-    },
-  ],
+// Base chain contract addresses (update if needed)
+const USDT_CONTRACT = "0xA7D7079b0FEAD91F3e65f86E8915Cb59c1a4C664"
+const USDC_CONTRACT = "0xd9AAEC86B65d86F6A7B5b1b0c42FFA531710b6CA"
+
+const supportedTokens = [
+	{ symbol: "ETH", name: "Ethereum", coingeckoId: "ethereum", color: "from-blue-500 to-purple-600" },
+	{ symbol: "USDT", name: "Tether", coingeckoId: "tether", color: "from-green-500 to-emerald-600", contract: USDT_CONTRACT, decimals: 6 },
+	{ symbol: "USDC", name: "USD Coin", coingeckoId: "usd-coin", color: "from-blue-400 to-cyan-600", contract: USDC_CONTRACT, decimals: 6 },
+]
+
+async function fetchEthBalance(address: string) {
+	const apiKey = process.env.NEXT_PUBLIC_ETHERSCAN_API_KEY
+	const res = await fetch(
+		`https://api.etherscan.io/v2/api?chainid=8453&module=account&action=balance&address=${address}&tag=latest&apikey=${apiKey}`
+	)
+	const data = await res.json()
+	if (data.status === "1") {
+		return Number(data.result) / 1e18
+	}
+	return 0
 }
 
-export function PortfolioOverview() {
-  const isPositive = portfolioData.changePercent > 0
-
-  return (
-    <Card className="shadow-lg border-2 hover:shadow-xl transition-shadow">
-      <CardHeader>
-        <CardTitle className="flex items-center space-x-2">
-          <Wallet className="h-5 w-5 text-blue-600" />
-          <span>Portfolio Overview</span>
-        </CardTitle>
-        <CardDescription>Your cryptocurrency holdings and performance</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="flex items-center space-x-2">
-                <DollarSign className="h-4 w-4 text-muted-foreground" />
-                <span className="text-2xl font-bold">${portfolioData.totalValue.toLocaleString()}</span>
-              </div>
-              <div className="flex items-center space-x-2 mt-1">
-                {isPositive ? (
-                  <TrendingUp className="h-4 w-4 text-green-500" />
-                ) : (
-                  <TrendingDown className="h-4 w-4 text-red-500" />
-                )}
-                <span className={`text-sm font-medium ${isPositive ? "text-green-500" : "text-red-500"}`}>
-                  ${Math.abs(portfolioData.change24h).toFixed(2)} ({portfolioData.changePercent.toFixed(2)}%)
-                </span>
-                <span className="text-sm text-muted-foreground">24h</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            {portfolioData.balances.map((crypto) => (
-              <div
-                key={crypto.symbol}
-                className="flex items-center justify-between p-3 rounded-lg border-2 hover:border-blue-200 dark:hover:border-blue-800 transition-colors bg-gradient-to-r from-white to-gray-50 dark:from-gray-800 dark:to-gray-900"
-              >
-                <div className="flex items-center space-x-3">
-                  <div
-                    className={`h-8 w-8 rounded-full bg-gradient-to-r ${crypto.color} flex items-center justify-center shadow-md`}
-                  >
-                    <span className="text-white font-bold text-xs">{crypto.symbol.slice(0, 2)}</span>
-                  </div>
-                  <div>
-                    <div className="font-medium">{crypto.symbol}</div>
-                    <div className="text-sm text-muted-foreground">
-                      {crypto.balance} {crypto.symbol}
-                    </div>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="font-medium">${crypto.value.toFixed(2)}</div>
-                  <Badge variant={crypto.change > 0 ? "default" : "destructive"} className="text-xs">
-                    {crypto.change > 0 ? "+" : ""}
-                    {crypto.change.toFixed(2)}%
-                  </Badge>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  )
+async function fetchErc20Balance(address: string, contract: string, decimals: number) {
+	const apiKey = process.env.NEXT_PUBLIC_ETHERSCAN_API_KEY
+	const res = await fetch(
+		`https://api.etherscan.io/v2/api?chainid=8453&module=account&action=tokenbalance&contractaddress=${contract}&address=${address}&tag=latest&apikey=${apiKey}`
+	)
+	const data = await res.json()
+	if (data.status === "1") {
+		return Number(data.result) / 10 ** decimals
+	}
+	return 0
 }
+
+async function fetchPrices() {
+	const ids = supportedTokens.map((t) => t.coingeckoId).join(",")
+	const res = await fetch(
+		`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd,ngn`
+	)
+	return await res.json()
+}
+
+export function PortfolioOverview({ wallet }: { wallet: any }) {
+	const [balances, setBalances] = useState<any[]>([])
+	const [prices, setPrices] = useState<any>({})
+	const [loading, setLoading] = useState(false)
+
+	useEffect(() => {
+		if (!wallet?.address) return
+		setLoading(true)
+		Promise.all([
+			fetchEthBalance(wallet.address),
+			fetchErc20Balance(wallet.address, USDT_CONTRACT, 6),
+			fetchErc20Balance(wallet.address, USDC_CONTRACT, 6),
+			fetchPrices(),
+		]).then(([eth, usdt, usdc, priceData]) => {
+			setBalances([
+				{ symbol: "ETH", name: "Ethereum", balance: eth, color: "from-blue-500 to-purple-600" },
+				{ symbol: "USDT", name: "Tether", balance: usdt, color: "from-green-500 to-emerald-600" },
+				{ symbol: "USDC", name: "USD Coin", balance: usdc, color: "from-blue-400 to-cyan-600" },
+			])
+			setPrices(priceData)
+			setLoading(false)
+		})
+	}, [wallet])
+
+	const totalValue = balances.reduce((sum, b) => {
+		const token = supportedTokens.find((t) => t.symbol === b.symbol)
+		const price = token && prices[token.coingeckoId]?.usd ? prices[token.coingeckoId].usd : 0
+		return sum + b.balance * price
+	}, 0)
+
+	return (
+		<Card className="shadow-lg border-2 hover:shadow-xl transition-shadow">
+			<CardHeader>
+				<CardTitle className="flex items-center space-x-2">
+					<Wallet className="h-5 w-5 text-blue-600" />
+					<span>Portfolio Overview</span>
+				</CardTitle>
+				<CardDescription>Your cryptocurrency holdings and performance</CardDescription>
+			</CardHeader>
+			<CardContent>
+				<div className="space-y-6">
+					<div className="flex items-center justify-between">
+						<div>
+							<div className="flex items-center space-x-2">
+								<DollarSign className="h-4 w-4 text-muted-foreground" />
+								<span className="text-2xl font-bold">
+									{loading ? "Loading..." : `$${totalValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
+								</span>
+							</div>
+						</div>
+					</div>
+
+					<div className="grid gap-4 md:grid-cols-2">
+						{balances.map((crypto) => {
+							const token = supportedTokens.find((t) => t.symbol === crypto.symbol)
+							const price = token ? prices[token.coingeckoId] : undefined
+							return (
+								<div
+									key={crypto.symbol}
+									className="flex items-center justify-between p-3 rounded-lg border-2 hover:border-blue-200 dark:hover:border-blue-800 transition-colors bg-gradient-to-r from-white to-gray-50 dark:from-gray-800 dark:to-gray-900"
+								>
+									<div className="flex items-center space-x-3">
+										<div
+											className={`h-8 w-8 rounded-full bg-gradient-to-r ${crypto.color} flex items-center justify-center shadow-md`}
+										>
+											<span className="text-white font-bold text-xs">{crypto.symbol.slice(0, 2)}</span>
+										</div>
+										<div>
+											<div className="font-medium">{crypto.symbol}</div>
+											<div className="text-sm text-muted-foreground">
+												{crypto.balance} {crypto.symbol}
+											</div>
+										</div>
+									</div>
+									<div className="text-right">
+										<div className="font-medium">
+											{price ? `$${(crypto.balance * price.usd).toLocaleString(undefined, { maximumFractionDigits: 2 })}` : "--"}
+										</div>
+										<Badge variant="default" className="text-xs">
+											{price ? `₦${(crypto.balance * price.ngn).toLocaleString(undefined, { maximumFractionDigits: 2 })}` : "--"}
+										</Badge>
+									</div>
+								</div>
+							)
+						})}
+					</div>
+				</div>
+			</CardContent>
+		</Card>
+	)
+}
+
