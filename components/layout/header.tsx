@@ -8,7 +8,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
@@ -79,11 +78,8 @@ export function Header({ onMenuClick }: HeaderProps) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel>My Account</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem>Profile</DropdownMenuItem>
-              <DropdownMenuItem>Settings</DropdownMenuItem>
-              <DropdownMenuItem>Security</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => router.push("/settings")}>Settings</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => router.push("/security")}>Security</DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleSignOut}>Sign out</DropdownMenuItem>
             </DropdownMenuContent>
@@ -93,3 +89,4 @@ export function Header({ onMenuClick }: HeaderProps) {
     </header>
   )
 }
+    
