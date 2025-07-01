@@ -2,18 +2,23 @@
 
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Dashboard } from "@/components/dashboard/dashboard"
+import { LandingPage } from "@/components/landing/landing-page"
+import { usePrivy } from "@privy-io/react-auth"
 
-export default function Home() {
+export default function Landing() {
+  const { ready, authenticated, login, signup } = usePrivy()
   const router = useRouter()
 
   useEffect(() => {
-    // Check if user has signed up (in a real app, this would be proper authentication)
-    const userEmail = localStorage.getItem("userEmail")
-    if (!userEmail) {
-      router.push("/landing")
+    if (ready && authenticated) {
+      router.replace("/dashboard")
     }
-  }, [router])
+  }, [ready, authenticated, router])
 
-  return <Dashboard />
+  return (
+    <LandingPage
+      onSignIn={login}
+      onSignUp={signup}
+    />
+  )
 }
