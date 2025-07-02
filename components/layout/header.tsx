@@ -26,7 +26,8 @@ export function Header({ onMenuClick }: HeaderProps) {
 
   const handleSignOut = () => {
     localStorage.removeItem("userEmail")
-    router.push("/landing")
+    // Optionally, disconnect wallet here if using a wallet provider
+    router.push("/")
   }
 
   return (
@@ -89,4 +90,4 @@ export function Header({ onMenuClick }: HeaderProps) {
     </header>
   )
 }
-    
+
