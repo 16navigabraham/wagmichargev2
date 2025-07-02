@@ -1,16 +1,139 @@
 "use client"
 
+import { useState, useEffect } from "react"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Badge } from "@/components/ui/badge"
+
+const CRYPTOS = [
+	{ symbol: "ETH", name: "Ethereum", coingeckoId: "ethereum" },
+	{ symbol: "USDT", name: "Tether", coingeckoId: "tether" },
+	{ symbol: "USDC", name: "USD Coin", coingeckoId: "usd-coin" },
+]
+
+const PROVIDERS = [
+	{ id: "mtn", name: "MTN" },
+	{ id: "airtel", name: "Airtel" },
+	{ id: "glo", name: "Glo" },
+	{ id: "9mobile", name: "9mobile" },
+]
+
+async function fetchPrices() {
+	const ids = CRYPTOS.map((c) => c.coingeckoId).join(",")
+	const res = await fetch(
+		`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=ngn`
+	)
+	return await res.json()
+}
+
 export default function AirtimePage() {
-  return (
-    <div className="container py-10">
-      <h1 className="text-3xl font-bold mb-4">Buy Airtime</h1>
-      <p className="text-muted-foreground mb-8">
-        Instantly top up your mobile airtime using USDT, USDC, or ETH on Base chain.
-      </p>
-      {/* Integrate your conversion calculator or airtime form here */}
-      <div className="rounded-lg border p-6 bg-background">
-        <p>Coming soon: Buy airtime for MTN, Airtel, Glo, and 9mobile with crypto.</p>
-      </div>
-    </div>
-  )
+	const [crypto, setCrypto] = useState("")
+	const [provider, setProvider] = useState("")
+	const [amount, setAmount] = useState("")
+	const [prices, setPrices] = useState<any>({})
+	const [loading, setLoading] = useState(false)
+
+	useEffect(() => {
+		setLoading(true)
+		fetchPrices().then((data) => {
+			setPrices(data)
+			setLoading(false)
+		})
+	}, [])
+
+	const selectedCrypto = CRYPTOS.find((c) => c.symbol === crypto)
+	const priceNGN = selectedCrypto ? prices[selectedCrypto.coingeckoId]?.ngn : null
+	const amountNGN = Number(amount) || 0
+	const cryptoNeeded = priceNGN ? amountNGN / priceNGN : 0
+
+	return (
+		<div className="container py-10 max-w-xl mx-auto">
+			<h1 className="text-3xl font-bold mb-4">Buy Airtime</h1>
+			<p className="text-muted-foreground mb-8">
+				Instantly top up your mobile airtime using USDT, USDC, or ETH on Base
+				chain.
+			</p>
+			<Card>
+				<CardHeader>
+					<CardTitle>Crypto to Airtime</CardTitle>
+					<CardDescription>
+						Preview and calculate your airtime purchase with crypto
+					</CardDescription>
+				</CardHeader>
+				<CardContent className="space-y-6">
+					<div className="space-y-4">
+						<div className="space-y-2">
+							<Label htmlFor="crypto">Pay With</Label>
+							<Select value={crypto} onValueChange={setCrypto}>
+								<SelectTrigger>
+									<SelectValue placeholder="Select crypto" />
+								</SelectTrigger>
+								<SelectContent>
+									{CRYPTOS.map((c) => (
+										<SelectItem key={c.symbol} value={c.symbol}>
+											{c.symbol} - {c.name}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						</div>
+						<div className="space-y-2">
+							<Label htmlFor="provider">Network Provider</Label>
+							<Select value={provider} onValueChange={setProvider}>
+								<SelectTrigger>
+									<SelectValue placeholder="Select provider" />
+								</SelectTrigger>
+								<SelectContent>
+									{PROVIDERS.map((p) => (
+										<SelectItem key={p.id} value={p.id}>
+											{p.name}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						</div>
+						<div className="space-y-2">
+							<Label htmlFor="amount">Amount (NGN)</Label>
+							<Input
+								id="amount"
+								type="number"
+								min={1}
+								placeholder="Enter amount in Naira"
+								value={amount}
+								onChange={(e) => setAmount(e.target.value)}
+							/>
+						</div>
+					</div>
+					<div className="border-t pt-4 space-y-2">
+						<div className="flex justify-between text-sm">
+							<span>Conversion Rate:</span>
+							<span>
+								{selectedCrypto && priceNGN
+									? `₦${priceNGN.toLocaleString()} / 1 ${selectedCrypto.symbol}`
+									: "--"}
+							</span>
+						</div>
+						<div className="flex justify-between text-sm">
+							<span>You will pay:</span>
+							<span>
+								{crypto && amount && priceNGN ? (
+									<Badge variant="outline">
+										{cryptoNeeded.toFixed(6)} {crypto}
+									</Badge>
+								) : (
+									"--"
+								)}
+							</span>
+						</div>
+					</div>
+					<Button className="w-full" disabled>
+						Purchase (Coming Soon)
+					</Button>
+				</CardContent>
+			</Card>
+		</div>
+	)
 }
