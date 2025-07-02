@@ -1,0 +1,5 @@
+onlyBuiltDependencies:
+  - '@reown/appkit'
+  - bufferutil
+  - sharp
+  - utf-8-validate
