@@ -62,14 +62,19 @@ export function Header({ onMenuClick }: HeaderProps) {
             <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
           </Button>
 
-          <Button variant="ghost" size="icon" className="relative">
+            <Button
+            variant="ghost"
+            size="icon"
+            className="relative"
+            onClick={() => router.push("/dashboard/recent-transactions")}
+            >
             <Bell className="h-5 w-5" />
             {notifications > 0 && (
               <Badge className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs">
-                {notifications}
+              {notifications}
               </Badge>
             )}
-          </Button>
+            </Button>
 
           <Button variant="ghost" size="icon">
             <Wallet className="h-5 w-5" />
