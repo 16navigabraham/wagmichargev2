@@ -14,6 +14,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { useTheme } from "next-themes"
 import { useRouter } from "next/navigation"
+import { usePrivy } from "@privy-io/react-auth"
 
 interface HeaderProps {
   onMenuClick: () => void
@@ -24,10 +25,12 @@ export function Header({ onMenuClick }: HeaderProps) {
   const [notifications] = useState(3)
   const router = useRouter()
 
-  const handleSignOut = () => {
+  const { logout } = usePrivy()
+
+  const handleSignOut = async () => {
     localStorage.removeItem("userEmail")
-    // Optionally, disconnect wallet here if using a wallet provider
-    router.push("/")
+    await logout() // Disconnect Privy wallet/session
+    router.push("/") // Redirect to app/page.tsx ("/" is the root)
   }
 
   return (
