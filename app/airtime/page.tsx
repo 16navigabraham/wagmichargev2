@@ -106,6 +106,15 @@ export default function AirtimePage() {
 								onChange={(e) => setAmount(e.target.value)}
 							/>
 						</div>
+						<div className="space-y-2">
+							<Label htmlFor="phone">Phone Number</Label>
+							<Input
+								id="phone"
+								type="tel"
+								placeholder="e.g. 08012345678"
+								// Optionally, add value and onChange for controlled input
+							/>
+						</div>
 					</div>
 					<div className="border-t pt-4 space-y-2">
 						<div className="flex justify-between text-sm">
