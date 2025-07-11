@@ -1,11 +1,12 @@
 "use client"
 
 import type React from "react"
-import { ArrowRight, Sun, Moon, Shield, Clock, Users, TrendingUp, CheckCircle, Globe, Star, KeyRound, Zap, X } from "lucide-react"
+import { ArrowRight,Sun, Moon, Shield, Clock, Users, TrendingUp, CheckCircle, Globe, Star, KeyRound, Zap, X } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useTheme } from "next-themes"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { MdOutlineSpeed } from "react-icons/md";
 import {
   Card,
   CardContent,
@@ -27,6 +28,12 @@ const features = [
     icon: Clock,
     title: "24/7 Available",
     description: "Convert and pay anytime, anywhere with our automated system",
+    color: "from-indigo-500 to-purple-600",
+  },
+  {
+    icon: MdOutlineSpeed,
+    title: "Instant Payments",
+    description: "A fast payment platform ensures that users can pay bills, receive confirmations, and complete transactions within seconds.",
     color: "from-indigo-500 to-purple-600",
   },
 ]
@@ -98,11 +105,11 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
                 <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
               </Button>
               <Button variant="outline" onClick={login}>
-                Sign In
+                Launch App
               </Button>
-              <Button variant="default" onClick={signUp}>
+              {/* <Button variant="default" onClick={signUp}>
                 Sign Up
-              </Button>
+              </Button> */}
             </div>
           </div>
         </div>
