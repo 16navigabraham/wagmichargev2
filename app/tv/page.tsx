@@ -1,8 +1,11 @@
 "use client"
-
+import BackToDashboard from "@/components/BackToDashboard"
+import AuthGuard from "@/components/AuthGuard"
 export default function TVPage() {
   return (
+       <AuthGuard>
     <div className="container py-10">
+       <BackToDashboard /> {/* 👈 Add this at the top */}
       <h1 className="text-3xl font-bold mb-4">Pay TV Subscription</h1>
       <p className="text-muted-foreground mb-8">
         Pay for DSTV, GOtv, or Startimes subscriptions using USDT, USDC, or ETH on Base chain.
@@ -12,5 +15,6 @@ export default function TVPage() {
         <p>Coming soon: Pay for your TV subscription with crypto.</p>
       </div>
     </div>
+       </AuthGuard>
   )
 }

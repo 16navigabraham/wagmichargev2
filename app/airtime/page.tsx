@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
+import BackToDashboard from '@/components/BackToDashboard'
+import AuthGuard from "@/components/AuthGuard"
 
 const CRYPTOS = [
 	{ symbol: "ETH", name: "Ethereum", coingeckoId: "ethereum" },
@@ -50,7 +52,9 @@ export default function AirtimePage() {
 	const cryptoNeeded = priceNGN ? amountNGN / priceNGN : 0
 
 	return (
+		  <AuthGuard>
 		<div className="container py-10 max-w-xl mx-auto">
+             <BackToDashboard /> {/* 👈 Add this at the top */}
 			<h1 className="text-3xl font-bold mb-4">Buy Airtime</h1>
 			<p className="text-muted-foreground mb-8">
 				Instantly top up your mobile airtime using USDT, USDC, or ETH on Base
@@ -112,6 +116,7 @@ export default function AirtimePage() {
 								id="phone"
 								type="tel"
 								placeholder="e.g. 08012345678"
+								maxLength={11}
 								// Optionally, add value and onChange for controlled input
 							/>
 						</div>
@@ -143,6 +148,8 @@ export default function AirtimePage() {
 					</Button>
 				</CardContent>
 			</Card>
+			
 		</div>
+		   </AuthGuard>
 	)
 }
