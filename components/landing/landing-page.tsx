@@ -187,9 +187,9 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
               <div className="h-16 w-16 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center mx-auto mb-4 shadow-lg group-hover:scale-110 transition-transform">
                 <span className="text-white font-bold text-xl">1</span>
               </div>
-              <h3 className="text-xl font-semibold mb-2">sign up or sign in</h3>
+              <h3 className="text-xl font-semibold mb-2">Launch App</h3>
               <p className="text-muted-foreground leading-relaxed">
-                Click the sign up button to create an account or sign in with your existing account
+                Click on the launch app to get started.
               </p>
             </div>
 

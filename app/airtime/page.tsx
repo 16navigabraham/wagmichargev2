@@ -115,8 +115,8 @@ export default function AirtimePage() {
 							<Input
 								id="phone"
 								type="tel"
-								placeholder="e.g. 08012345678"
-								maxLength={11}
+								placeholder="e.g. 080*********"
+								max="11"
 								// Optionally, add value and onChange for controlled input
 							/>
 						</div>
