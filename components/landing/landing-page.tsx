@@ -312,9 +312,10 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
         </div>
       </section>
 
+      tsx
       {/* Footer Section */}
       <footer className="bg-white/90 dark:bg-gray-900/90 border-t mt-12">
-        <div className="container mx-auto">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8"> {/* Added mx-auto and responsive padding */}
           <div className="grid md:grid-cols-4 gap-8">
             <div>
               <div className="flex items-center space-x-2 mb-4">
@@ -326,7 +327,7 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
                 </span>
               </div>
               <p className="text-muted-foreground leading-relaxed">
-                The easiest way  to pay for everyday utilities with cryptocurrency .
+                The easiest way to pay for everyday utilities with cryptocurrency .
               </p>
               <div className="flex space-x-4 mt-4">
                 <a href="https://x.com/yourproject" target="_blank" rel="noopener noreferrer" aria-label="X (Twitter)">
