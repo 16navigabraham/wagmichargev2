@@ -16,13 +16,13 @@ const CRYPTOS = [
 	{ symbol: "USDC", name: "USD Coin", coingeckoId: "usd-coin" },
 ]
 
-interface InternetProvider {
-	serviceID: string
-	name: string
-	minimumAmount?: string
-	maximumAmount?: string
-	convinience_fee?: string
-}
+// Static data providers as requested
+const DATA_PROVIDERS = [
+	{ id: "mtn", name: "MTN" },
+	{ id: "glo", name: "GLO" },
+	{ id: "airtel", name: "AIRTEL" },
+	{ id: "9mobile", name: "9MOBILE" },
+]
 
 interface InternetPlan {
 	variation_code: string
@@ -31,34 +31,17 @@ interface InternetPlan {
 	fixedPrice: string
 }
 
-// Move API keys to server-side only - don't expose in client
+// Generate unique requestId
+function generateRequestId(): string {
+	return `${Date.now()}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`
+}
+
 async function fetchPrices() {
 	const ids = CRYPTOS.map((c) => c.coingeckoId).join(",")
 	const res = await fetch(
 		`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=ngn`
 	)
 	return await res.json()
-}
-
-async function fetchInternetProviders() {
-	try {
-		const response = await fetch('/api/vtpass/services?identifier=internet', {
-			method: 'GET',
-			headers: {
-				'Content-Type': 'application/json',
-			},
-		})
-		
-		if (!response.ok) {
-			throw new Error(`HTTP error! status: ${response.status}`)
-		}
-		
-		const data = await response.json()
-		return data.content || []
-	} catch (error) {
-		console.error('Error fetching internet providers:', error)
-		return []
-	}
 }
 
 async function fetchInternetPlans(serviceID: string) {
@@ -87,20 +70,17 @@ export default function InternetPage() {
 	const [provider, setProvider] = useState("")
 	const [plan, setPlan] = useState("")
 	const [customerID, setCustomerID] = useState("")
-	const [providers, setProviders] = useState<InternetProvider[]>([])
 	const [plans, setPlans] = useState<InternetPlan[]>([])
 	const [prices, setPrices] = useState<any>({})
 	const [loading, setLoading] = useState(false)
-	const [loadingProviders, setLoadingProviders] = useState(true)
 	const [loadingPlans, setLoadingPlans] = useState(false)
+	const [requestId, setRequestId] = useState("")
 
 	useEffect(() => {
 		setLoading(true)
-		Promise.all([fetchPrices(), fetchInternetProviders()]).then(([priceData, providerData]) => {
+		fetchPrices().then((priceData) => {
 			setPrices(priceData)
-			setProviders(providerData)
 			setLoading(false)
-			setLoadingProviders(false)
 		})
 	}, [])
 
@@ -115,11 +95,36 @@ export default function InternetPage() {
 		}
 	}, [provider])
 
+	// Generate requestId when user starts filling form
+	useEffect(() => {
+		if (crypto || provider || plan || customerID) {
+			if (!requestId) {
+				setRequestId(generateRequestId())
+			}
+		}
+	}, [crypto, provider, plan, customerID, requestId])
+
 	const selectedCrypto = CRYPTOS.find((c) => c.symbol === crypto)
 	const selectedPlan = plans.find((p) => p.variation_code === plan)
 	const priceNGN = selectedCrypto ? prices[selectedCrypto.coingeckoId]?.ngn : null
 	const amountNGN = selectedPlan ? Number(selectedPlan.variation_amount) : 0
 	const cryptoNeeded = priceNGN && amountNGN ? amountNGN / priceNGN : 0
+
+	const handlePurchase = () => {
+		// This would be where you send the data to backend
+		const orderData = {
+			requestId,
+			crypto,
+			provider,
+			plan,
+			customerID,
+			amount: amountNGN,
+			cryptoNeeded,
+			type: 'internet'
+		}
+		console.log('Order data:', orderData)
+		// TODO: Send to backend API
+	}
 
 	return (
 		<AuthGuard>
@@ -155,13 +160,13 @@ export default function InternetPage() {
 							</div>
 							<div className="space-y-2">
 								<Label htmlFor="provider">Internet Provider</Label>
-								<Select value={provider} onValueChange={setProvider} disabled={loadingProviders}>
+								<Select value={provider} onValueChange={setProvider}>
 									<SelectTrigger>
-										<SelectValue placeholder={loadingProviders ? "Loading providers..." : "Select provider"} />
+										<SelectValue placeholder="Select provider" />
 									</SelectTrigger>
 									<SelectContent>
-										{providers.map((p) => (
-											<SelectItem key={p.serviceID} value={p.serviceID}>
+										{DATA_PROVIDERS.map((p) => (
+											<SelectItem key={p.id} value={p.id}>
 												{p.name}
 											</SelectItem>
 										))}
@@ -195,6 +200,12 @@ export default function InternetPage() {
 							</div>
 						</div>
 						<div className="border-t pt-4 space-y-2">
+							{requestId && (
+								<div className="flex justify-between text-sm">
+									<span>Request ID:</span>
+									<span className="text-muted-foreground font-mono text-xs">{requestId}</span>
+								</div>
+							)}
 							<div className="flex justify-between text-sm">
 								<span>Conversion Rate:</span>
 								<span>
@@ -222,7 +233,7 @@ export default function InternetPage() {
 								</span>
 							</div>
 						</div>
-						<Button className="w-full" disabled>
+						<Button className="w-full" disabled onClick={handlePurchase}>
 							Purchase (Coming Soon)
 						</Button>
 					</CardContent>

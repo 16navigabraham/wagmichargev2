@@ -31,6 +31,11 @@ interface TVPlan {
 	fixedPrice: string
 }
 
+// Generate unique requestId
+const generateRequestId = () => {
+	return `${Date.now()}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`
+}
+
 // Move API keys to server-side only - don't expose in client
 async function fetchPrices() {
 	const ids = CRYPTOS.map((c) => c.coingeckoId).join(",")
@@ -82,6 +87,31 @@ async function fetchTVPlans(serviceID: string) {
 	}
 }
 
+async function verifySmartCard(smartcard_number: string, service_id: string) {
+	try {
+		const response = await fetch('/api/vtpass/verify', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify({
+				smartcard_number,
+				service_id,
+			}),
+		})
+		
+		if (!response.ok) {
+			throw new Error(`HTTP error! status: ${response.status}`)
+		}
+		
+		const data = await response.json()
+		return data
+	} catch (error) {
+		console.error('Error verifying smart card:', error)
+		throw error
+	}
+}
+
 export default function TVPage() {
 	const [crypto, setCrypto] = useState("")
 	const [provider, setProvider] = useState("")
@@ -94,6 +124,8 @@ export default function TVPage() {
 	const [loading, setLoading] = useState(false)
 	const [loadingProviders, setLoadingProviders] = useState(true)
 	const [loadingPlans, setLoadingPlans] = useState(false)
+	const [verifyingSmartCard, setVerifyingSmartCard] = useState(false)
+	const [requestId, setRequestId] = useState("")
 
 	useEffect(() => {
 		setLoading(true)
@@ -116,11 +148,58 @@ export default function TVPage() {
 		}
 	}, [provider])
 
+	// Generate requestId when user attempts to place order
+	useEffect(() => {
+		if (crypto && provider && plan && smartCardNumber && customerName) {
+			setRequestId(generateRequestId())
+		}
+	}, [crypto, provider, plan, smartCardNumber, customerName])
+
+	const handleVerifySmartCard = async () => {
+		if (!smartCardNumber || !provider) {
+			return
+		}
+
+		setVerifyingSmartCard(true)
+		try {
+			const result = await verifySmartCard(smartCardNumber, provider)
+			if (result && result.Customer_Name) {
+				setCustomerName(result.Customer_Name)
+			} else {
+				console.error('No customer name found in verification result')
+			}
+		} catch (error) {
+			console.error('Failed to verify smart card:', error)
+		} finally {
+			setVerifyingSmartCard(false)
+		}
+	}
+
+	const handlePayment = () => {
+		// This would be where you send the data to backend
+		const orderData = {
+			requestId,
+			crypto,
+			provider,
+			plan,
+			amount: amountNGN,
+			smartCardNumber,
+			customerName,
+			cryptoNeeded,
+			type: 'tv'
+		}
+		console.log('Order data:', orderData)
+		// TODO: Send to backend API
+	}
+
 	const selectedCrypto = CRYPTOS.find((c) => c.symbol === crypto)
 	const selectedPlan = plans.find((p) => p.variation_code === plan)
 	const priceNGN = selectedCrypto ? prices[selectedCrypto.coingeckoId]?.ngn : null
 	const amountNGN = selectedPlan ? Number(selectedPlan.variation_amount) : 0
 	const cryptoNeeded = priceNGN && amountNGN ? amountNGN / priceNGN : 0
+
+	// Check if all required fields are filled to enable payment
+	const canPay = crypto && provider && plan && smartCardNumber && customerName && priceNGN && amountNGN && requestId
 
 	return (
 		<AuthGuard>
@@ -186,22 +265,33 @@ export default function TVPage() {
 							</div>
 							<div className="space-y-2">
 								<Label htmlFor="smartCardNumber">Smart Card Number / IUC Number</Label>
-								<Input
-									id="smartCardNumber"
-									type="text"
-									placeholder="Enter smart card number"
-									value={smartCardNumber}
-									onChange={(e) => setSmartCardNumber(e.target.value)}
-								/>
+								<div className="flex space-x-2">
+									<Input
+										id="smartCardNumber"
+										type="text"
+										placeholder="Enter smart card number"
+										value={smartCardNumber}
+										onChange={(e) => setSmartCardNumber(e.target.value)}
+									/>
+									<Button
+										type="button"
+										onClick={handleVerifySmartCard}
+										disabled={!smartCardNumber || !provider || verifyingSmartCard}
+										variant="outline"
+									>
+										{verifyingSmartCard ? "Verifying..." : "Verify Smartcard"}
+									</Button>
+								</div>
 							</div>
 							<div className="space-y-2">
 								<Label htmlFor="customerName">Customer Name</Label>
 								<Input
 									id="customerName"
 									type="text"
-									placeholder="Enter customer name"
+									placeholder="Verify smartcard to get customer name"
 									value={customerName}
 									onChange={(e) => setCustomerName(e.target.value)}
+									readOnly={true}
 								/>
 							</div>
 						</div>
@@ -232,9 +322,19 @@ export default function TVPage() {
 									)}
 								</span>
 							</div>
+							{requestId && (
+								<div className="flex justify-between text-sm">
+									<span>Request ID:</span>
+									<span className="font-mono text-xs">{requestId}</span>
+								</div>
+							)}
 						</div>
-						<Button className="w-full" disabled>
-							Pay Subscription (Coming Soon)
+						<Button 
+							className="w-full" 
+							disabled={!canPay}
+							onClick={handlePayment}
+						>
+							{canPay ? "Pay Subscription" : "Pay Subscription (Coming Soon)"}
 						</Button>
 					</CardContent>
 				</Card>
