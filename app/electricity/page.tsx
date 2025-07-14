@@ -16,13 +16,21 @@ const CRYPTOS = [
 	{ symbol: "USDC", name: "USD Coin", coingeckoId: "usd-coin" },
 ]
 
-interface ElectricityProvider {
-	serviceID: string
-	name: string
-	minimumAmount?: string
-	maximumAmount?: string
-	convinience_fee?: string
-}
+// Static electricity providers (DISCOs) - you can update these based on VTpass supported ones
+const ELECTRICITY_PROVIDERS = [
+	{ serviceID: "ikeja-electric", name: "Ikeja Electric" },
+	{ serviceID: "eko-electric", name: "Eko Electric" },
+	{ serviceID: "kano-electric", name: "Kano Electric" },
+	{ serviceID: "portharcourt-electric", name: "Port Harcourt Electric" },
+	{ serviceID: "jos-electric", name: "Jos Electric" },
+	{ serviceID: "ibadan-electric", name: "Ibadan Electric" },
+	{ serviceID: "kaduna-electric", name: "Kaduna Electric" },
+	{ serviceID: "abuja-electric", name: "Abuja Electric" },
+	{ serviceID: "enugu-electric", name: "Enugu Electric (EEDC)" },
+	{ serviceID: "benin-electric", name: "Benin Electric" },
+	{ serviceID: "aba-electric", name: "Aba Electric" },
+	{ serviceID: "yola-electric", name: "Yola Electric" },
+]
 
 interface ElectricityPlan {
 	variation_code: string
@@ -31,34 +39,17 @@ interface ElectricityPlan {
 	fixedPrice: string
 }
 
-// Move API keys to server-side only - don't expose in client
+// Generate unique requestId
+function generateRequestId(): string {
+	return `${Date.now()}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`
+}
+
 async function fetchPrices() {
 	const ids = CRYPTOS.map((c) => c.coingeckoId).join(",")
 	const res = await fetch(
 		`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=ngn`
 	)
 	return await res.json()
-}
-
-async function fetchElectricityProviders() {
-	try {
-		const response = await fetch('/api/vtpass/services?identifier=electricity', {
-			method: 'GET',
-			headers: {
-				'Content-Type': 'application/json',
-			},
-		})
-		
-		if (!response.ok) {
-			throw new Error(`HTTP error! status: ${response.status}`)
-		}
-		
-		const data = await response.json()
-		return data.content || []
-	} catch (error) {
-		console.error('Error fetching electricity providers:', error)
-		return []
-	}
 }
 
 async function fetchElectricityPlans(serviceID: string) {
@@ -89,20 +80,17 @@ export default function ElectricityPage() {
 	const [amount, setAmount] = useState("")
 	const [meterNumber, setMeterNumber] = useState("")
 	const [customerName, setCustomerName] = useState("")
-	const [providers, setProviders] = useState<ElectricityProvider[]>([])
 	const [plans, setPlans] = useState<ElectricityPlan[]>([])
 	const [prices, setPrices] = useState<any>({})
 	const [loading, setLoading] = useState(false)
-	const [loadingProviders, setLoadingProviders] = useState(true)
 	const [loadingPlans, setLoadingPlans] = useState(false)
+	const [requestId, setRequestId] = useState("")
 
 	useEffect(() => {
 		setLoading(true)
-		Promise.all([fetchPrices(), fetchElectricityProviders()]).then(([priceData, providerData]) => {
+		fetchPrices().then((priceData) => {
 			setPrices(priceData)
-			setProviders(providerData)
 			setLoading(false)
-			setLoadingProviders(false)
 		})
 	}, [])
 
@@ -117,6 +105,15 @@ export default function ElectricityPage() {
 		}
 	}, [provider])
 
+	// Generate requestId when user starts filling form
+	useEffect(() => {
+		if (crypto || provider || plan || amount || meterNumber || customerName) {
+			if (!requestId) {
+				setRequestId(generateRequestId())
+			}
+		}
+	}, [crypto, provider, plan, amount, meterNumber, customerName, requestId])
+
 	const selectedCrypto = CRYPTOS.find((c) => c.symbol === crypto)
 	const selectedPlan = plans.find((p) => p.variation_code === plan)
 	const priceNGN = selectedCrypto ? prices[selectedCrypto.coingeckoId]?.ngn : null
@@ -128,8 +125,25 @@ export default function ElectricityPage() {
 	
 	const cryptoNeeded = priceNGN && amountNGN ? amountNGN / priceNGN : 0
 
-	const selectedProvider = providers.find((p) => p.serviceID === provider)
+	const selectedProvider = ELECTRICITY_PROVIDERS.find((p) => p.serviceID === provider)
 	const isFixedPrice = selectedPlan?.fixedPrice === "Yes"
+
+	const handlePayment = () => {
+		// This would be where you send the data to backend
+		const orderData = {
+			requestId,
+			crypto,
+			provider,
+			plan,
+			amount: amountNGN,
+			meterNumber,
+			customerName,
+			cryptoNeeded,
+			type: 'electricity'
+		}
+		console.log('Order data:', orderData)
+		// TODO: Send to backend API
+	}
 
 	return (
 		<AuthGuard>
@@ -165,12 +179,12 @@ export default function ElectricityPage() {
 							</div>
 							<div className="space-y-2">
 								<Label htmlFor="provider">Electricity Provider</Label>
-								<Select value={provider} onValueChange={setProvider} disabled={loadingProviders}>
+								<Select value={provider} onValueChange={setProvider}>
 									<SelectTrigger>
-										<SelectValue placeholder={loadingProviders ? "Loading providers..." : "Select provider"} />
+										<SelectValue placeholder="Select provider" />
 									</SelectTrigger>
 									<SelectContent>
-										{providers.map((p) => (
+										{ELECTRICITY_PROVIDERS.map((p) => (
 											<SelectItem key={p.serviceID} value={p.serviceID}>
 												{p.name}
 											</SelectItem>
@@ -219,22 +233,21 @@ export default function ElectricityPage() {
 									<Input
 										id="amount"
 										type="number"
-										min={selectedProvider?.minimumAmount || 1}
-										max={selectedProvider?.maximumAmount}
+										min={1}
 										placeholder="Enter amount in Naira"
 										value={amount}
 										onChange={(e) => setAmount(e.target.value)}
 									/>
-									{selectedProvider?.minimumAmount && selectedProvider?.maximumAmount && (
-										<p className="text-sm text-muted-foreground">
-											Min: ₦{Number(selectedProvider.minimumAmount).toLocaleString()} - 
-											Max: ₦{Number(selectedProvider.maximumAmount).toLocaleString()}
-										</p>
-									)}
 								</div>
 							)}
 						</div>
 						<div className="border-t pt-4 space-y-2">
+							{requestId && (
+								<div className="flex justify-between text-sm">
+									<span>Request ID:</span>
+									<span className="text-muted-foreground font-mono text-xs">{requestId}</span>
+								</div>
+							)}
 							<div className="flex justify-between text-sm">
 								<span>Conversion Rate:</span>
 								<span>
@@ -262,7 +275,7 @@ export default function ElectricityPage() {
 								</span>
 							</div>
 						</div>
-						<Button className="w-full" disabled>
+						<Button className="w-full" disabled onClick={handlePayment}>
 							Pay Bill (Coming Soon)
 						</Button>
 					</CardContent>
