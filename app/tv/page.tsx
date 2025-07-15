@@ -39,11 +39,17 @@ const generateRequestId = () => {
 }
 
 async function fetchPrices() {
-	const ids = CRYPTOS.map((c) => c.coingeckoId).join(",")
-	const res = await fetch(
-		`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=ngn`
-	)
-	return await res.json()
+  try {
+    const ids = CRYPTOS.map(c => c.coingeckoId).join(',')
+    const res = await fetch(
+      `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=ngn`
+    )
+    if (!res.ok) throw new Error(res.statusText)
+    return await res.json()
+  } catch (err) {
+    console.error('Coingecko fetch failed:', err)
+    return {}
+  }
 }
 
 async function fetchTVProviders() {
