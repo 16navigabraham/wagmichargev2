@@ -16,12 +16,17 @@ const CRYPTOS = [
 	{ symbol: "USDC", name: "USD Coin", coingeckoId: "usd-coin" },
 ]
 
-// Static data providers as requested
+// Updated with correct VTpass service IDs for data providers
 const DATA_PROVIDERS = [
+	{ id: "mtn-data", name: "MTN Data" },
+	{ id: "glo-data", name: "GLO Data" },
+	{ id: "airtel-data", name: "Airtel Data" },
+	{ id: "etisalat-data", name: "9mobile Data" },
+	// Alternative service IDs if the above don't work
 	{ id: "mtn", name: "MTN" },
 	{ id: "glo", name: "GLO" },
-	{ id: "airtel", name: "AIRTEL" },
-	{ id: "9mobile", name: "9MOBILE" },
+	{ id: "airtel", name: "Airtel" },
+	{ id: "9mobile", name: "9mobile" },
 ]
 
 interface InternetPlan {
@@ -46,7 +51,33 @@ async function fetchPrices() {
 
 async function fetchInternetPlans(serviceID: string) {
 	try {
+		console.log(`Fetching plans for service: ${serviceID}`)
 		const response = await fetch(`/api/vtpass/service-variations?serviceID=${serviceID}`, {
+			method: 'GET',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+		})
+		
+		if (!response.ok) {
+			const errorData = await response.json()
+			console.error(`HTTP error! status: ${response.status}`, errorData)
+			throw new Error(`HTTP error! status: ${response.status}`)
+		}
+		
+		const data = await response.json()
+		console.log('Fetched plans data:', data)
+		return data.content?.variations || []
+	} catch (error) {
+		console.error('Error fetching internet plans:', error)
+		return []
+	}
+}
+
+// Function to get all available data services
+async function fetchDataServices() {
+	try {
+		const response = await fetch('/api/vtpass/services?identifier=data', {
 			method: 'GET',
 			headers: {
 				'Content-Type': 'application/json',
@@ -58,9 +89,10 @@ async function fetchInternetPlans(serviceID: string) {
 		}
 		
 		const data = await response.json()
-		return data.content?.variations || []
+		console.log('Available data services:', data)
+		return data.content || []
 	} catch (error) {
-		console.error('Error fetching internet plans:', error)
+		console.error('Error fetching data services:', error)
 		return []
 	}
 }
@@ -74,12 +106,14 @@ export default function InternetPage() {
 	const [prices, setPrices] = useState<any>({})
 	const [loading, setLoading] = useState(false)
 	const [loadingPlans, setLoadingPlans] = useState(false)
+	const [availableProviders, setAvailableProviders] = useState<any[]>([])
 	const [requestId, setRequestId] = useState("")
 
 	useEffect(() => {
 		setLoading(true)
-		fetchPrices().then((priceData) => {
+		Promise.all([fetchPrices(), fetchDataServices()]).then(([priceData, serviceData]) => {
 			setPrices(priceData)
+			setAvailableProviders(serviceData)
 			setLoading(false)
 		})
 	}, [])
@@ -87,11 +121,20 @@ export default function InternetPage() {
 	useEffect(() => {
 		if (provider) {
 			setLoadingPlans(true)
+			setPlan("") // Reset plan when provider changes
+			
 			fetchInternetPlans(provider).then((planData) => {
+				console.log(`Plans for ${provider}:`, planData)
 				setPlans(planData)
 				setLoadingPlans(false)
-				setPlan("")
+			}).catch((error) => {
+				console.error('Error loading plans:', error)
+				setPlans([])
+				setLoadingPlans(false)
 			})
+		} else {
+			setPlans([])
+			setPlan("")
 		}
 	}, [provider])
 
@@ -125,6 +168,9 @@ export default function InternetPage() {
 		console.log('Order data:', orderData)
 		// TODO: Send to backend API
 	}
+
+	// Use available providers from API if available, otherwise fall back to static list
+	const providersToShow = availableProviders.length > 0 ? availableProviders : DATA_PROVIDERS
 
 	return (
 		<AuthGuard>
@@ -165,8 +211,8 @@ export default function InternetPage() {
 										<SelectValue placeholder="Select provider" />
 									</SelectTrigger>
 									<SelectContent>
-										{DATA_PROVIDERS.map((p) => (
-											<SelectItem key={p.id} value={p.id}>
+										{providersToShow.map((p) => (
+											<SelectItem key={p.serviceID || p.id} value={p.serviceID || p.id}>
 												{p.name}
 											</SelectItem>
 										))}
@@ -180,11 +226,19 @@ export default function InternetPage() {
 										<SelectValue placeholder={loadingPlans ? "Loading plans..." : "Select data plan"} />
 									</SelectTrigger>
 									<SelectContent>
-										{plans.map((p) => (
-											<SelectItem key={p.variation_code} value={p.variation_code}>
-												{p.name} - ₦{Number(p.variation_amount).toLocaleString()}
-											</SelectItem>
-										))}
+										{plans.length > 0 ? (
+											plans.map((p) => (
+												<SelectItem key={p.variation_code} value={p.variation_code}>
+													{p.name} - ₦{Number(p.variation_amount).toLocaleString()}
+												</SelectItem>
+											))
+										) : (
+											!loadingPlans && provider && (
+												<SelectItem value="no-plans" disabled>
+													No plans available for this provider
+												</SelectItem>
+											)
+										)}
 									</SelectContent>
 								</Select>
 							</div>
@@ -195,6 +249,7 @@ export default function InternetPage() {
 									type="text"
 									placeholder="Enter customer ID or phone number"
 									value={customerID}
+									maxLength={11}
 									onChange={(e) => setCustomerID(e.target.value)}
 								/>
 							</div>
