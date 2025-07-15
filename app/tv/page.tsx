@@ -18,6 +18,7 @@ const CRYPTOS = [
 ]
 
 interface TVProvider {
+  numberLength: any
   serviceID: string
   name: string
 }
