@@ -36,7 +36,6 @@ const generateRequestId = () => {
 	return `${Date.now()}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`
 }
 
-// Move API keys to server-side only - don't expose in client
 async function fetchPrices() {
 	const ids = CRYPTOS.map((c) => c.coingeckoId).join(",")
 	const res = await fetch(
@@ -87,7 +86,8 @@ async function fetchTVPlans(serviceID: string) {
 	}
 }
 
-async function verifySmartCard(smartcard_number: string, service_id: string) {
+// FIXED: Updated verify function with correct parameter names
+async function verifySmartCard(billersCode: string, serviceID: string) {
 	try {
 		const response = await fetch('/api/vtpass/verify', {
 			method: 'POST',
@@ -95,13 +95,14 @@ async function verifySmartCard(smartcard_number: string, service_id: string) {
 				'Content-Type': 'application/json',
 			},
 			body: JSON.stringify({
-				smartcard_number,
-				service_id,
+				billersCode,  // Changed from smartcard_number to billersCode
+				serviceID,    // Changed from service_id to serviceID
 			}),
 		})
 		
 		if (!response.ok) {
-			throw new Error(`HTTP error! status: ${response.status}`)
+			const errorData = await response.json()
+			throw new Error(`HTTP error! status: ${response.status}, message: ${errorData.error || 'Unknown error'}`)
 		}
 		
 		const data = await response.json()
@@ -125,6 +126,7 @@ export default function TVPage() {
 	const [loadingProviders, setLoadingProviders] = useState(true)
 	const [loadingPlans, setLoadingPlans] = useState(false)
 	const [verifyingSmartCard, setVerifyingSmartCard] = useState(false)
+	const [verificationError, setVerificationError] = useState("")
 	const [requestId, setRequestId] = useState("")
 
 	useEffect(() => {
@@ -155,21 +157,37 @@ export default function TVPage() {
 		}
 	}, [crypto, provider, plan, smartCardNumber, customerName])
 
+	// FIXED: Updated verification handler
 	const handleVerifySmartCard = async () => {
 		if (!smartCardNumber || !provider) {
+			setVerificationError("Please enter smart card number and select a provider")
 			return
 		}
 
 		setVerifyingSmartCard(true)
+		setVerificationError("")
+		setCustomerName("")
+		
 		try {
 			const result = await verifySmartCard(smartCardNumber, provider)
-			if (result && result.Customer_Name) {
+			console.log('Verification result:', result) // For debugging
+			
+			// Handle different possible response structures
+			if (result?.content?.Customer_Name) {
+				setCustomerName(result.content.Customer_Name)
+			} else if (result?.Customer_Name) {
 				setCustomerName(result.Customer_Name)
+			} else if (result?.content?.customer_name) {
+				setCustomerName(result.content.customer_name)
+			} else if (result?.customer_name) {
+				setCustomerName(result.customer_name)
 			} else {
-				console.error('No customer name found in verification result')
+				setVerificationError("Smart card verified but no customer name found")
+				console.log('Full verification response:', result)
 			}
 		} catch (error) {
 			console.error('Failed to verify smart card:', error)
+			setVerificationError("Failed to verify smart card. Please check the number and try again.")
 		} finally {
 			setVerifyingSmartCard(false)
 		}
@@ -271,7 +289,11 @@ export default function TVPage() {
 										type="text"
 										placeholder="Enter smart card number"
 										value={smartCardNumber}
-										onChange={(e) => setSmartCardNumber(e.target.value)}
+										onChange={(e) => {
+											setSmartCardNumber(e.target.value)
+											setVerificationError("")
+											setCustomerName("")
+										}}
 									/>
 									<Button
 										type="button"
@@ -279,9 +301,12 @@ export default function TVPage() {
 										disabled={!smartCardNumber || !provider || verifyingSmartCard}
 										variant="outline"
 									>
-										{verifyingSmartCard ? "Verifying..." : "Verify Smartcard"}
+										{verifyingSmartCard ? "Verifying..." : "Verify"}
 									</Button>
 								</div>
+								{verificationError && (
+									<p className="text-sm text-red-500">{verificationError}</p>
+								)}
 							</div>
 							<div className="space-y-2">
 								<Label htmlFor="customerName">Customer Name</Label>
