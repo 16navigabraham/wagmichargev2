@@ -32,83 +32,49 @@ const ELECTRICITY_PROVIDERS = [
   { serviceID: "yola-electric", name: "Yola Electric" },
 ]
 
-interface ElectricityPlan {
-  variation_code: string
-  name: string
-  variation_amount: string
-  fixedPrice: string
-}
+interface ElectricityPlan { variation_code: string; name: string }
 
-// Correct meter number lengths for different meter types
 const METER_LENGTHS = {
-  'prepaid': [11],
-  'postpaid': [10, 11, 13],
-  'default': [10, 11, 12, 13]
+  prepaid: [11],
+  postpaid: [10, 11, 13],
+  default: [10, 11, 12, 13],
 }
 
-function generateRequestId(): string {
+function generateRequestId() {
   return `${Date.now()}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`
 }
 
 async function fetchPrices() {
-  try {
-    const ids = CRYPTOS.map(c => c.coingeckoId).join(",")
-    const res = await fetch(
-      `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=ngn`
-    )
-    if (!res.ok) throw new Error(res.statusText)
-    return await res.json()
-  } catch {
-    return {}
-  }
+  const ids = CRYPTOS.map(c => c.coingeckoId).join(",")
+  const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=ngn`)
+  return res.ok ? await res.json() : {}
 }
 
 async function fetchElectricityPlans(serviceID: string) {
-  try {
-    const res = await fetch(`/api/vtpass/service-variations?serviceID=${serviceID}`)
-    if (!res.ok) throw new Error(String(res.status))
-    const data = await res.json()
-    return data.content?.variations || []
-  } catch {
-    return []
-  }
+  const res = await fetch(`/api/vtpass/service-variations?serviceID=${serviceID}`)
+  const data = res.ok ? await res.json() : {}
+  return data.content?.variations || []
 }
 
 async function verifyMeter(billersCode: string, serviceID: string, type?: string) {
-  try {
-    const res = await fetch("/api/vtpass/verify", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ billersCode, serviceID, type }),
-    })
-    
-    const data = await res.json()
-    
-    if (!res.ok) {
-      throw new Error(data.error || `HTTP ${res.status}`)
-    }
-    
-    // Log the response structure for debugging
-    console.log('Meter verification response:', JSON.stringify(data, null, 2))
-    
-    return data
-  } catch (error) {
-    console.error('Meter verification error:', error)
-    throw error
-  }
+  const res = await fetch("/api/vtpass/verify", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ billersCode, serviceID, type }),
+  })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
+  return data
 }
 
 function getMeterLength(planCode: string): number[] {
-  const lowerPlanCode = planCode.toLowerCase()
-  
-  if (lowerPlanCode.includes('prepaid')) return METER_LENGTHS.prepaid
-  if (lowerPlanCode.includes('postpaid')) return METER_LENGTHS.postpaid
-  
+  const lc = planCode.toLowerCase()
+  if (lc.includes("prepaid")) return METER_LENGTHS.prepaid
+  if (lc.includes("postpaid")) return METER_LENGTHS.postpaid
   return METER_LENGTHS.default
 }
 
 export default function ElectricityPage() {
-  /* ---------- STATE ---------- */
   const [crypto, setCrypto] = useState("")
   const [provider, setProvider] = useState("")
   const [plan, setPlan] = useState("")
@@ -118,16 +84,14 @@ export default function ElectricityPage() {
   const [customerAddress, setCustomerAddress] = useState("")
   const [plans, setPlans] = useState<ElectricityPlan[]>([])
   const [prices, setPrices] = useState<any>({})
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [loadingPlans, setLoadingPlans] = useState(false)
   const [verifyingMeter, setVerifyingMeter] = useState(false)
   const [verificationError, setVerificationError] = useState("")
   const [verificationSuccess, setVerificationSuccess] = useState(false)
   const [requestId, setRequestId] = useState("")
 
-  /* ---------- EFFECTS ---------- */
   useEffect(() => {
-    setLoading(true)
     fetchPrices().then(setPrices).finally(() => setLoading(false))
   }, [])
 
@@ -138,17 +102,8 @@ export default function ElectricityPage() {
   }, [provider])
 
   useEffect(() => {
-    if (crypto || provider || plan || amount || meterNumber || customerName) {
-      if (!requestId) setRequestId(generateRequestId())
-    }
-  }, [crypto, provider, plan, amount, meterNumber, customerName, requestId])
-
-  /* ---------- AUTO-VERIFY ---------- */
-  useEffect(() => {
     if (!plan || !meterNumber || !provider) return
-    
     const validLengths = getMeterLength(plan)
-    
     if (!validLengths.includes(meterNumber.length)) {
       setVerificationError("")
       setVerificationSuccess(false)
@@ -165,108 +120,63 @@ export default function ElectricityPage() {
       setCustomerAddress("")
 
       try {
-        const data = await verifyMeter(meterNumber, provider, plan)
-        
-        if (data.success && data.data) {
-          // Log the data structure for debugging
-          console.log('Customer data structure:', JSON.stringify(data.data, null, 2))
-          
-          // Try multiple possible field names for customer name
-          const name = data.data.Customer_Name ||
-                      data.data.customer_name ||
-                      data.data.name ||
-                      data.data.customerName ||
-                      data.data.CUSTOMER_NAME ||
-                      data.data.Customer_Name ||
-                      data.data.customer ||
-                      data.data.Customer ||
-                      // Sometimes it's nested in different structures
-                      data.data.content?.Customer_Name ||
-                      data.data.content?.customer_name ||
-                      data.data.content?.name ||
-                      // Check if the entire data.data is the customer name (some APIs return just a string)
-                      (typeof data.data === 'string' ? data.data : null) ||
-                      ""
-          
-          // Try multiple possible field names for address
-          const address = data.data.Address ||
-                         data.data.customer_address ||
-                         data.data.address ||
-                         data.data.customerAddress ||
-                         data.data.ADDRESS ||
-                         data.data.Customer_Address ||
-                         data.data.content?.Address ||
-                         data.data.content?.customer_address ||
-                         data.data.content?.address ||
-                         ""
-          
-          console.log('Extracted customer info:', { name, address })
-          
-          if (name && name.trim() !== '') {
-            setCustomerName(name.trim())
-            setCustomerAddress(address.trim())
-            setVerificationSuccess(true)
-          } else {
-            // If no name found, log the entire response structure
-            console.error('Customer name not found in response. Full response:', {
-              data: data.data,
-              rawResponse: data.rawResponse
-            })
-            
-            // Try to extract any text that might be the customer name
-            const possibleName = Object.values(data.data || {}).find(
-              value => typeof value === 'string' && value.length > 2 && value.length < 100
-            )
-            
-            if (possibleName) {
-              console.log('Found possible customer name:', possibleName)
-              setCustomerName(possibleName)
-              setCustomerAddress(address.trim())
-              setVerificationSuccess(true)
-            } else {
-              throw new Error("Customer name not found in response. Please check the meter number and try again.")
-            }
-          }
+        const { data } = await verifyMeter(meterNumber, provider, plan)
+        const name =
+          data.Customer_Name ||
+          data.customer_name ||
+          data.customer?.customer_name ||
+          data.name ||
+          data.customerName ||
+          data.CUSTOMER_NAME ||
+          ""
+        const address =
+          data.Address ||
+          data.address ||
+          data.customer_address ||
+          data.customerAddress ||
+          ""
+        if (name.trim()) {
+          setCustomerName(name.trim())
+          setCustomerAddress(address.trim())
+          setVerificationSuccess(true)
         } else {
-          throw new Error(data.error || "Verification failed")
+          throw new Error("Customer name not found")
         }
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : "Unknown error"
-        setVerificationError(errorMessage)
+      } catch (err: any) {
+        setVerificationError(err.message || "Verification failed")
         setVerificationSuccess(false)
-        console.error('Meter verification failed:', errorMessage)
       } finally {
         setVerifyingMeter(false)
       }
-    }, 1000) // Increased delay to reduce API calls
-    
+    }, 1000)
     return () => clearTimeout(id)
   }, [meterNumber, provider, plan])
 
-  /* ---------- DERIVED ---------- */
+  useEffect(() => {
+    if (crypto || provider || plan || amount || meterNumber || customerName) {
+      if (!requestId) setRequestId(generateRequestId())
+    }
+  }, [crypto, provider, plan, amount, meterNumber, customerName, requestId])
+
   const selectedCrypto = CRYPTOS.find(c => c.symbol === crypto)
-  const selectedPlan = plans.find(p => p.variation_code === plan)
   const priceNGN = selectedCrypto ? prices[selectedCrypto.coingeckoId]?.ngn : null
-  const amountNGN =
-    selectedPlan?.fixedPrice === "Yes"
-      ? Number(selectedPlan.variation_amount)
-      : Number(amount) || 0
+  const amountNGN = Number(amount) || 0
   const cryptoNeeded = priceNGN && amountNGN ? amountNGN / priceNGN : 0
   const selectedProvider = ELECTRICITY_PROVIDERS.find(p => p.serviceID === provider)
-  const isFixedPrice = selectedPlan?.fixedPrice === "Yes"
   const canPay =
     crypto &&
     provider &&
     plan &&
     meterNumber &&
-    (isFixedPrice || amount) &&
+    amount &&
     priceNGN &&
-    amountNGN &&
+    amountNGN >= 100 &&
     requestId &&
     customerName &&
     verificationSuccess
 
-  /* ---------- RENDER ---------- */
+  if (loading) return <div className="p-10 text-center">Loading…</div>
+
   return (
     <AuthGuard>
       <div className="container py-10 max-w-xl mx-auto">
@@ -283,13 +193,10 @@ export default function ElectricityPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            {/* Crypto */}
             <div className="space-y-2">
               <Label>Pay With</Label>
               <Select value={crypto} onValueChange={setCrypto}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select crypto" />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Select crypto" /></SelectTrigger>
                 <SelectContent>
                   {CRYPTOS.map(c => (
                     <SelectItem key={c.symbol} value={c.symbol}>
@@ -300,13 +207,10 @@ export default function ElectricityPage() {
               </Select>
             </div>
 
-            {/* Provider */}
             <div className="space-y-2">
               <Label>Electricity Provider</Label>
               <Select value={provider} onValueChange={setProvider}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select provider" />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Select provider" /></SelectTrigger>
                 <SelectContent>
                   {ELECTRICITY_PROVIDERS.map(p => (
                     <SelectItem key={p.serviceID} value={p.serviceID}>
@@ -317,7 +221,6 @@ export default function ElectricityPage() {
               </Select>
             </div>
 
-            {/* Meter Type */}
             <div className="space-y-2">
               <Label>Meter Type</Label>
               <Select value={plan} onValueChange={setPlan} disabled={!provider || loadingPlans}>
@@ -334,7 +237,6 @@ export default function ElectricityPage() {
               </Select>
             </div>
 
-            {/* Meter Number */}
             <div className="space-y-2">
               <Label>Meter Number</Label>
               <Input
@@ -342,8 +244,8 @@ export default function ElectricityPage() {
                 placeholder={plan ? `Enter ${getMeterLength(plan).join(' or ')}-digit meter number` : "Enter meter number"}
                 value={meterNumber}
                 onChange={e => {
-                  const value = e.target.value.replace(/\D/g, "")
-                  setMeterNumber(value)
+                  const v = e.target.value.replace(/\D/g, "")
+                  setMeterNumber(v)
                   setVerificationError("")
                   setVerificationSuccess(false)
                   setCustomerName("")
@@ -351,22 +253,18 @@ export default function ElectricityPage() {
                 }}
                 maxLength={13}
               />
-              
-              {/* Verification Status */}
               {verifyingMeter && (
                 <div className="flex items-center space-x-2 text-sm text-blue-600">
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Verifying meter number...</span>
+                  <span>Verifying meter number…</span>
                 </div>
               )}
-              
-              {verificationSuccess && customerName && (
+              {verificationSuccess && (
                 <div className="flex items-center space-x-2 text-sm text-green-600">
                   <CheckCircle className="w-4 h-4" />
                   <span>Meter verified successfully</span>
                 </div>
               )}
-              
               {verificationError && (
                 <div className="flex items-center space-x-2 text-sm text-red-600">
                   <AlertCircle className="w-4 h-4" />
@@ -375,7 +273,6 @@ export default function ElectricityPage() {
               )}
             </div>
 
-            {/* Customer Info */}
             {customerName && (
               <div className="space-y-2">
                 <Label>Customer Name</Label>
@@ -389,7 +286,6 @@ export default function ElectricityPage() {
               </div>
             )}
 
-            {/* Amount - Always show this input field */}
             <div className="space-y-2">
               <Label>Amount (NGN)</Label>
               <Input
@@ -399,21 +295,10 @@ export default function ElectricityPage() {
                 placeholder="Enter amount in Naira"
                 value={amount}
                 onChange={e => setAmount(e.target.value)}
-                disabled={isFixedPrice}
               />
-              {isFixedPrice && selectedPlan && (
-                <p className="text-sm text-blue-600">
-                  Fixed price plan: ₦{Number(selectedPlan.variation_amount).toLocaleString()}
-                </p>
-              )}
-              {!isFixedPrice && (
-                <p className="text-sm text-gray-500">
-                  Enter the amount you want to pay (minimum ₦100)
-                </p>
-              )}
+              <p className="text-sm text-gray-500">Minimum ₦100</p>
             </div>
 
-            {/* Summary */}
             <div className="border-t pt-4 space-y-2 text-sm">
               {requestId && (
                 <div className="flex justify-between">
@@ -427,7 +312,7 @@ export default function ElectricityPage() {
               </div>
               <div className="flex justify-between">
                 <span>Meter Type:</span>
-                <span>{selectedPlan?.name || "--"}</span>
+                <span>{plans.find(p => p.variation_code === plan)?.name || "--"}</span>
               </div>
               <div className="flex justify-between">
                 <span>Conversion Rate:</span>
