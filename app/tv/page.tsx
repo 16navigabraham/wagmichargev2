@@ -17,15 +17,8 @@ const CRYPTOS = [
   { symbol: "ETH", name: "Ethereum", coingeckoId: "ethereum" },
 ]
 
-interface TVProvider {
-  serviceID: string
-  name: string
-}
-interface TVPlan {
-  variation_code: string
-  name: string
-  variation_amount: string
-}
+interface TVProvider { serviceID: string; name: string }
+interface TVPlan { variation_code: string; name: string; variation_amount: string }
 
 const SMART_CARD_LENGTHS: Record<string, number[]> = {
   dstv: [10, 11],
@@ -65,7 +58,7 @@ async function verifyCard(billersCode: string, serviceID: string) {
   })
   const data = await res.json()
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
-  return data.content
+  return data.content || {}
 }
 
 function getSmartCardLength(serviceID: string): number[] {
@@ -93,6 +86,7 @@ export default function TVPage() {
   const [verificationSuccess, setVerificationSuccess] = useState(false)
   const [requestId, setRequestId] = useState("")
 
+  /* initial load */
   useEffect(() => {
     Promise.all([fetchPrices(), fetchTVProviders()]).then(([p, prov]) => {
       setPrices(p)
@@ -102,17 +96,20 @@ export default function TVPage() {
     })
   }, [])
 
+  /* fetch plans when provider changes */
   useEffect(() => {
     if (!provider) return
     setLoadingPlans(true)
     fetchTVPlans(provider).then(setPlans).finally(() => setLoadingPlans(false))
   }, [provider])
 
+  /* requestId */
   useEffect(() => {
     if (crypto && provider && plan && smartCardNumber && customerName && !requestId)
       setRequestId(generateRequestId())
   }, [crypto, provider, plan, smartCardNumber, customerName, requestId])
 
+  /* auto-verify smart-card */
   useEffect(() => {
     if (!provider || !smartCardNumber) return
     const validLengths = getSmartCardLength(provider)
@@ -137,12 +134,13 @@ export default function TVPage() {
 
       try {
         const content = await verifyCard(smartCardNumber, provider)
-        const name = content.Customer_Name || content.customer_name || ""
-        const bouquet = content.Current_Bouquet || content.current_bouquet || ""
-        const due = content.Due_Date || content.due_date || ""
-        const renewal = content.Renewal_Amount || content.renewal_amount || ""
 
-        if (!name) throw new Error("Customer name not returned by VTpass")
+        const name         = String(content?.Customer_Name || content?.customer_name || "").trim()
+        const bouquet      = String(content?.Current_Bouquet || content?.current_bouquet || "").trim()
+        const due          = String(content?.Due_Date || content?.due_date || "").trim()
+        const renewal      = String(content?.Renewal_Amount || content?.renewal_amount || "").trim()
+
+        if (!name) throw new Error("Customer name not returned")
         setCustomerName(name)
         setCurrentBouquet(bouquet)
         setDueDate(due)
@@ -158,10 +156,10 @@ export default function TVPage() {
   }, [smartCardNumber, provider])
 
   const selectedCrypto = CRYPTOS.find(c => c.symbol === crypto)
-  const selectedPlan = plans.find(p => p.variation_code === plan)
-  const priceNGN = selectedCrypto ? prices[selectedCrypto.coingeckoId]?.ngn : null
-  const amountNGN = selectedPlan ? Number(selectedPlan.variation_amount) : 0
-  const cryptoNeeded = priceNGN && amountNGN ? amountNGN / priceNGN : 0
+  const selectedPlan   = plans.find(p => p.variation_code === plan)
+  const priceNGN       = selectedCrypto ? prices[selectedCrypto.coingeckoId]?.ngn : null
+  const amountNGN      = selectedPlan ? Number(selectedPlan.variation_amount) : 0
+  const cryptoNeeded   = priceNGN && amountNGN ? amountNGN / priceNGN : 0
   const canPay =
     crypto &&
     provider &&
@@ -191,6 +189,7 @@ export default function TVPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
+            {/* crypto */}
             <div className="space-y-2">
               <Label>Pay With</Label>
               <Select value={crypto} onValueChange={setCrypto}>
@@ -207,6 +206,7 @@ export default function TVPage() {
               </Select>
             </div>
 
+            {/* provider */}
             <div className="space-y-2">
               <Label>TV Provider</Label>
               <Select value={provider} onValueChange={setProvider} disabled={loadingProviders}>
@@ -223,6 +223,7 @@ export default function TVPage() {
               </Select>
             </div>
 
+            {/* plan */}
             <div className="space-y-2">
               <Label>Subscription Plan</Label>
               <Select value={plan} onValueChange={setPlan} disabled={!provider || loadingPlans}>
@@ -239,6 +240,7 @@ export default function TVPage() {
               </Select>
             </div>
 
+            {/* smart card */}
             <div className="space-y-2">
               <Label>Smart Card / IUC Number</Label>
               <Input
@@ -276,6 +278,7 @@ export default function TVPage() {
               )}
             </div>
 
+            {/* customer details */}
             {customerName && (
               <div className="space-y-2">
                 <Label>Customer Name</Label>
@@ -301,6 +304,7 @@ export default function TVPage() {
               </div>
             )}
 
+            {/* summary */}
             <div className="border-t pt-4 space-y-2 text-sm">
               {requestId && (
                 <div className="flex justify-between">
