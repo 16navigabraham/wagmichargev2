@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
+import { Loader2 } from "lucide-react"
 import BackToDashboard from '@/components/BackToDashboard'
 import AuthGuard from "@/components/AuthGuard"
 
@@ -38,6 +39,13 @@ interface ElectricityPlan {
   fixedPrice: string
 }
 
+// Correct meter number lengths for different meter types
+const METER_LENGTHS = {
+  'prepaid': [11], // Prepaid meters are typically 11 digits
+  'postpaid': [13], // Postpaid meters are typically 13 digits
+  'default': [10, 11, 12, 13] // Default for unknown types
+}
+
 function generateRequestId(): string {
   return `${Date.now()}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`
 }
@@ -67,13 +75,32 @@ async function fetchElectricityPlans(serviceID: string) {
 }
 
 async function verifyMeter(billersCode: string, serviceID: string, type?: string) {
-  const res = await fetch("/api/vtpass/verify", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ billersCode, serviceID, type }),
-  })
-  if (!res.ok) throw new Error(String(res.status))
-  return res.json()
+  try {
+    const res = await fetch("/api/vtpass/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ billersCode, serviceID, type }),
+    })
+    
+    if (!res.ok) {
+      const errorData = await res.json()
+      throw new Error(errorData.error || `HTTP ${res.status}`)
+    }
+    
+    return res.json()
+  } catch (error) {
+    console.error('Meter verification error:', error)
+    throw error
+  }
+}
+
+function getMeterLength(planCode: string): number[] {
+  const lowerPlanCode = planCode.toLowerCase()
+  
+  if (lowerPlanCode.includes('prepaid')) return METER_LENGTHS.prepaid
+  if (lowerPlanCode.includes('postpaid')) return METER_LENGTHS.postpaid
+  
+  return METER_LENGTHS.default
 }
 
 export default function ElectricityPage() {
@@ -113,8 +140,11 @@ export default function ElectricityPage() {
 
   /* ---------- AUTO-VERIFY ---------- */
   useEffect(() => {
-    const expectedLength = plan === "postpaid" ? 13 : 10 // adjust to your plan codes
-    if (meterNumber.length !== expectedLength || !provider) return
+    if (!plan || !meterNumber || !provider) return
+    
+    const validLengths = getMeterLength(plan)
+    
+    if (!validLengths.includes(meterNumber.length)) return
 
     const id = setTimeout(async () => {
       setVerifyingMeter(true)
@@ -124,24 +154,34 @@ export default function ElectricityPage() {
 
       try {
         const data = await verifyMeter(meterNumber, provider, plan)
-        setCustomerName(
-          data?.content?.Customer_Name ||
-          data?.Customer_Name ||
-          data?.customer_name ||
-          ""
+        
+        if (data.success && data.data) {
+          setCustomerName(
+            data.data.Customer_Name ||
+            data.data.customer_name ||
+            data.data.name ||
+            ""
+          )
+          setCustomerAddress(
+            data.data.Address ||
+            data.data.customer_address ||
+            data.data.address ||
+            ""
+          )
+        } else {
+          throw new Error(data.error || "Verification failed")
+        }
+      } catch (error) {
+        setVerificationError(
+          error instanceof Error 
+            ? error.message 
+            : "Failed to verify meter. Please check the number and try again."
         )
-        setCustomerAddress(
-          data?.content?.Address ||
-          data?.Address ||
-          data?.customer_address ||
-          ""
-        )
-      } catch {
-        setVerificationError("Failed to verify meter (401 or network error)")
       } finally {
         setVerifyingMeter(false)
       }
-    }, 400)
+    }, 800) // Increased delay to avoid too many requests
+    
     return () => clearTimeout(id)
   }, [meterNumber, provider, plan])
 
@@ -240,7 +280,7 @@ export default function ElectricityPage() {
               <Label>Meter Number</Label>
               <Input
                 type="text"
-                placeholder="Enter meter number"
+                placeholder={plan ? `Enter ${getMeterLength(plan).join(' or ')}-digit meter number` : "Enter meter number"}
                 value={meterNumber}
                 onChange={e => {
                   setMeterNumber(e.target.value.replace(/\D/g, ""))
@@ -250,37 +290,52 @@ export default function ElectricityPage() {
                 }}
                 maxLength={13}
               />
-              {verifyingMeter && <p className="text-sm text-blue-500">Verifying…</p>}
+              {verifyingMeter && (
+                <div className="flex items-center space-x-2 text-sm text-blue-500">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Verifying meter number...</span>
+                </div>
+              )}
               {verificationError && <p className="text-sm text-red-500">{verificationError}</p>}
             </div>
 
             {/* Customer Info */}
             {customerName && (
-              <>
+              <div className="space-y-2">
                 <Label>Customer Name</Label>
                 <Input value={customerName} readOnly className="bg-green-50" />
-              </>
-            )}
-            {customerAddress && (
-              <>
-                <Label>Address</Label>
-                <Input value={customerAddress} readOnly className="bg-green-50" />
-              </>
-            )}
-
-            {/* Amount (only if not fixed-price) */}
-            {!isFixedPrice && (
-              <div className="space-y-2">
-                <Label>Amount (NGN)</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  placeholder="Enter amount in Naira"
-                  value={amount}
-                  onChange={e => setAmount(e.target.value)}
-                />
               </div>
             )}
+            {customerAddress && (
+              <div className="space-y-2">
+                <Label>Address</Label>
+                <Input value={customerAddress} readOnly className="bg-green-50" />
+              </div>
+            )}
+
+            {/* Amount - Always show this input field */}
+            <div className="space-y-2">
+              <Label>Amount (NGN)</Label>
+              <Input
+                type="number"
+                min={100}
+                max={50000}
+                placeholder="Enter amount in Naira"
+                value={amount}
+                onChange={e => setAmount(e.target.value)}
+                disabled={isFixedPrice}
+              />
+              {isFixedPrice && selectedPlan && (
+                <p className="text-sm text-blue-500">
+                  Fixed price plan: ₦{Number(selectedPlan.variation_amount).toLocaleString()}
+                </p>
+              )}
+              {!isFixedPrice && (
+                <p className="text-sm text-gray-500">
+                  Enter the amount you want to pay (minimum ₦100)
+                </p>
+              )}
+            </div>
 
             {/* Summary */}
             <div className="border-t pt-4 space-y-2 text-sm">

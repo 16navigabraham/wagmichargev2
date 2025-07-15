@@ -30,6 +30,16 @@ interface TVPlan {
   fixedPrice: string
 }
 
+// Smart card number lengths for different providers
+const SMART_CARD_LENGTHS = {
+  'dstv': [10, 11], // DSTV smart card numbers
+  'gotv': [10, 11], // GOTV IUC numbers
+  'startimes': [10, 11], // StarTimes smart card numbers
+  'showmax': [10, 11], // Default lengths
+  'multichoice': [10, 11], // MultiChoice platforms
+  'default': [10, 11, 12] // Default for unknown providers
+}
+
 function generateRequestId() {
   return `${Date.now()}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`
 }
@@ -70,13 +80,35 @@ async function fetchTVPlans(serviceID: string) {
 }
 
 async function verifyCard(billersCode: string, serviceID: string) {
-  const res = await fetch("/api/vtpass/verify", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ billersCode, serviceID }),
-  })
-  if (!res.ok) throw new Error(String(res.status))
-  return res.json()
+  try {
+    const res = await fetch("/api/vtpass/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ billersCode, serviceID }),
+    })
+    
+    if (!res.ok) {
+      const errorData = await res.json()
+      throw new Error(errorData.error || `HTTP ${res.status}`)
+    }
+    
+    return res.json()
+  } catch (error) {
+    console.error('Verification error:', error)
+    throw error
+  }
+}
+
+function getSmartCardLength(serviceID: string): number[] {
+  const lowerServiceID = serviceID.toLowerCase()
+  
+  if (lowerServiceID.includes('dstv')) return SMART_CARD_LENGTHS.dstv
+  if (lowerServiceID.includes('gotv')) return SMART_CARD_LENGTHS.gotv
+  if (lowerServiceID.includes('startimes')) return SMART_CARD_LENGTHS.startimes
+  if (lowerServiceID.includes('showmax')) return SMART_CARD_LENGTHS.showmax
+  if (lowerServiceID.includes('multichoice')) return SMART_CARD_LENGTHS.multichoice
+  
+  return SMART_CARD_LENGTHS.default
 }
 
 export default function TVPage() {
@@ -120,30 +152,43 @@ export default function TVPage() {
 
   /* ---------- AUTO-VERIFY ---------- */
   useEffect(() => {
-    const cfg = providers.find(p => p.serviceID === provider)
-    const len = Array.isArray(cfg?.numberLength) ? cfg.numberLength : [cfg?.numberLength || 10]
-    if (!len.includes(smartCardNumber.length) || !provider) return
+    if (!provider || !smartCardNumber) return
+    
+    const validLengths = getSmartCardLength(provider)
+    
+    if (!validLengths.includes(smartCardNumber.length)) return
 
     const id = setTimeout(async () => {
       setVerifyingCard(true)
       setVerificationError("")
       setCustomerName("")
+      
       try {
         const data = await verifyCard(smartCardNumber, provider)
-        setCustomerName(
-          data?.content?.Customer_Name ||
-          data?.Customer_Name ||
-          data?.customer_name ||
-          ""
+        
+        if (data.success && data.data) {
+          setCustomerName(
+            data.data.Customer_Name ||
+            data.data.customer_name ||
+            data.data.name ||
+            ""
+          )
+        } else {
+          throw new Error(data.error || "Verification failed")
+        }
+      } catch (error) {
+        setVerificationError(
+          error instanceof Error 
+            ? error.message 
+            : "Failed to verify card. Please check the number and try again."
         )
-      } catch {
-        setVerificationError("Failed to verify card (401 or network error)")
       } finally {
         setVerifyingCard(false)
       }
-    }, 400)
+    }, 800) // Increased delay to avoid too many requests
+    
     return () => clearTimeout(id)
-  }, [smartCardNumber, provider, providers])
+  }, [smartCardNumber, provider])
 
   /* ---------- DERIVED ---------- */
   const selectedCrypto = CRYPTOS.find(c => c.symbol === crypto)
@@ -233,7 +278,7 @@ export default function TVPage() {
             <div className="space-y-2">
               <Label>Smart Card / IUC Number</Label>
               <Input
-                placeholder="Enter card number"
+                placeholder={provider ? `Enter ${getSmartCardLength(provider).join(' or ')}-digit card number` : "Enter card number"}
                 value={smartCardNumber}
                 onChange={e => {
                   setSmartCardNumber(e.target.value.replace(/\D/g, ""))
@@ -242,16 +287,21 @@ export default function TVPage() {
                 }}
                 maxLength={12}
               />
-              {verifyingCard && <p className="text-sm text-blue-500">Verifying…</p>}
+              {verifyingCard && (
+                <div className="flex items-center space-x-2 text-sm text-blue-500">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Verifying card number...</span>
+                </div>
+              )}
               {verificationError && <p className="text-sm text-red-500">{verificationError}</p>}
             </div>
 
             {/* Customer Name */}
             {customerName && (
-              <>
+              <div className="space-y-2">
                 <Label>Customer Name</Label>
                 <Input value={customerName} readOnly className="bg-green-50" />
-              </>
+              </div>
             )}
 
             {/* Summary */}
