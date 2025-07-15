@@ -1,14 +1,16 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
+import { Loader2, CheckCircle, XCircle, AlertCircle } from "lucide-react"
 import BackToDashboard from '@/components/BackToDashboard'
 import AuthGuard from "@/components/AuthGuard"
+import useVTpassVerification from '@/hooks/useVTpassVerification'
 
 const CRYPTOS = [
 	{ symbol: "ETH", name: "Ethereum", coingeckoId: "ethereum" },
@@ -73,55 +75,27 @@ async function fetchElectricityPlans(serviceID: string) {
 	}
 }
 
-// FIXED: Updated meter verification function with correct parameter names
-async function verifyMeter(billersCode: string, serviceID: string, type?: string) {
-	try {
-		const requestBody: any = {
-			billersCode,  // Changed from meterNumber to billersCode
-			serviceID,    // Correct parameter name
-		}
-		
-		// Add type if provided (some electricity providers might need this)
-		if (type) {
-			requestBody.type = type
-		}
-
-		const response = await fetch('/api/vtpass/verify', {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-			},
-			body: JSON.stringify(requestBody),
-		})
-		
-		if (!response.ok) {
-			const errorData = await response.json()
-			throw new Error(`HTTP error! status: ${response.status}, message: ${errorData.error || 'Unknown error'}`)
-		}
-		
-		const data = await response.json()
-		return data
-	} catch (error) {
-		console.error('Error verifying meter:', error)
-		throw error
-	}
-}
-
 export default function ElectricityPage() {
 	const [crypto, setCrypto] = useState("")
 	const [provider, setProvider] = useState("")
 	const [plan, setPlan] = useState("")
 	const [amount, setAmount] = useState("")
 	const [meterNumber, setMeterNumber] = useState("")
-	const [customerName, setCustomerName] = useState("")
-	const [customerAddress, setCustomerAddress] = useState("")
 	const [plans, setPlans] = useState<ElectricityPlan[]>([])
 	const [prices, setPrices] = useState<any>({})
 	const [loading, setLoading] = useState(false)
 	const [loadingPlans, setLoadingPlans] = useState(false)
-	const [verifyingMeter, setVerifyingMeter] = useState(false)
-	const [verificationError, setVerificationError] = useState("")
 	const [requestId, setRequestId] = useState("")
+
+	// Use the verification hook
+	const {
+		verificationState,
+		verifyCustomer,
+		resetVerification,
+		getProviderConfig,
+		isValidLength,
+		isValidFormat
+	} = useVTpassVerification('electricity')
 
 	useEffect(() => {
 		setLoading(true)
@@ -144,67 +118,72 @@ export default function ElectricityPage() {
 
 	// Generate requestId when user starts filling form
 	useEffect(() => {
-		if (crypto || provider || plan || amount || meterNumber || customerName) {
+		if (crypto || provider || plan || amount || meterNumber || verificationState.customerName) {
 			if (!requestId) {
 				setRequestId(generateRequestId())
 			}
 		}
-	}, [crypto, provider, plan, amount, meterNumber, customerName, requestId])
+	}, [crypto, provider, plan, amount, meterNumber, verificationState.customerName, requestId])
 
-	// FIXED: Updated meter verification handler
-	const handleVerifyMeter = async () => {
+	// Auto-verify when meter number is complete and valid
+	useEffect(() => {
 		if (!meterNumber || !provider) {
-			setVerificationError("Please enter meter number and select a provider")
+			resetVerification()
 			return
 		}
 
-		// Clear previous data
-		setVerifyingMeter(true)
-		setVerificationError("")
-		setCustomerName("")
-		setCustomerAddress("")
-		
-		try {
-			const selectedPlan = plans.find((p) => p.variation_code === plan)
-			const result = await verifyMeter(meterNumber, provider, selectedPlan?.variation_code)
-			console.log('Meter verification result:', result) // For debugging
-			
-			// Handle different possible response structures for electricity verification
-			if (result?.content?.Customer_Name) {
-				setCustomerName(result.content.Customer_Name)
-			} else if (result?.Customer_Name) {
-				setCustomerName(result.Customer_Name)
-			} else if (result?.content?.customer_name) {
-				setCustomerName(result.content.customer_name)
-			} else if (result?.customer_name) {
-				setCustomerName(result.customer_name)
-			}
+		const config = getProviderConfig(provider)
+		if (!config) return
 
-			// Handle address if available
-			if (result?.content?.Address) {
-				setCustomerAddress(result.content.Address)
-			} else if (result?.Address) {
-				setCustomerAddress(result.Address)
-			} else if (result?.content?.customer_address) {
-				setCustomerAddress(result.content.customer_address)
-			} else if (result?.customer_address) {
-				setCustomerAddress(result.customer_address)
-			}
+		// Check if the number is valid length and format
+		if (isValidLength(meterNumber, config) && isValidFormat(meterNumber, config)) {
+			// Debounce the verification to avoid too many calls
+			const timeoutId = setTimeout(() => {
+				const selectedPlan = plans.find((p) => p.variation_code === plan)
+				verifyCustomer(meterNumber, provider, selectedPlan?.variation_code)
+			}, 500)
 
-			// If we got some data but no customer name, show what we got
-			if (!customerName && result) {
-				if (result.content || result.Customer_Name || result.customer_name) {
-					setVerificationError("Meter verified but customer information is incomplete")
-				} else {
-					setVerificationError("Meter number verified but no customer details found")
-				}
-				console.log('Full verification response:', result)
+			return () => clearTimeout(timeoutId)
+		} else {
+			// Reset verification if number is incomplete or invalid
+			resetVerification()
+		}
+	}, [meterNumber, provider, plan, plans, verifyCustomer, resetVerification, getProviderConfig, isValidLength, isValidFormat])
+
+	// Handle manual verification
+	const handleVerifyMeter = async () => {
+		if (!meterNumber || !provider) {
+			return
+		}
+
+		const selectedPlan = plans.find((p) => p.variation_code === plan)
+		verifyCustomer(meterNumber, provider, selectedPlan?.variation_code)
+	}
+
+	const handleMeterNumberChange = (value: string) => {
+		// Only allow digits and limit to reasonable length
+		const cleanValue = value.replace(/\D/g, '').slice(0, 13)
+		setMeterNumber(cleanValue)
+	}
+
+	const handleProviderChange = (newProvider: string) => {
+		setProvider(newProvider)
+		setMeterNumber("")
+		resetVerification()
+	}
+
+	const handlePlanChange = (newPlan: string) => {
+		setPlan(newPlan)
+		// Reset verification when plan changes as some providers require it
+		if (meterNumber && provider) {
+			const config = getProviderConfig(provider)
+			if (config && isValidLength(meterNumber, config) && isValidFormat(meterNumber, config)) {
+				// Re-verify with new plan
+				setTimeout(() => {
+					const selectedPlan = plans.find((p) => p.variation_code === newPlan)
+					verifyCustomer(meterNumber, provider, selectedPlan?.variation_code)
+				}, 300)
 			}
-		} catch (error) {
-			console.error('Failed to verify meter:', error)
-			setVerificationError("Failed to verify meter number. Please check the number and try again.")
-		} finally {
-			setVerifyingMeter(false)
 		}
 	}
 
@@ -221,6 +200,7 @@ export default function ElectricityPage() {
 
 	const selectedProvider = ELECTRICITY_PROVIDERS.find((p) => p.serviceID === provider)
 	const isFixedPrice = selectedPlan?.fixedPrice === "Yes"
+	const config = getProviderConfig(provider)
 
 	const handlePayment = () => {
 		// This would be where you send the data to backend
@@ -231,8 +211,8 @@ export default function ElectricityPage() {
 			plan,
 			amount: amountNGN,
 			meterNumber,
-			customerName,
-			customerAddress,
+			customerName: verificationState.customerName,
+			customerAddress: verificationState.customerAddress,
 			cryptoNeeded,
 			type: 'electricity'
 		}
@@ -241,7 +221,25 @@ export default function ElectricityPage() {
 	}
 
 	// Check if all required fields are filled
-	const canPay = crypto && provider && plan && meterNumber && (isFixedPrice || amount) && priceNGN && amountNGN && requestId
+	const canPay = crypto && provider && plan && meterNumber && (isFixedPrice || amount) && priceNGN && amountNGN && requestId && verificationState.isVerified
+
+	const getMeterNumberValidationMessage = () => {
+		if (!meterNumber || !config) return null
+		
+		const expectedLength = Array.isArray(config.numberLength) 
+			? config.numberLength.join(' or ') 
+			: config.numberLength
+		
+		if (!isValidLength(meterNumber, config)) {
+			return `${config.displayName} must be ${expectedLength} digits`
+		}
+		
+		if (!isValidFormat(meterNumber, config)) {
+			return `Invalid ${config.displayName} format`
+		}
+		
+		return null
+	}
 
 	return (
 		<AuthGuard>
@@ -277,7 +275,7 @@ export default function ElectricityPage() {
 							</div>
 							<div className="space-y-2">
 								<Label htmlFor="provider">Electricity Provider</Label>
-								<Select value={provider} onValueChange={setProvider}>
+								<Select value={provider} onValueChange={handleProviderChange}>
 									<SelectTrigger>
 										<SelectValue placeholder="Select provider" />
 									</SelectTrigger>
@@ -292,7 +290,7 @@ export default function ElectricityPage() {
 							</div>
 							<div className="space-y-2">
 								<Label htmlFor="plan">Meter Type</Label>
-								<Select value={plan} onValueChange={setPlan} disabled={!provider || loadingPlans}>
+								<Select value={plan} onValueChange={handlePlanChange} disabled={!provider || loadingPlans}>
 									<SelectTrigger>
 										<SelectValue placeholder={loadingPlans ? "Loading meter types..." : "Select meter type"} />
 									</SelectTrigger>
@@ -306,31 +304,62 @@ export default function ElectricityPage() {
 								</Select>
 							</div>
 							<div className="space-y-2">
-								<Label htmlFor="meterNumber">Meter Number</Label>
+								<Label htmlFor="meterNumber">
+									{config?.displayName || 'Meter Number'}
+								</Label>
 								<div className="flex space-x-2">
-									<Input
-										id="meterNumber"
-										type="text"
-										placeholder="Enter meter number"
-										value={meterNumber}
-										onChange={(e) => {
-											setMeterNumber(e.target.value)
-											setVerificationError("")
-											setCustomerName("")
-											setCustomerAddress("")
-										}}
-									/>
+									<div className="flex-1 relative">
+										<Input
+											id="meterNumber"
+											type="text"
+											placeholder={`Enter ${config?.displayName || 'meter number'}`}
+											value={meterNumber}
+											onChange={(e) => handleMeterNumberChange(e.target.value)}
+											className={`${
+												meterNumber && !verificationState.isVerifying && !verificationState.isVerified
+													? 'border-red-500'
+													: verificationState.isVerified
+													? 'border-green-500'
+													: ''
+											}`}
+										/>
+										{verificationState.isVerifying && (
+											<div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+												<Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+											</div>
+										)}
+										{verificationState.isVerified && (
+											<div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+												<CheckCircle className="h-4 w-4 text-green-500" />
+											</div>
+										)}
+										{verificationState.error && (
+											<div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+												<XCircle className="h-4 w-4 text-red-500" />
+											</div>
+										)}
+									</div>
 									<Button
 										type="button"
 										onClick={handleVerifyMeter}
-										disabled={!meterNumber || !provider || verifyingMeter}
+										disabled={!meterNumber || !provider || verificationState.isVerifying}
 										variant="outline"
 									>
-										{verifyingMeter ? "Verifying..." : "Verify"}
+										{verificationState.isVerifying ? "Verifying..." : "Verify"}
 									</Button>
 								</div>
-								{verificationError && (
-									<p className="text-sm text-red-500">{verificationError}</p>
+								
+								{/* Validation Message */}
+								{getMeterNumberValidationMessage() && (
+									<p className="text-sm text-red-600 flex items-center gap-1">
+										<AlertCircle className="h-4 w-4" />
+										{getMeterNumberValidationMessage()}
+									</p>
+								)}
+								
+								{/* Verification Error */}
+								{verificationState.error && (
+									<p className="text-sm text-red-500">{verificationState.error}</p>
 								)}
 							</div>
 							<div className="space-y-2">
@@ -339,19 +368,21 @@ export default function ElectricityPage() {
 									id="customerName"
 									type="text"
 									placeholder="Verify meter to get customer name"
-									value={customerName}
-									onChange={(e) => setCustomerName(e.target.value)}
+									value={verificationState.customerName}
+									readOnly={true}
+									className={verificationState.isVerified ? 'bg-green-50' : ''}
 								/>
 							</div>
-							{customerAddress && (
+							{verificationState.customerAddress && (
 								<div className="space-y-2">
 									<Label htmlFor="customerAddress">Customer Address</Label>
 									<Input
 										id="customerAddress"
 										type="text"
 										placeholder="Customer address"
-										value={customerAddress}
+										value={verificationState.customerAddress}
 										readOnly={true}
+										className="bg-green-50"
 									/>
 								</div>
 							)}
@@ -420,7 +451,7 @@ export default function ElectricityPage() {
 							disabled={!canPay}
 							onClick={handlePayment}
 						>
-							{canPay ? "Pay Bill" : "Pay Bill (Coming Soon)"}
+							{canPay ? "Pay Bill" : "Pay Bill (Complete verification)"}
 						</Button>
 					</CardContent>
 				</Card>
