@@ -312,8 +312,8 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
         </div>
       </section>
 
-      {/* Footer Section */}
-<footer className="bg-white/90 dark:bg-gray-900/90 border-t mt-12 w-full">
+       {/* Footer Section */}
+      <footer className="bg-white/90 dark:bg-gray-900/90 border-t mt-12 w-full">
   <div className="container mx-auto px-4 py-8 md:py-12">
     <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
       <div className="md:col-span-1">
@@ -400,7 +400,9 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
     </div>
 
     <div className="border-t mt-8 pt-6 text-center text-muted-foreground">
-      <p className="text-sm">© {new Date().getFullYear()} wagmi charge v2. All rights reserved.</p>
-    </div>
+ <p className="text-sm">© {new Date().getFullYear()} wagmi charge v2. All rights reserved.</p>
+ </div>
   </div>
-</footer>
+      </footer>
+    </div>
+  )}
