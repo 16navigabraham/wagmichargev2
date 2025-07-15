@@ -88,6 +88,9 @@ async function verifyMeter(billersCode: string, serviceID: string, type?: string
       throw new Error(data.error || `HTTP ${res.status}`)
     }
     
+    // Log the response structure for debugging
+    console.log('Meter verification response:', JSON.stringify(data, null, 2))
+    
     return data
   } catch (error) {
     console.error('Meter verification error:', error)
@@ -165,22 +168,64 @@ export default function ElectricityPage() {
         const data = await verifyMeter(meterNumber, provider, plan)
         
         if (data.success && data.data) {
+          // Log the data structure for debugging
+          console.log('Customer data structure:', JSON.stringify(data.data, null, 2))
+          
+          // Try multiple possible field names for customer name
           const name = data.data.Customer_Name ||
                       data.data.customer_name ||
                       data.data.name ||
+                      data.data.customerName ||
+                      data.data.CUSTOMER_NAME ||
+                      data.data.Customer_Name ||
+                      data.data.customer ||
+                      data.data.Customer ||
+                      // Sometimes it's nested in different structures
+                      data.data.content?.Customer_Name ||
+                      data.data.content?.customer_name ||
+                      data.data.content?.name ||
+                      // Check if the entire data.data is the customer name (some APIs return just a string)
+                      (typeof data.data === 'string' ? data.data : null) ||
                       ""
           
+          // Try multiple possible field names for address
           const address = data.data.Address ||
                          data.data.customer_address ||
                          data.data.address ||
+                         data.data.customerAddress ||
+                         data.data.ADDRESS ||
+                         data.data.Customer_Address ||
+                         data.data.content?.Address ||
+                         data.data.content?.customer_address ||
+                         data.data.content?.address ||
                          ""
           
-          if (name) {
-            setCustomerName(name)
-            setCustomerAddress(address)
+          console.log('Extracted customer info:', { name, address })
+          
+          if (name && name.trim() !== '') {
+            setCustomerName(name.trim())
+            setCustomerAddress(address.trim())
             setVerificationSuccess(true)
           } else {
-            throw new Error("Customer name not found in response")
+            // If no name found, log the entire response structure
+            console.error('Customer name not found in response. Full response:', {
+              data: data.data,
+              rawResponse: data.rawResponse
+            })
+            
+            // Try to extract any text that might be the customer name
+            const possibleName = Object.values(data.data || {}).find(
+              value => typeof value === 'string' && value.length > 2 && value.length < 100
+            )
+            
+            if (possibleName) {
+              console.log('Found possible customer name:', possibleName)
+              setCustomerName(possibleName)
+              setCustomerAddress(address.trim())
+              setVerificationSuccess(true)
+            } else {
+              throw new Error("Customer name not found in response. Please check the meter number and try again.")
+            }
           }
         } else {
           throw new Error(data.error || "Verification failed")
