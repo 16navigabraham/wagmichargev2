@@ -47,6 +47,7 @@ function generateRequestId() {
   return `${Date.now()}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`
 }
 
+/* ---------- fetch helpers ---------- */
 async function fetchPrices() {
   const ids = CRYPTOS.map(c => c.coingeckoId).join(",")
   const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=ngn`)
@@ -59,6 +60,7 @@ async function fetchElectricityPlans(serviceID: string) {
   return data.content?.variations || []
 }
 
+/* ---------- VTpass verify ---------- */
 async function verifyMeter(billersCode: string, serviceID: string, type: string) {
   const res = await fetch("/api/vtpass/verify", {
     method: "POST",
@@ -67,7 +69,7 @@ async function verifyMeter(billersCode: string, serviceID: string, type: string)
   })
   const data = await res.json()
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
-  return data.content || {}
+  return data.content || {} // safe object
 }
 
 function getMeterLength(planCode: string): number[] {
@@ -77,6 +79,7 @@ function getMeterLength(planCode: string): number[] {
   return METER_LENGTHS.default
 }
 
+/* ---------- component ---------- */
 export default function ElectricityPage() {
   const [crypto, setCrypto] = useState("")
   const [provider, setProvider] = useState("")
@@ -99,14 +102,14 @@ export default function ElectricityPage() {
     fetchPrices().then(setPrices).finally(() => setLoading(false))
   }, [])
 
-  /* fetch plans when provider changes */
+  /* plans when provider changes */
   useEffect(() => {
     if (!provider) return
     setLoadingPlans(true)
     fetchElectricityPlans(provider).then(setPlans).finally(() => setLoadingPlans(false))
   }, [provider])
 
-  /* requestId */
+  /* requestId generator */
   useEffect(() => {
     if (crypto || provider || plan || amount || meterNumber || customerName) {
       if (!requestId) setRequestId(generateRequestId())
@@ -135,8 +138,8 @@ export default function ElectricityPage() {
       try {
         const content = await verifyMeter(meterNumber, provider, plan)
 
-        const name    = String(content?.Customer_Name || content?.customer_name || "").trim()
-        const address = String(content?.Address || content?.address || "").trim()
+        const name    = String(content?.Customer_Name || "").trim()
+        const address = String(content?.Address || "").trim()
 
         if (!name) throw new Error("Customer name not returned")
         setCustomerName(name)
@@ -151,6 +154,7 @@ export default function ElectricityPage() {
     return () => clearTimeout(id)
   }, [meterNumber, provider, plan])
 
+  /* derived values */
   const selectedCrypto = CRYPTOS.find(c => c.symbol === crypto)
   const priceNGN = selectedCrypto ? prices[selectedCrypto.coingeckoId]?.ngn : null
   const amountNGN = Number(amount) || 0

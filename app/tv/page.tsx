@@ -32,6 +32,7 @@ function generateRequestId() {
   return `${Date.now()}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`
 }
 
+/* ---------- fetch helpers ---------- */
 async function fetchPrices() {
   const ids = CRYPTOS.map(c => c.coingeckoId).join(",")
   const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=ngn`)
@@ -50,6 +51,7 @@ async function fetchTVPlans(serviceID: string) {
   return data.content?.variations || []
 }
 
+/* ---------- VTpass verify ---------- */
 async function verifyCard(billersCode: string, serviceID: string) {
   const res = await fetch("/api/vtpass/verify", {
     method: "POST",
@@ -58,7 +60,7 @@ async function verifyCard(billersCode: string, serviceID: string) {
   })
   const data = await res.json()
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
-  return data.content || {}
+  return data.content || {} // safe object
 }
 
 function getSmartCardLength(serviceID: string): number[] {
@@ -66,6 +68,7 @@ function getSmartCardLength(serviceID: string): number[] {
   return SMART_CARD_LENGTHS[id] ?? SMART_CARD_LENGTHS.default
 }
 
+/* ---------- component ---------- */
 export default function TVPage() {
   const [crypto, setCrypto] = useState("")
   const [provider, setProvider] = useState("")
@@ -96,14 +99,14 @@ export default function TVPage() {
     })
   }, [])
 
-  /* fetch plans when provider changes */
+  /* plans when provider changes */
   useEffect(() => {
     if (!provider) return
     setLoadingPlans(true)
     fetchTVPlans(provider).then(setPlans).finally(() => setLoadingPlans(false))
   }, [provider])
 
-  /* requestId */
+  /* requestId generator */
   useEffect(() => {
     if (crypto && provider && plan && smartCardNumber && customerName && !requestId)
       setRequestId(generateRequestId())
@@ -135,10 +138,10 @@ export default function TVPage() {
       try {
         const content = await verifyCard(smartCardNumber, provider)
 
-        const name         = String(content?.Customer_Name || content?.customer_name || "").trim()
-        const bouquet      = String(content?.Current_Bouquet || content?.current_bouquet || "").trim()
-        const due          = String(content?.Due_Date || content?.due_date || "").trim()
-        const renewal      = String(content?.Renewal_Amount || content?.renewal_amount || "").trim()
+        const name    = String(content?.Customer_Name || "").trim()
+        const bouquet = String(content?.Current_Bouquet || "").trim()
+        const due     = String(content?.Due_Date || "").trim()
+        const renewal = String(content?.Renewal_Amount || "").trim()
 
         if (!name) throw new Error("Customer name not returned")
         setCustomerName(name)
@@ -155,6 +158,7 @@ export default function TVPage() {
     return () => clearTimeout(id)
   }, [smartCardNumber, provider])
 
+  /* derived values */
   const selectedCrypto = CRYPTOS.find(c => c.symbol === crypto)
   const selectedPlan   = plans.find(p => p.variation_code === plan)
   const priceNGN       = selectedCrypto ? prices[selectedCrypto.coingeckoId]?.ngn : null
@@ -193,9 +197,7 @@ export default function TVPage() {
             <div className="space-y-2">
               <Label>Pay With</Label>
               <Select value={crypto} onValueChange={setCrypto}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select crypto" />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Select crypto" /></SelectTrigger>
                 <SelectContent>
                   {CRYPTOS.map(c => (
                     <SelectItem key={c.symbol} value={c.symbol}>
@@ -240,7 +242,7 @@ export default function TVPage() {
               </Select>
             </div>
 
-            {/* smart card */}
+            {/* smart-card */}
             <div className="space-y-2">
               <Label>Smart Card / IUC Number</Label>
               <Input
