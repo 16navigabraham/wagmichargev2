@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Loader2 } from "lucide-react"
+import { Loader2, AlertCircle, CheckCircle } from "lucide-react"
 import BackToDashboard from '@/components/BackToDashboard'
 import AuthGuard from "@/components/AuthGuard"
 
@@ -41,9 +41,9 @@ interface ElectricityPlan {
 
 // Correct meter number lengths for different meter types
 const METER_LENGTHS = {
-  'prepaid': [11], // Prepaid meters are typically 11 digits
-  'postpaid': [10, 11, 13], // Postpaid meters are typically 13 digits
-  'default': [10, 11, 12, 13] // Default for unknown types
+  'prepaid': [11],
+  'postpaid': [10, 11, 13],
+  'default': [10, 11, 12, 13]
 }
 
 function generateRequestId(): string {
@@ -82,12 +82,13 @@ async function verifyMeter(billersCode: string, serviceID: string, type?: string
       body: JSON.stringify({ billersCode, serviceID, type }),
     })
     
+    const data = await res.json()
+    
     if (!res.ok) {
-      const errorData = await res.json()
-      throw new Error(errorData.error || `HTTP ${res.status}`)
+      throw new Error(data.error || `HTTP ${res.status}`)
     }
     
-    return res.json()
+    return data
   } catch (error) {
     console.error('Meter verification error:', error)
     throw error
@@ -118,6 +119,7 @@ export default function ElectricityPage() {
   const [loadingPlans, setLoadingPlans] = useState(false)
   const [verifyingMeter, setVerifyingMeter] = useState(false)
   const [verificationError, setVerificationError] = useState("")
+  const [verificationSuccess, setVerificationSuccess] = useState(false)
   const [requestId, setRequestId] = useState("")
 
   /* ---------- EFFECTS ---------- */
@@ -144,11 +146,18 @@ export default function ElectricityPage() {
     
     const validLengths = getMeterLength(plan)
     
-    if (!validLengths.includes(meterNumber.length)) return
+    if (!validLengths.includes(meterNumber.length)) {
+      setVerificationError("")
+      setVerificationSuccess(false)
+      setCustomerName("")
+      setCustomerAddress("")
+      return
+    }
 
     const id = setTimeout(async () => {
       setVerifyingMeter(true)
       setVerificationError("")
+      setVerificationSuccess(false)
       setCustomerName("")
       setCustomerAddress("")
 
@@ -156,31 +165,35 @@ export default function ElectricityPage() {
         const data = await verifyMeter(meterNumber, provider, plan)
         
         if (data.success && data.data) {
-          setCustomerName(
-            data.data.Customer_Name ||
-            data.data.customer_name ||
-            data.data.name ||
-            ""
-          )
-          setCustomerAddress(
-            data.data.Address ||
-            data.data.customer_address ||
-            data.data.address ||
-            ""
-          )
+          const name = data.data.Customer_Name ||
+                      data.data.customer_name ||
+                      data.data.name ||
+                      ""
+          
+          const address = data.data.Address ||
+                         data.data.customer_address ||
+                         data.data.address ||
+                         ""
+          
+          if (name) {
+            setCustomerName(name)
+            setCustomerAddress(address)
+            setVerificationSuccess(true)
+          } else {
+            throw new Error("Customer name not found in response")
+          }
         } else {
           throw new Error(data.error || "Verification failed")
         }
       } catch (error) {
-        setVerificationError(
-          error instanceof Error 
-            ? error.message 
-            : "Failed to verify meter. Please check the number and try again."
-        )
+        const errorMessage = error instanceof Error ? error.message : "Unknown error"
+        setVerificationError(errorMessage)
+        setVerificationSuccess(false)
+        console.error('Meter verification failed:', errorMessage)
       } finally {
         setVerifyingMeter(false)
       }
-    }, 800) // Increased delay to avoid too many requests
+    }, 1000) // Increased delay to reduce API calls
     
     return () => clearTimeout(id)
   }, [meterNumber, provider, plan])
@@ -205,7 +218,8 @@ export default function ElectricityPage() {
     priceNGN &&
     amountNGN &&
     requestId &&
-    customerName
+    customerName &&
+    verificationSuccess
 
   /* ---------- RENDER ---------- */
   return (
@@ -283,33 +297,50 @@ export default function ElectricityPage() {
                 placeholder={plan ? `Enter ${getMeterLength(plan).join(' or ')}-digit meter number` : "Enter meter number"}
                 value={meterNumber}
                 onChange={e => {
-                  setMeterNumber(e.target.value.replace(/\D/g, ""))
+                  const value = e.target.value.replace(/\D/g, "")
+                  setMeterNumber(value)
                   setVerificationError("")
+                  setVerificationSuccess(false)
                   setCustomerName("")
                   setCustomerAddress("")
                 }}
                 maxLength={13}
               />
+              
+              {/* Verification Status */}
               {verifyingMeter && (
-                <div className="flex items-center space-x-2 text-sm text-blue-500">
+                <div className="flex items-center space-x-2 text-sm text-blue-600">
                   <Loader2 className="w-4 h-4 animate-spin" />
                   <span>Verifying meter number...</span>
                 </div>
               )}
-              {verificationError && <p className="text-sm text-red-500">{verificationError}</p>}
+              
+              {verificationSuccess && customerName && (
+                <div className="flex items-center space-x-2 text-sm text-green-600">
+                  <CheckCircle className="w-4 h-4" />
+                  <span>Meter verified successfully</span>
+                </div>
+              )}
+              
+              {verificationError && (
+                <div className="flex items-center space-x-2 text-sm text-red-600">
+                  <AlertCircle className="w-4 h-4" />
+                  <span>{verificationError}</span>
+                </div>
+              )}
             </div>
 
             {/* Customer Info */}
             {customerName && (
               <div className="space-y-2">
                 <Label>Customer Name</Label>
-                <Input value={customerName} readOnly className="bg-green-50" />
+                <Input value={customerName} readOnly className="bg-green-50 border-green-200" />
               </div>
             )}
             {customerAddress && (
               <div className="space-y-2">
                 <Label>Address</Label>
-                <Input value={customerAddress} readOnly className="bg-green-50" />
+                <Input value={customerAddress} readOnly className="bg-green-50 border-green-200" />
               </div>
             )}
 
@@ -326,7 +357,7 @@ export default function ElectricityPage() {
                 disabled={isFixedPrice}
               />
               {isFixedPrice && selectedPlan && (
-                <p className="text-sm text-blue-500">
+                <p className="text-sm text-blue-600">
                   Fixed price plan: ₦{Number(selectedPlan.variation_amount).toLocaleString()}
                 </p>
               )}
@@ -372,7 +403,7 @@ export default function ElectricityPage() {
             </div>
 
             <Button className="w-full" disabled={!canPay}>
-              {canPay ? "Pay Bill" : "Complete verification"}
+              {canPay ? "Pay Bill" : "Complete form and verify meter"}
             </Button>
           </CardContent>
         </Card>

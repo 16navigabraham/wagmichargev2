@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Loader2 } from "lucide-react"
+import { Loader2, AlertCircle, CheckCircle } from "lucide-react"
 import BackToDashboard from '@/components/BackToDashboard'
 import AuthGuard from "@/components/AuthGuard"
 
@@ -32,12 +32,12 @@ interface TVPlan {
 
 // Smart card number lengths for different providers
 const SMART_CARD_LENGTHS = {
-  'dstv': [10, 11], // DSTV smart card numbers
-  'gotv': [10, 11], // GOTV IUC numbers
-  'startimes': [10, 11], // StarTimes smart card numbers
-  'showmax': [10, 11], // Default lengths
-  'multichoice': [10, 11], // MultiChoice platforms
-  'default': [10, 11, 12] // Default for unknown providers
+  'dstv': [10, 11],
+  'gotv': [10, 11],
+  'startimes': [10, 11],
+  'showmax': [10, 11],
+  'multichoice': [10, 11],
+  'default': [10, 11, 12]
 }
 
 function generateRequestId() {
@@ -87,12 +87,13 @@ async function verifyCard(billersCode: string, serviceID: string) {
       body: JSON.stringify({ billersCode, serviceID }),
     })
     
+    const data = await res.json()
+    
     if (!res.ok) {
-      const errorData = await res.json()
-      throw new Error(errorData.error || `HTTP ${res.status}`)
+      throw new Error(data.error || `HTTP ${res.status}`)
     }
     
-    return res.json()
+    return data
   } catch (error) {
     console.error('Verification error:', error)
     throw error
@@ -126,6 +127,7 @@ export default function TVPage() {
   const [loadingPlans, setLoadingPlans] = useState(false)
   const [verifyingCard, setVerifyingCard] = useState(false)
   const [verificationError, setVerificationError] = useState("")
+  const [verificationSuccess, setVerificationSuccess] = useState(false)
   const [requestId, setRequestId] = useState("")
 
   /* ---------- EFFECTS ---------- */
@@ -156,36 +158,46 @@ export default function TVPage() {
     
     const validLengths = getSmartCardLength(provider)
     
-    if (!validLengths.includes(smartCardNumber.length)) return
+    if (!validLengths.includes(smartCardNumber.length)) {
+      setVerificationError("")
+      setVerificationSuccess(false)
+      setCustomerName("")
+      return
+    }
 
     const id = setTimeout(async () => {
       setVerifyingCard(true)
       setVerificationError("")
+      setVerificationSuccess(false)
       setCustomerName("")
       
       try {
         const data = await verifyCard(smartCardNumber, provider)
         
         if (data.success && data.data) {
-          setCustomerName(
-            data.data.Customer_Name ||
-            data.data.customer_name ||
-            data.data.name ||
-            ""
-          )
+          const name = data.data.Customer_Name ||
+                      data.data.customer_name ||
+                      data.data.name ||
+                      ""
+          
+          if (name) {
+            setCustomerName(name)
+            setVerificationSuccess(true)
+          } else {
+            throw new Error("Customer name not found in response")
+          }
         } else {
           throw new Error(data.error || "Verification failed")
         }
       } catch (error) {
-        setVerificationError(
-          error instanceof Error 
-            ? error.message 
-            : "Failed to verify card. Please check the number and try again."
-        )
+        const errorMessage = error instanceof Error ? error.message : "Unknown error"
+        setVerificationError(errorMessage)
+        setVerificationSuccess(false)
+        console.error('Card verification failed:', errorMessage)
       } finally {
         setVerifyingCard(false)
       }
-    }, 800) // Increased delay to avoid too many requests
+    }, 1000) // Increased delay to reduce API calls
     
     return () => clearTimeout(id)
   }, [smartCardNumber, provider])
@@ -202,6 +214,7 @@ export default function TVPage() {
     plan &&
     smartCardNumber &&
     customerName &&
+    verificationSuccess &&
     priceNGN &&
     amountNGN &&
     requestId
@@ -281,26 +294,43 @@ export default function TVPage() {
                 placeholder={provider ? `Enter ${getSmartCardLength(provider).join(' or ')}-digit card number` : "Enter card number"}
                 value={smartCardNumber}
                 onChange={e => {
-                  setSmartCardNumber(e.target.value.replace(/\D/g, ""))
+                  const value = e.target.value.replace(/\D/g, "")
+                  setSmartCardNumber(value)
                   setVerificationError("")
+                  setVerificationSuccess(false)
                   setCustomerName("")
                 }}
                 maxLength={12}
               />
+              
+              {/* Verification Status */}
               {verifyingCard && (
-                <div className="flex items-center space-x-2 text-sm text-blue-500">
+                <div className="flex items-center space-x-2 text-sm text-blue-600">
                   <Loader2 className="w-4 h-4 animate-spin" />
                   <span>Verifying card number...</span>
                 </div>
               )}
-              {verificationError && <p className="text-sm text-red-500">{verificationError}</p>}
+              
+              {verificationSuccess && customerName && (
+                <div className="flex items-center space-x-2 text-sm text-green-600">
+                  <CheckCircle className="w-4 h-4" />
+                  <span>Card verified successfully</span>
+                </div>
+              )}
+              
+              {verificationError && (
+                <div className="flex items-center space-x-2 text-sm text-red-600">
+                  <AlertCircle className="w-4 h-4" />
+                  <span>{verificationError}</span>
+                </div>
+              )}
             </div>
 
             {/* Customer Name */}
             {customerName && (
               <div className="space-y-2">
                 <Label>Customer Name</Label>
-                <Input value={customerName} readOnly className="bg-green-50" />
+                <Input value={customerName} readOnly className="bg-green-50 border-green-200" />
               </div>
             )}
 
@@ -331,7 +361,7 @@ export default function TVPage() {
             </div>
 
             <Button className="w-full" disabled={!canPay}>
-              {canPay ? "Pay Subscription" : "Complete form"}
+              {canPay ? "Pay Subscription" : "Complete form and verify card"}
             </Button>
           </CardContent>
         </Card>
