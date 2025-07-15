@@ -1,3 +1,4 @@
+// Fixed TV Page - app/tv/page.tsx
 "use client"
 
 import { useState, useEffect } from "react"
@@ -174,17 +175,30 @@ export default function TVPage() {
       try {
         const data = await verifyCard(smartCardNumber, provider)
         
-        if (data.success && data.data) {
-          const name = data.data.Customer_Name ||
-                      data.data.customer_name ||
-                      data.data.name ||
+        if (data.success && data.content) {
+          console.log('Verification response data:', data.content) // Debug log
+          
+          // More comprehensive customer name extraction
+          const name = data.content.Customer_Name ||
+                      data.content.customer_name ||
+                      data.content.customerName ||
+                      data.content.name ||
+                      data.content.Name ||
+                      data.content.customer?.name ||
+                      data.content.customer?.Customer_Name ||
+                      data.content.content?.Customer_Name ||
+                      data.content.content?.customer_name ||
                       ""
           
-          if (name) {
-            setCustomerName(name)
+          console.log('Extracted customer name:', name) // Debug log
+          
+          if (name && name.trim()) {
+            setCustomerName(name.trim())
             setVerificationSuccess(true)
           } else {
-            throw new Error("Customer name not found in response")
+            // Instead of throwing error, let's show what we got
+            console.log('Available data fields:', Object.keys(data.content))
+            throw new Error("Customer name not found. Please check if the card number is correct.")
           }
         } else {
           throw new Error(data.error || "Verification failed")
@@ -197,7 +211,7 @@ export default function TVPage() {
       } finally {
         setVerifyingCard(false)
       }
-    }, 1000) // Increased delay to reduce API calls
+    }, 1000)
     
     return () => clearTimeout(id)
   }, [smartCardNumber, provider])
