@@ -67,7 +67,7 @@ async function verifyMeter(billersCode: string, serviceID: string, type: string)
   })
   const data = await res.json()
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
-  return data.content
+  return data.content || {}
 }
 
 function getMeterLength(planCode: string): number[] {
@@ -94,22 +94,26 @@ export default function ElectricityPage() {
   const [verificationSuccess, setVerificationSuccess] = useState(false)
   const [requestId, setRequestId] = useState("")
 
+  /* initial load */
   useEffect(() => {
     fetchPrices().then(setPrices).finally(() => setLoading(false))
   }, [])
 
+  /* fetch plans when provider changes */
   useEffect(() => {
     if (!provider) return
     setLoadingPlans(true)
     fetchElectricityPlans(provider).then(setPlans).finally(() => setLoadingPlans(false))
   }, [provider])
 
+  /* requestId */
   useEffect(() => {
     if (crypto || provider || plan || amount || meterNumber || customerName) {
       if (!requestId) setRequestId(generateRequestId())
     }
   }, [crypto, provider, plan, amount, meterNumber, customerName, requestId])
 
+  /* auto-verify meter */
   useEffect(() => {
     if (!plan || !meterNumber || !provider) return
     const validLengths = getMeterLength(plan)
@@ -130,11 +134,11 @@ export default function ElectricityPage() {
 
       try {
         const content = await verifyMeter(meterNumber, provider, plan)
-        const name =
-          content.Customer_Name || content.customer_name || content.customer?.customer_name || ""
-        const address = content.Address || content.address || content.customer_address || ""
 
-        if (!name) throw new Error("Customer name not returned by VTpass")
+        const name    = String(content?.Customer_Name || content?.customer_name || "").trim()
+        const address = String(content?.Address || content?.address || "").trim()
+
+        if (!name) throw new Error("Customer name not returned")
         setCustomerName(name)
         setCustomerAddress(address)
         setVerificationSuccess(true)
@@ -182,6 +186,7 @@ export default function ElectricityPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
+            {/* crypto */}
             <div className="space-y-2">
               <Label>Pay With</Label>
               <Select value={crypto} onValueChange={setCrypto}>
@@ -198,6 +203,7 @@ export default function ElectricityPage() {
               </Select>
             </div>
 
+            {/* provider */}
             <div className="space-y-2">
               <Label>Electricity Provider</Label>
               <Select value={provider} onValueChange={setProvider}>
@@ -214,6 +220,7 @@ export default function ElectricityPage() {
               </Select>
             </div>
 
+            {/* meter type */}
             <div className="space-y-2">
               <Label>Meter Type</Label>
               <Select value={plan} onValueChange={setPlan} disabled={!provider || loadingPlans}>
@@ -230,6 +237,7 @@ export default function ElectricityPage() {
               </Select>
             </div>
 
+            {/* meter number */}
             <div className="space-y-2">
               <Label>Meter Number</Label>
               <Input
@@ -266,6 +274,7 @@ export default function ElectricityPage() {
               )}
             </div>
 
+            {/* customer details */}
             {customerName && (
               <div className="space-y-2">
                 <Label>Customer Name</Label>
@@ -279,6 +288,7 @@ export default function ElectricityPage() {
               </div>
             )}
 
+            {/* amount */}
             <div className="space-y-2">
               <Label>Amount (NGN)</Label>
               <Input
@@ -292,6 +302,7 @@ export default function ElectricityPage() {
               <p className="text-sm text-gray-500">Minimum ₦100</p>
             </div>
 
+            {/* summary */}
             <div className="border-t pt-4 space-y-2 text-sm">
               {requestId && (
                 <div className="flex justify-between">
