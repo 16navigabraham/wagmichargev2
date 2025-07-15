@@ -113,7 +113,7 @@ export default function ElectricityPage() {
 
   /* ---------- AUTO-VERIFY ---------- */
   useEffect(() => {
-    const expectedLength = plan === "postpaid" ? 10 : 13 // adjust to your plan codes
+    const expectedLength = plan === "postpaid" ? 13 : 10 // adjust to your plan codes
     if (meterNumber.length !== expectedLength || !provider) return
 
     const id = setTimeout(async () => {
