@@ -135,8 +135,9 @@ export default function AirtimePage() {
 								<Input
 									id="amount"
 									type="number"
-									min={1}
-									placeholder="Enter amount in Naira"
+									min={100}
+									max={50000}
+									placeholder="Enter amount in Naira, minimum ₦100"
 									value={amount}
 									onChange={(e) => setAmount(e.target.value)}
 								/>
