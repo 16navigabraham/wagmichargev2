@@ -1,4 +1,3 @@
-// Fixed TV Page - app/tv/page.tsx
 "use client"
 
 import { useState, useEffect } from "react"
@@ -18,27 +17,16 @@ const CRYPTOS = [
   { symbol: "USDC", name: "USD Coin", coingeckoId: "usd-coin" },
 ]
 
-interface TVProvider {
-  numberLength: any
-  serviceID: string
-  name: string
-}
+interface TVProvider { serviceID: string; name: string }
+interface TVPlan { variation_code: string; name: string; variation_amount: string }
 
-interface TVPlan {
-  variation_code: string
-  name: string
-  variation_amount: string
-  fixedPrice: string
-}
-
-// Smart card number lengths for different providers
 const SMART_CARD_LENGTHS = {
-  'dstv': [10, 11],
-  'gotv': [10, 11],
-  'startimes': [10, 11],
-  'showmax': [10, 11],
-  'multichoice': [10, 11],
-  'default': [10, 11, 12]
+  dstv: [10, 11],
+  gotv: [10, 11],
+  startimes: [10, 11],
+  showmax: [10, 11],
+  multichoice: [10, 11],
+  default: [10, 11, 12],
 }
 
 function generateRequestId() {
@@ -46,75 +34,40 @@ function generateRequestId() {
 }
 
 async function fetchPrices() {
-  try {
-    const ids = CRYPTOS.map(c => c.coingeckoId).join(",")
-    const res = await fetch(
-      `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=ngn`
-    )
-    if (!res.ok) throw new Error(String(res.status))
-    return await res.json()
-  } catch {
-    return {}
-  }
+  const ids = CRYPTOS.map(c => c.coingeckoId).join(",")
+  const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=ngn`)
+  return res.ok ? await res.json() : {}
 }
 
 async function fetchTVProviders() {
-  try {
-    const res = await fetch("/api/vtpass/services?identifier=tv-subscription")
-    if (!res.ok) throw new Error(String(res.status))
-    const data = await res.json()
-    return data.content || []
-  } catch {
-    return []
-  }
+  const res = await fetch("/api/vtpass/services?identifier=tv-subscription")
+  const data = res.ok ? await res.json() : {}
+  return data.content || []
 }
 
 async function fetchTVPlans(serviceID: string) {
-  try {
-    const res = await fetch(`/api/vtpass/service-variations?serviceID=${serviceID}`)
-    if (!res.ok) throw new Error(String(res.status))
-    const data = await res.json()
-    return data.content?.variations || []
-  } catch {
-    return []
-  }
+  const res = await fetch(`/api/vtpass/service-variations?serviceID=${serviceID}`)
+  const data = res.ok ? await res.json() : {}
+  return data.content?.variations || []
 }
 
 async function verifyCard(billersCode: string, serviceID: string) {
-  try {
-    const res = await fetch("/api/vtpass/verify", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ billersCode, serviceID }),
-    })
-    
-    const data = await res.json()
-    
-    if (!res.ok) {
-      throw new Error(data.error || `HTTP ${res.status}`)
-    }
-    
-    return data
-  } catch (error) {
-    console.error('Verification error:', error)
-    throw error
-  }
+  const res = await fetch("/api/vtpass/verify", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ billersCode, serviceID }),
+  })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
+  return data
 }
 
 function getSmartCardLength(serviceID: string): number[] {
-  const lowerServiceID = serviceID.toLowerCase()
-  
-  if (lowerServiceID.includes('dstv')) return SMART_CARD_LENGTHS.dstv
-  if (lowerServiceID.includes('gotv')) return SMART_CARD_LENGTHS.gotv
-  if (lowerServiceID.includes('startimes')) return SMART_CARD_LENGTHS.startimes
-  if (lowerServiceID.includes('showmax')) return SMART_CARD_LENGTHS.showmax
-  if (lowerServiceID.includes('multichoice')) return SMART_CARD_LENGTHS.multichoice
-  
-  return SMART_CARD_LENGTHS.default
+  const id = serviceID.toLowerCase()
+  return SMART_CARD_LENGTHS[id as keyof typeof SMART_CARD_LENGTHS] ?? SMART_CARD_LENGTHS.default
 }
 
 export default function TVPage() {
-  /* ---------- STATE ---------- */
   const [crypto, setCrypto] = useState("")
   const [provider, setProvider] = useState("")
   const [plan, setPlan] = useState("")
@@ -123,7 +76,7 @@ export default function TVPage() {
   const [providers, setProviders] = useState<TVProvider[]>([])
   const [plans, setPlans] = useState<TVPlan[]>([])
   const [prices, setPrices] = useState<any>({})
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [loadingProviders, setLoadingProviders] = useState(true)
   const [loadingPlans, setLoadingPlans] = useState(false)
   const [verifyingCard, setVerifyingCard] = useState(false)
@@ -131,9 +84,7 @@ export default function TVPage() {
   const [verificationSuccess, setVerificationSuccess] = useState(false)
   const [requestId, setRequestId] = useState("")
 
-  /* ---------- EFFECTS ---------- */
   useEffect(() => {
-    setLoading(true)
     Promise.all([fetchPrices(), fetchTVProviders()]).then(([p, prov]) => {
       setPrices(p)
       setProviders(prov)
@@ -153,12 +104,9 @@ export default function TVPage() {
       setRequestId(generateRequestId())
   }, [crypto, provider, plan, smartCardNumber, customerName, requestId])
 
-  /* ---------- AUTO-VERIFY ---------- */
   useEffect(() => {
     if (!provider || !smartCardNumber) return
-    
     const validLengths = getSmartCardLength(provider)
-    
     if (!validLengths.includes(smartCardNumber.length)) {
       setVerificationError("")
       setVerificationSuccess(false)
@@ -171,52 +119,33 @@ export default function TVPage() {
       setVerificationError("")
       setVerificationSuccess(false)
       setCustomerName("")
-      
+
       try {
-        const data = await verifyCard(smartCardNumber, provider)
-        
-        if (data.success && data.content) {
-          console.log('Verification response data:', data.content) // Debug log
-          
-          // More comprehensive customer name extraction
-          const name = data.content.Customer_Name ||
-                      data.content.customer_name ||
-                      data.content.customerName ||
-                      data.content.name ||
-                      data.content.Name ||
-                      data.content.customer?.name ||
-                      data.content.customer?.Customer_Name ||
-                      data.content.content?.Customer_Name ||
-                      data.content.content?.customer_name ||
-                      ""
-          
-          console.log('Extracted customer name:', name) // Debug log
-          
-          if (name && name.trim()) {
-            setCustomerName(name.trim())
-            setVerificationSuccess(true)
-          } else {
-            // Instead of throwing error, let's show what we got
-            console.log('Available data fields:', Object.keys(data.content))
-            throw new Error("Customer name not found. Please check if the card number is correct.")
-          }
+        const { data } = await verifyCard(smartCardNumber, provider)
+        const name =
+          data.Customer_Name ||
+          data.customer_name ||
+          data.customer?.customer_name ||
+          data.customerName ||
+          data.name ||
+          data.Name ||
+          ""
+        if (name.trim()) {
+          setCustomerName(name.trim())
+          setVerificationSuccess(true)
         } else {
-          throw new Error(data.error || "Verification failed")
+          throw new Error("Customer name not found")
         }
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : "Unknown error"
-        setVerificationError(errorMessage)
+      } catch (err: any) {
+        setVerificationError(err.message || "Verification failed")
         setVerificationSuccess(false)
-        console.error('Card verification failed:', errorMessage)
       } finally {
         setVerifyingCard(false)
       }
     }, 1000)
-    
     return () => clearTimeout(id)
   }, [smartCardNumber, provider])
 
-  /* ---------- DERIVED ---------- */
   const selectedCrypto = CRYPTOS.find(c => c.symbol === crypto)
   const selectedPlan = plans.find(p => p.variation_code === plan)
   const priceNGN = selectedCrypto ? prices[selectedCrypto.coingeckoId]?.ngn : null
@@ -233,7 +162,8 @@ export default function TVPage() {
     amountNGN &&
     requestId
 
-  /* ---------- RENDER ---------- */
+  if (loading) return <div className="p-10 text-center">Loading…</div>
+
   return (
     <AuthGuard>
       <div className="container py-10 max-w-xl mx-auto">
@@ -250,13 +180,10 @@ export default function TVPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            {/* Crypto */}
             <div className="space-y-2">
               <Label>Pay With</Label>
               <Select value={crypto} onValueChange={setCrypto}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select crypto" />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Select crypto" /></SelectTrigger>
                 <SelectContent>
                   {CRYPTOS.map(c => (
                     <SelectItem key={c.symbol} value={c.symbol}>
@@ -267,7 +194,6 @@ export default function TVPage() {
               </Select>
             </div>
 
-            {/* Provider */}
             <div className="space-y-2">
               <Label>TV Provider</Label>
               <Select value={provider} onValueChange={setProvider} disabled={loadingProviders}>
@@ -284,7 +210,6 @@ export default function TVPage() {
               </Select>
             </div>
 
-            {/* Plan */}
             <div className="space-y-2">
               <Label>Subscription Plan</Label>
               <Select value={plan} onValueChange={setPlan} disabled={!provider || loadingPlans}>
@@ -301,37 +226,32 @@ export default function TVPage() {
               </Select>
             </div>
 
-            {/* Smart Card */}
             <div className="space-y-2">
               <Label>Smart Card / IUC Number</Label>
               <Input
                 placeholder={provider ? `Enter ${getSmartCardLength(provider).join(' or ')}-digit card number` : "Enter card number"}
                 value={smartCardNumber}
                 onChange={e => {
-                  const value = e.target.value.replace(/\D/g, "")
-                  setSmartCardNumber(value)
+                  const v = e.target.value.replace(/\D/g, "")
+                  setSmartCardNumber(v)
                   setVerificationError("")
                   setVerificationSuccess(false)
                   setCustomerName("")
                 }}
                 maxLength={12}
               />
-              
-              {/* Verification Status */}
               {verifyingCard && (
                 <div className="flex items-center space-x-2 text-sm text-blue-600">
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Verifying card number...</span>
+                  <span>Verifying card number…</span>
                 </div>
               )}
-              
-              {verificationSuccess && customerName && (
+              {verificationSuccess && (
                 <div className="flex items-center space-x-2 text-sm text-green-600">
                   <CheckCircle className="w-4 h-4" />
                   <span>Card verified successfully</span>
                 </div>
               )}
-              
               {verificationError && (
                 <div className="flex items-center space-x-2 text-sm text-red-600">
                   <AlertCircle className="w-4 h-4" />
@@ -340,7 +260,6 @@ export default function TVPage() {
               )}
             </div>
 
-            {/* Customer Name */}
             {customerName && (
               <div className="space-y-2">
                 <Label>Customer Name</Label>
@@ -348,7 +267,6 @@ export default function TVPage() {
               </div>
             )}
 
-            {/* Summary */}
             <div className="border-t pt-4 space-y-2 text-sm">
               {requestId && (
                 <div className="flex justify-between">
@@ -358,11 +276,7 @@ export default function TVPage() {
               )}
               <div className="flex justify-between">
                 <span>Conversion Rate:</span>
-                <span>
-                  {selectedCrypto && priceNGN
-                    ? `₦${priceNGN.toLocaleString()} / 1 ${selectedCrypto.symbol}`
-                    : "--"}
-                </span>
+                <span>{selectedCrypto && priceNGN ? `₦${priceNGN.toLocaleString()} / 1 ${selectedCrypto.symbol}` : "--"}</span>
               </div>
               <div className="flex justify-between">
                 <span>Subscription Amount:</span>

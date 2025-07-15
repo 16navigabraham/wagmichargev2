@@ -12,24 +12,24 @@ export async function POST(request: NextRequest) {
     const secretKey = process.env.VTPASS_SECRET_KEY
 
     if (!apiKey || !secretKey) {
-      return NextResponse.json({ 
-        error: 'VTPass API credentials not configured' 
-      }, { status: 500 })
+      return NextResponse.json(
+        { error: 'VTPass API credentials not configured' },
+        { status: 500 }
+      )
     }
 
     if (!serviceID || !billersCode) {
-      return NextResponse.json({ 
-        error: 'serviceID and billersCode required' 
-      }, { status: 400 })
+      return NextResponse.json(
+        { error: 'serviceID and billersCode required' },
+        { status: 400 }
+      )
     }
 
     const payload = {
       serviceID,
       billersCode,
-      ...(type && { type })
+      ...(type && { type }),
     }
-
-    console.log('VTPass verify request:', payload)
 
     const res = await fetch(`${VTPASS_BASE_URL}/merchant-verify`, {
       method: 'POST',
@@ -42,43 +42,32 @@ export async function POST(request: NextRequest) {
     })
 
     const data = await res.json()
-    console.log('VTPass verify response:', { status: res.status, data })
 
     if (res.ok) {
-      // Log the full response structure for debugging
-      console.log('VTPass verify success - full response:', JSON.stringify(data, null, 2))
-      
-      return NextResponse.json({ 
-        success: true, 
-        data: data.content,
-        // Also include the raw response for debugging
-        rawResponse: data
+      return NextResponse.json({
+        success: true,
+        data: data.content || data, // fallback in case VTPass returns flat object
       })
-    } else {
-      // More detailed error handling
-      const errorMessage = data.response_description || 
-                          data.message || 
-                          data.error || 
-                          `VTPass API returned status ${res.status}`
-      
-      console.error('VTPass verify error:', {
-        status: res.status,
-        statusText: res.statusText,
-        data,
-        payload
-      })
-
-      return NextResponse.json({ 
-        error: errorMessage,
-        details: data,
-        status: res.status
-      }, { status: res.status })
     }
+
+    const errorMessage =
+      data.response_description ||
+      data.message ||
+      data.error ||
+      `VTPass API returned status ${res.status}`
+
+    return NextResponse.json(
+      { error: errorMessage },
+      { status: res.status }
+    )
   } catch (err) {
     console.error('verify error', err)
-    return NextResponse.json({ 
-      error: 'Internal server error',
-      details: err instanceof Error ? err.message : 'Unknown error'
-    }, { status: 500 })
+    return NextResponse.json(
+      {
+        error: 'Internal server error',
+        details: err instanceof Error ? err.message : 'Unknown error',
+      },
+      { status: 500 }
+    )
   }
 }
