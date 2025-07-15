@@ -8,13 +8,13 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, AlertCircle, CheckCircle } from "lucide-react"
-import BackToDashboard from '@/components/BackToDashboard'
+import BackToDashboard from "@/components/BackToDashboard"
 import AuthGuard from "@/components/AuthGuard"
 
 const CRYPTOS = [
-  { symbol: "ETH", name: "Ethereum", coingeckoId: "ethereum" },
   { symbol: "USDT", name: "Tether", coingeckoId: "tether" },
   { symbol: "USDC", name: "USD Coin", coingeckoId: "usd-coin" },
+  { symbol: "ETH", name: "Ethereum", coingeckoId: "ethereum" },
 ]
 
 const ELECTRICITY_PROVIDERS = [
@@ -32,7 +32,10 @@ const ELECTRICITY_PROVIDERS = [
   { serviceID: "yola-electric", name: "Yola Electric" },
 ]
 
-interface ElectricityPlan { variation_code: string; name: string }
+interface ElectricityPlan {
+  variation_code: string
+  name: string
+}
 
 const METER_LENGTHS = {
   prepaid: [11],
@@ -56,7 +59,7 @@ async function fetchElectricityPlans(serviceID: string) {
   return data.content?.variations || []
 }
 
-async function verifyMeter(billersCode: string, serviceID: string, type?: string) {
+async function verifyMeter(billersCode: string, serviceID: string, type: string) {
   const res = await fetch("/api/vtpass/verify", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -64,7 +67,7 @@ async function verifyMeter(billersCode: string, serviceID: string, type?: string
   })
   const data = await res.json()
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
-  return data
+  return data.content
 }
 
 function getMeterLength(planCode: string): number[] {
@@ -102,6 +105,12 @@ export default function ElectricityPage() {
   }, [provider])
 
   useEffect(() => {
+    if (crypto || provider || plan || amount || meterNumber || customerName) {
+      if (!requestId) setRequestId(generateRequestId())
+    }
+  }, [crypto, provider, plan, amount, meterNumber, customerName, requestId])
+
+  useEffect(() => {
     if (!plan || !meterNumber || !provider) return
     const validLengths = getMeterLength(plan)
     if (!validLengths.includes(meterNumber.length)) {
@@ -120,43 +129,23 @@ export default function ElectricityPage() {
       setCustomerAddress("")
 
       try {
-        const { data } = await verifyMeter(meterNumber, provider, plan)
+        const content = await verifyMeter(meterNumber, provider, plan)
         const name =
-          data.Customer_Name ||
-          data.customer_name ||
-          data.customer?.customer_name ||
-          data.name ||
-          data.customerName ||
-          data.CUSTOMER_NAME ||
-          ""
-        const address =
-          data.Address ||
-          data.address ||
-          data.customer_address ||
-          data.customerAddress ||
-          ""
-        if (name.trim()) {
-          setCustomerName(name.trim())
-          setCustomerAddress(address.trim())
-          setVerificationSuccess(true)
-        } else {
-          throw new Error("Customer name not found")
-        }
+          content.Customer_Name || content.customer_name || content.customer?.customer_name || ""
+        const address = content.Address || content.address || content.customer_address || ""
+
+        if (!name) throw new Error("Customer name not returned by VTpass")
+        setCustomerName(name)
+        setCustomerAddress(address)
+        setVerificationSuccess(true)
       } catch (err: any) {
         setVerificationError(err.message || "Verification failed")
-        setVerificationSuccess(false)
       } finally {
         setVerifyingMeter(false)
       }
     }, 1000)
     return () => clearTimeout(id)
   }, [meterNumber, provider, plan])
-
-  useEffect(() => {
-    if (crypto || provider || plan || amount || meterNumber || customerName) {
-      if (!requestId) setRequestId(generateRequestId())
-    }
-  }, [crypto, provider, plan, amount, meterNumber, customerName, requestId])
 
   const selectedCrypto = CRYPTOS.find(c => c.symbol === crypto)
   const priceNGN = selectedCrypto ? prices[selectedCrypto.coingeckoId]?.ngn : null
@@ -169,8 +158,8 @@ export default function ElectricityPage() {
     plan &&
     meterNumber &&
     amount &&
-    priceNGN &&
     amountNGN >= 100 &&
+    priceNGN &&
     requestId &&
     customerName &&
     verificationSuccess
@@ -196,7 +185,9 @@ export default function ElectricityPage() {
             <div className="space-y-2">
               <Label>Pay With</Label>
               <Select value={crypto} onValueChange={setCrypto}>
-                <SelectTrigger><SelectValue placeholder="Select crypto" /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select crypto" />
+                </SelectTrigger>
                 <SelectContent>
                   {CRYPTOS.map(c => (
                     <SelectItem key={c.symbol} value={c.symbol}>
@@ -210,7 +201,9 @@ export default function ElectricityPage() {
             <div className="space-y-2">
               <Label>Electricity Provider</Label>
               <Select value={provider} onValueChange={setProvider}>
-                <SelectTrigger><SelectValue placeholder="Select provider" /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select provider" />
+                </SelectTrigger>
                 <SelectContent>
                   {ELECTRICITY_PROVIDERS.map(p => (
                     <SelectItem key={p.serviceID} value={p.serviceID}>
@@ -241,7 +234,7 @@ export default function ElectricityPage() {
               <Label>Meter Number</Label>
               <Input
                 type="text"
-                placeholder={plan ? `Enter ${getMeterLength(plan).join(' or ')}-digit meter number` : "Enter meter number"}
+                placeholder={plan ? `Enter ${getMeterLength(plan).join(" or ")}-digit meter number` : "Enter meter number"}
                 value={meterNumber}
                 onChange={e => {
                   const v = e.target.value.replace(/\D/g, "")
@@ -256,13 +249,13 @@ export default function ElectricityPage() {
               {verifyingMeter && (
                 <div className="flex items-center space-x-2 text-sm text-blue-600">
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Verifying meter number…</span>
+                  <span>Verifying meter…</span>
                 </div>
               )}
               {verificationSuccess && (
                 <div className="flex items-center space-x-2 text-sm text-green-600">
                   <CheckCircle className="w-4 h-4" />
-                  <span>Meter verified successfully</span>
+                  <span>Meter verified</span>
                 </div>
               )}
               {verificationError && (
@@ -276,13 +269,13 @@ export default function ElectricityPage() {
             {customerName && (
               <div className="space-y-2">
                 <Label>Customer Name</Label>
-                <Input value={customerName} readOnly className="bg-green-50 border-green-200" />
+                <Input value={customerName} readOnly className="bg-green-50" />
               </div>
             )}
             {customerAddress && (
               <div className="space-y-2">
                 <Label>Address</Label>
-                <Input value={customerAddress} readOnly className="bg-green-50 border-green-200" />
+                <Input value={customerAddress} readOnly className="bg-green-50" />
               </div>
             )}
 

@@ -8,24 +8,30 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, AlertCircle, CheckCircle } from "lucide-react"
-import BackToDashboard from '@/components/BackToDashboard'
+import BackToDashboard from "@/components/BackToDashboard"
 import AuthGuard from "@/components/AuthGuard"
 
 const CRYPTOS = [
-  { symbol: "ETH", name: "Ethereum", coingeckoId: "ethereum" },
   { symbol: "USDT", name: "Tether", coingeckoId: "tether" },
   { symbol: "USDC", name: "USD Coin", coingeckoId: "usd-coin" },
+  { symbol: "ETH", name: "Ethereum", coingeckoId: "ethereum" },
 ]
 
-interface TVProvider { serviceID: string; name: string }
-interface TVPlan { variation_code: string; name: string; variation_amount: string }
+interface TVProvider {
+  serviceID: string
+  name: string
+}
+interface TVPlan {
+  variation_code: string
+  name: string
+  variation_amount: string
+}
 
-const SMART_CARD_LENGTHS = {
+const SMART_CARD_LENGTHS: Record<string, number[]> = {
   dstv: [10, 11],
   gotv: [10, 11],
   startimes: [10, 11],
   showmax: [10, 11],
-  multichoice: [10, 11],
   default: [10, 11, 12],
 }
 
@@ -59,12 +65,12 @@ async function verifyCard(billersCode: string, serviceID: string) {
   })
   const data = await res.json()
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
-  return data
+  return data.content
 }
 
 function getSmartCardLength(serviceID: string): number[] {
   const id = serviceID.toLowerCase()
-  return SMART_CARD_LENGTHS[id as keyof typeof SMART_CARD_LENGTHS] ?? SMART_CARD_LENGTHS.default
+  return SMART_CARD_LENGTHS[id] ?? SMART_CARD_LENGTHS.default
 }
 
 export default function TVPage() {
@@ -73,6 +79,9 @@ export default function TVPage() {
   const [plan, setPlan] = useState("")
   const [smartCardNumber, setSmartCardNumber] = useState("")
   const [customerName, setCustomerName] = useState("")
+  const [currentBouquet, setCurrentBouquet] = useState("")
+  const [dueDate, setDueDate] = useState("")
+  const [renewalAmount, setRenewalAmount] = useState("")
   const [providers, setProviders] = useState<TVProvider[]>([])
   const [plans, setPlans] = useState<TVPlan[]>([])
   const [prices, setPrices] = useState<any>({})
@@ -111,6 +120,9 @@ export default function TVPage() {
       setVerificationError("")
       setVerificationSuccess(false)
       setCustomerName("")
+      setCurrentBouquet("")
+      setDueDate("")
+      setRenewalAmount("")
       return
     }
 
@@ -119,26 +131,25 @@ export default function TVPage() {
       setVerificationError("")
       setVerificationSuccess(false)
       setCustomerName("")
+      setCurrentBouquet("")
+      setDueDate("")
+      setRenewalAmount("")
 
       try {
-        const { data } = await verifyCard(smartCardNumber, provider)
-        const name =
-          data.Customer_Name ||
-          data.customer_name ||
-          data.customer?.customer_name ||
-          data.customerName ||
-          data.name ||
-          data.Name ||
-          ""
-        if (name.trim()) {
-          setCustomerName(name.trim())
-          setVerificationSuccess(true)
-        } else {
-          throw new Error("Customer name not found")
-        }
+        const content = await verifyCard(smartCardNumber, provider)
+        const name = content.Customer_Name || content.customer_name || ""
+        const bouquet = content.Current_Bouquet || content.current_bouquet || ""
+        const due = content.Due_Date || content.due_date || ""
+        const renewal = content.Renewal_Amount || content.renewal_amount || ""
+
+        if (!name) throw new Error("Customer name not returned by VTpass")
+        setCustomerName(name)
+        setCurrentBouquet(bouquet)
+        setDueDate(due)
+        setRenewalAmount(renewal)
+        setVerificationSuccess(true)
       } catch (err: any) {
         setVerificationError(err.message || "Verification failed")
-        setVerificationSuccess(false)
       } finally {
         setVerifyingCard(false)
       }
@@ -183,7 +194,9 @@ export default function TVPage() {
             <div className="space-y-2">
               <Label>Pay With</Label>
               <Select value={crypto} onValueChange={setCrypto}>
-                <SelectTrigger><SelectValue placeholder="Select crypto" /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select crypto" />
+                </SelectTrigger>
                 <SelectContent>
                   {CRYPTOS.map(c => (
                     <SelectItem key={c.symbol} value={c.symbol}>
@@ -229,7 +242,7 @@ export default function TVPage() {
             <div className="space-y-2">
               <Label>Smart Card / IUC Number</Label>
               <Input
-                placeholder={provider ? `Enter ${getSmartCardLength(provider).join(' or ')}-digit card number` : "Enter card number"}
+                placeholder={provider ? `Enter ${getSmartCardLength(provider).join(" or ")}-digit card number` : "Enter card number"}
                 value={smartCardNumber}
                 onChange={e => {
                   const v = e.target.value.replace(/\D/g, "")
@@ -237,19 +250,22 @@ export default function TVPage() {
                   setVerificationError("")
                   setVerificationSuccess(false)
                   setCustomerName("")
+                  setCurrentBouquet("")
+                  setDueDate("")
+                  setRenewalAmount("")
                 }}
                 maxLength={12}
               />
               {verifyingCard && (
                 <div className="flex items-center space-x-2 text-sm text-blue-600">
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Verifying card number…</span>
+                  <span>Verifying card…</span>
                 </div>
               )}
               {verificationSuccess && (
                 <div className="flex items-center space-x-2 text-sm text-green-600">
                   <CheckCircle className="w-4 h-4" />
-                  <span>Card verified successfully</span>
+                  <span>Card verified</span>
                 </div>
               )}
               {verificationError && (
@@ -263,7 +279,25 @@ export default function TVPage() {
             {customerName && (
               <div className="space-y-2">
                 <Label>Customer Name</Label>
-                <Input value={customerName} readOnly className="bg-green-50 border-green-200" />
+                <Input value={customerName} readOnly className="bg-green-50" />
+              </div>
+            )}
+            {currentBouquet && (
+              <div className="space-y-2">
+                <Label>Current Bouquet</Label>
+                <Input value={currentBouquet} readOnly className="bg-green-50" />
+              </div>
+            )}
+            {dueDate && (
+              <div className="space-y-2">
+                <Label>Due Date</Label>
+                <Input value={dueDate} readOnly className="bg-green-50" />
+              </div>
+            )}
+            {renewalAmount && (
+              <div className="space-y-2">
+                <Label>Renewal Amount</Label>
+                <Input value={`₦${Number(renewalAmount).toLocaleString()}`} readOnly className="bg-green-50" />
               </div>
             )}
 
@@ -276,7 +310,11 @@ export default function TVPage() {
               )}
               <div className="flex justify-between">
                 <span>Conversion Rate:</span>
-                <span>{selectedCrypto && priceNGN ? `₦${priceNGN.toLocaleString()} / 1 ${selectedCrypto.symbol}` : "--"}</span>
+                <span>
+                  {selectedCrypto && priceNGN
+                    ? `₦${priceNGN.toLocaleString()} / 1 ${selectedCrypto.symbol}`
+                    : "--"}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span>Subscription Amount:</span>
