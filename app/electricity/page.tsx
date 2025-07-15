@@ -42,7 +42,7 @@ interface ElectricityPlan {
 // Correct meter number lengths for different meter types
 const METER_LENGTHS = {
   'prepaid': [11], // Prepaid meters are typically 11 digits
-  'postpaid': [13], // Postpaid meters are typically 13 digits
+  'postpaid': [10, 11, 13], // Postpaid meters are typically 13 digits
   'default': [10, 11, 12, 13] // Default for unknown types
 }
 
