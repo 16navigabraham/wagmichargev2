@@ -39,21 +39,17 @@ interface ElectricityPlan {
 const METER_LENGTHS = {
   prepaid: [11],
   postpaid: [10, 11, 13],
-  default: [10, 11, 12, 13],
+  default: [10, 11, 12, 13], // Added 12 for a more generic default range
 }
 
 function generateRequestId() {
   return `${Date.now()}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`
 }
 
-function base64(str: string) {
-  return Buffer.from(str).toString("base64")
-}
-
 /* ---------- fetch helpers ---------- */
 async function fetchPrices() {
   const ids = CRYPTOS.map(c => c.coingeckoId).join(",")
-  const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=ngn`)
+  const res = await fetch(`https://api.coingeingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=ngn`)
   return res.ok ? await res.json() : {}
 }
 
@@ -63,24 +59,24 @@ async function fetchElectricityPlans(serviceID: string) {
   return data.content?.variations || []
 }
 
-/* ---------- VTpass verify ---------- */
+/* ---------- VTpass verify - NOW USES YOUR LOCAL API ROUTE ---------- */
 async function verifyMeter(billersCode: string, serviceID: string, type: string) {
-  const username = process.env.NEXT_PUBLIC_VTPASS_USERNAME
-  const password = process.env.NEXT_PUBLIC_VTPASS_PASSWORD
-  if (!username || !password) throw new Error("VTpass credentials missing")
-
-  const res = await fetch("https://vtpass.com/api/merchant-verify", {
+  const res = await fetch("/api/vtpass/verify", { // <--- Changed to your local API route
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Basic ${base64(`${username}:${password}`)}`,
     },
     body: JSON.stringify({ billersCode, serviceID, type }),
   })
 
   const data = await res.json()
-  if (!res.ok) throw new Error(data?.message || `HTTP ${res.status}`)
-  return data.content || {}
+
+  // Your API route structure assumes 'success' and 'data' or 'error'
+  if (data.success) {
+    return data.data || {};
+  } else {
+    throw new Error(data.error || "Verification failed");
+  }
 }
 
 function getMeterLength(planCode: string): number[] {
@@ -93,12 +89,12 @@ function getMeterLength(planCode: string): number[] {
 export default function ElectricityPage() {
   const [crypto, setCrypto] = useState("")
   const [provider, setProvider] = useState("")
-  const [plan, setPlan] = useState("")
+  const [plan, setPlan] = useState("") // This now holds the variation_code for meter type (e.g., "prepaid", "postpaid")
   const [amount, setAmount] = useState("")
   const [meterNumber, setMeterNumber] = useState("")
   const [customerName, setCustomerName] = useState("")
   const [customerAddress, setCustomerAddress] = useState("")
-  const [plans, setPlans] = useState<ElectricityPlan[]>([])
+  const [plans, setPlans] = useState<ElectricityPlan[]>([]) // These are the meter types (prepaid/postpaid)
   const [prices, setPrices] = useState<any>({})
   const [loading, setLoading] = useState(true)
   const [loadingPlans, setLoadingPlans] = useState(false)
@@ -114,23 +110,29 @@ export default function ElectricityPage() {
 
   /* plans when provider changes */
   useEffect(() => {
-    if (!provider) return
+    if (!provider) {
+        setPlans([]); // Clear plans if provider is unset
+        setPlan(""); // Clear selected plan as well
+        return;
+    }
     setLoadingPlans(true)
     fetchElectricityPlans(provider).then(setPlans).finally(() => setLoadingPlans(false))
   }, [provider])
 
   /* requestId generator */
   useEffect(() => {
-    if (crypto || provider || plan || amount || meterNumber || customerName) {
-      if (!requestId) setRequestId(generateRequestId())
+    // Generate request ID once all necessary data for a payment is present
+    if (crypto && provider && plan && amount && meterNumber && customerName && verificationSuccess && !requestId) {
+      setRequestId(generateRequestId())
+    } else if (! (crypto && provider && plan && amount && meterNumber && customerName && verificationSuccess) && requestId) {
+      // Clear requestId if conditions are no longer met
+      setRequestId("")
     }
-  }, [crypto, provider, plan, amount, meterNumber, customerName, requestId])
+  }, [crypto, provider, plan, amount, meterNumber, customerName, verificationSuccess, requestId])
 
   /* auto-verify meter */
   useEffect(() => {
-    if (!plan || !meterNumber || !provider) return
-    const validLengths = getMeterLength(plan)
-    if (!validLengths.includes(meterNumber.length)) {
+    if (!plan || !meterNumber || !provider) {
       setVerificationError("")
       setVerificationSuccess(false)
       setCustomerName("")
@@ -138,6 +140,16 @@ export default function ElectricityPage() {
       return
     }
 
+    const validLengths = getMeterLength(plan)
+    if (!validLengths.includes(meterNumber.length)) {
+      setVerificationError(`Please enter a valid ${validLengths.join(" or ")} digit meter number for ${plans.find(p => p.variation_code === plan)?.name || 'this meter type'}.`)
+      setVerificationSuccess(false)
+      setCustomerName("")
+      setCustomerAddress("")
+      return
+    }
+
+    // Debounce the verification request
     const id = setTimeout(async () => {
       setVerifyingMeter(true)
       setVerificationError("")
@@ -146,23 +158,25 @@ export default function ElectricityPage() {
       setCustomerAddress("")
 
       try {
+        // 'type' is the variation_code for electricity (e.g., 'prepaid', 'postpaid')
         const content = await verifyMeter(meterNumber, provider, plan)
 
         const name    = String(content?.Customer_Name || "").trim()
         const address = String(content?.Address || "").trim()
 
-        if (!name) throw new Error("Customer name not returned")
+        if (!name) throw new Error("Customer name not found. Please check the meter number.") // More specific error
+
         setCustomerName(name)
         setCustomerAddress(address)
         setVerificationSuccess(true)
       } catch (err: any) {
-        setVerificationError(err.message || "Verification failed")
+        setVerificationError(err.message || "Verification failed. Please try again.")
       } finally {
         setVerifyingMeter(false)
       }
-    }, 1000)
+    }, 700) // Reduced debounce time
     return () => clearTimeout(id)
-  }, [meterNumber, provider, plan])
+  }, [meterNumber, provider, plan, plans]) // Added plans to dependencies for error message
 
   /* derived values */
   const selectedCrypto = CRYPTOS.find(c => c.symbol === crypto)
@@ -179,7 +193,7 @@ export default function ElectricityPage() {
     amountNGN >= 100 &&
     priceNGN &&
     requestId &&
-    customerName &&
+    customerName && // Ensure customer name is present
     verificationSuccess
 
   if (loading) return <div className="p-10 text-center">Loading…</div>
@@ -202,9 +216,9 @@ export default function ElectricityPage() {
           <CardContent className="space-y-6">
             {/* crypto */}
             <div className="space-y-2">
-              <Label>Pay With</Label>
+              <Label htmlFor="crypto-select">Pay With</Label>
               <Select value={crypto} onValueChange={setCrypto}>
-                <SelectTrigger>
+                <SelectTrigger id="crypto-select"> {/* Moved id here */}
                   <SelectValue placeholder="Select crypto" />
                 </SelectTrigger>
                 <SelectContent>
@@ -219,9 +233,9 @@ export default function ElectricityPage() {
 
             {/* provider */}
             <div className="space-y-2">
-              <Label>Electricity Provider</Label>
+              <Label htmlFor="provider-select">Electricity Provider</Label>
               <Select value={provider} onValueChange={setProvider}>
-                <SelectTrigger>
+                <SelectTrigger id="provider-select"> {/* Moved id here */}
                   <SelectValue placeholder="Select provider" />
                 </SelectTrigger>
                 <SelectContent>
@@ -236,9 +250,9 @@ export default function ElectricityPage() {
 
             {/* meter type */}
             <div className="space-y-2">
-              <Label>Meter Type</Label>
+              <Label htmlFor="meter-type-select">Meter Type</Label>
               <Select value={plan} onValueChange={setPlan} disabled={!provider || loadingPlans}>
-                <SelectTrigger>
+                <SelectTrigger id="meter-type-select"> {/* Moved id here */}
                   <SelectValue placeholder={loadingPlans ? "Loading..." : "Select type"} />
                 </SelectTrigger>
                 <SelectContent>
@@ -253,20 +267,23 @@ export default function ElectricityPage() {
 
             {/* meter number */}
             <div className="space-y-2">
-              <Label>Meter Number</Label>
+              <Label htmlFor="meter-number-input">Meter Number</Label>
               <Input
+                id="meter-number-input"
                 type="text"
-                placeholder={plan ? `Enter ${getMeterLength(plan).join(" or ")}-digit meter number` : "Enter meter number"}
+                placeholder={plan ? `Enter ${getMeterLength(plan).join(" or ")}-digit meter number` : "Select a Meter Type first"}
                 value={meterNumber}
                 onChange={e => {
                   const v = e.target.value.replace(/\D/g, "")
                   setMeterNumber(v)
+                  // Reset verification states immediately on input change
                   setVerificationError("")
                   setVerificationSuccess(false)
                   setCustomerName("")
                   setCustomerAddress("")
                 }}
-                maxLength={13}
+                maxLength={13} // Max length based on the METER_LENGTHS values
+                disabled={!plan} // Disable if no meter type is selected
               />
               {verifyingMeter && (
                 <div className="flex items-center space-x-2 text-sm text-blue-600">
@@ -304,14 +321,16 @@ export default function ElectricityPage() {
 
             {/* amount */}
             <div className="space-y-2">
-              <Label>Amount (NGN)</Label>
+              <Label htmlFor="amount-input">Amount (NGN)</Label>
               <Input
+                id="amount-input"
                 type="number"
                 min={100}
                 max={50000}
-                placeholder="Enter amount in Naira"
+                placeholder="Enter amount in Naira (Min ₦100)"
                 value={amount}
                 onChange={e => setAmount(e.target.value)}
+                disabled={!verificationSuccess} // Allow amount input only after successful verification
               />
               <p className="text-sm text-gray-500">Minimum ₦100</p>
             </div>

@@ -8,6 +8,7 @@ import {Badge} from "@/components/ui/badge"
 import { Loader2, AlertCircle, CheckCircle } from "lucide-react"
 import BackToDashboard from "@/components/BackToDashboard"
 import AuthGuard from "@/components/AuthGuard"
+import { Input } from "@/components/ui/input" // Assuming you have this Input component now
 
 const CRYPTOS = [
   { symbol: "USDT", name: "Tether", coingeckoId: "tether" },
@@ -29,16 +30,12 @@ const SMART_CARD_LENGTHS: Record<string, number[]> = {
   dstv: [10, 11],
   gotv: [10, 11],
   startimes: [10, 11],
-  showmax: [10, 11],
+  showmax: [10, 11], // Assuming showmax might also use a smartcard number
   default: [10, 11, 12],
 }
 
 function generateRequestId() {
   return `${Date.now()}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`
-}
-
-function base64(str: string) {
-  return Buffer.from(str).toString("base64")
 }
 
 /* ---------- fetch helpers ---------- */
@@ -60,24 +57,24 @@ async function fetchTVPlans(serviceID: string) {
   return data.content?.variations || []
 }
 
-/* ---------- VTpass verify ---------- */
+/* ---------- VTpass verify - NOW USES YOUR LOCAL API ROUTE ---------- */
 async function verifyCard(billersCode: string, serviceID: string) {
-  const username = process.env.NEXT_PUBLIC_VTPASS_USERNAME
-  const password = process.env.NEXT_PUBLIC_VTPASS_PASSWORD
-  if (!username || !password) throw new Error("VTpass credentials missing")
-
-  const res = await fetch("https://vtpass.com/api/merchant-verify", {
+  const res = await fetch("/api/vtpass/verify", { // <--- Changed to your local API route
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Basic ${base64(`${username}:${password}`)}`,
     },
-    body: JSON.stringify({ billersCode, serviceID }),
+    body: JSON.stringify({ billersCode, serviceID, type: "smartcard" }), // Added type for consistency, though TV might not always need it explicitly depending on VTpass, but good practice.
   })
 
   const data = await res.json()
-  if (!res.ok) throw new Error(data?.message || `HTTP ${res.status}`)
-  return data.content || {}
+
+  // Your API route structure assumes 'success' and 'data' or 'error'
+  if (data.success) {
+    return data.data || {};
+  } else {
+    throw new Error(data.error || "Verification failed");
+  }
 }
 
 function getSmartCardLength(serviceID: string): number[] {
@@ -122,15 +119,19 @@ export default function TVPage() {
   }, [provider])
 
   useEffect(() => {
-    if (crypto && provider && plan && smartCardNumber && customerName && !requestId)
+    // Generate request ID once all necessary data for a payment is present
+    if (crypto && provider && plan && smartCardNumber && customerName && verificationSuccess && !requestId)
       setRequestId(generateRequestId())
-  }, [crypto, provider, plan, smartCardNumber, customerName, requestId])
+    else if (! (crypto && provider && plan && smartCardNumber && customerName && verificationSuccess) && requestId) {
+      // Clear requestId if conditions are no longer met
+      setRequestId("")
+    }
+  }, [crypto, provider, plan, smartCardNumber, customerName, verificationSuccess, requestId])
+
 
   /* auto-verify */
   useEffect(() => {
-    if (!provider || !smartCardNumber) return
-    const validLengths = getSmartCardLength(provider)
-    if (!validLengths.includes(smartCardNumber.length)) {
+    if (!provider || !smartCardNumber) {
       setCustomerName("")
       setCurrentBouquet("")
       setDueDate("")
@@ -140,6 +141,18 @@ export default function TVPage() {
       return
     }
 
+    const validLengths = getSmartCardLength(provider)
+    if (!validLengths.includes(smartCardNumber.length)) {
+      setCustomerName("")
+      setCurrentBouquet("")
+      setDueDate("")
+      setRenewalAmount("")
+      setVerificationError(`Please enter a valid ${validLengths.join(" or ")} digit smart card number for ${providers.find(p => p.serviceID === provider)?.name || 'this provider'}.`)
+      setVerificationSuccess(false)
+      return
+    }
+
+    // Debounce the verification request
     const id = setTimeout(async () => {
       setVerifyingCard(true)
       setVerificationError("")
@@ -157,20 +170,21 @@ export default function TVPage() {
         const due     = String(content?.Due_Date || "").trim()
         const renewal = String(content?.Renewal_Amount || "").trim()
 
-        if (!name) throw new Error("Customer name not returned")
+        if (!name) throw new Error("Customer name not found. Please check the smart card number.") // More specific error
+
         setCustomerName(name)
         setCurrentBouquet(bouquet)
         setDueDate(due)
         setRenewalAmount(renewal)
         setVerificationSuccess(true)
       } catch (err: any) {
-        setVerificationError(err.message || "Verification failed")
+        setVerificationError(err.message || "Verification failed. Please try again.")
       } finally {
         setVerifyingCard(false)
       }
-    }, 1000)
+    }, 700) // Reduced debounce time slightly for a snappier feel
     return () => clearTimeout(id)
-  }, [smartCardNumber, provider])
+  }, [smartCardNumber, provider, providers]) // Added providers to dependencies for error message
 
   const selectedCrypto = CRYPTOS.find(c => c.symbol === crypto)
   const selectedPlan   = plans.find(p => p.variation_code === plan)
@@ -182,10 +196,10 @@ export default function TVPage() {
     provider &&
     plan &&
     smartCardNumber &&
-    customerName &&
+    customerName && // Ensure customer name is present
     verificationSuccess &&
     priceNGN &&
-    amountNGN &&
+    amountNGN > 0 && // Ensure amount is greater than 0
     requestId
 
   if (loading) return <div className="p-10 text-center">Loading…</div>
@@ -208,9 +222,9 @@ export default function TVPage() {
           <CardContent className="space-y-6">
             {/* crypto */}
             <div className="space-y-2">
-              <Label>Pay With</Label>
+              <Label htmlFor="crypto-select">Pay With</Label>
               <Select value={crypto} onValueChange={setCrypto}>
-                <SelectTrigger><SelectValue placeholder="Select crypto" /></SelectTrigger>
+                <SelectTrigger id="crypto-select"><SelectValue placeholder="Select crypto" /></SelectTrigger> {/* Moved id here */}
                 <SelectContent>
                   {CRYPTOS.map(c => (
                     <SelectItem key={c.symbol} value={c.symbol}>
@@ -223,9 +237,9 @@ export default function TVPage() {
 
             {/* provider */}
             <div className="space-y-2">
-              <Label>TV Provider</Label>
+              <Label htmlFor="provider-select">TV Provider</Label>
               <Select value={provider} onValueChange={setProvider} disabled={loadingProviders}>
-                <SelectTrigger>
+                <SelectTrigger id="provider-select"> {/* Moved id here */}
                   <SelectValue placeholder={loadingProviders ? "Loading..." : "Select provider"} />
                 </SelectTrigger>
                 <SelectContent>
@@ -240,9 +254,9 @@ export default function TVPage() {
 
             {/* plan */}
             <div className="space-y-2">
-              <Label>Subscription Plan</Label>
+              <Label htmlFor="plan-select">Subscription Plan</Label>
               <Select value={plan} onValueChange={setPlan} disabled={!provider || loadingPlans}>
-                <SelectTrigger>
+                <SelectTrigger id="plan-select"> {/* Moved id here */}
                   <SelectValue placeholder={loadingPlans ? "Loading..." : "Select plan"} />
                 </SelectTrigger>
                 <SelectContent>
@@ -257,13 +271,16 @@ export default function TVPage() {
 
             {/* smart-card */}
             <div className="space-y-2">
-              <Label>Smart Card / IUC Number</Label>
-              <input
-                placeholder={provider ? `Enter ${getSmartCardLength(provider).join(" or ")}-digit card number` : "Enter card number"}
+              <Label htmlFor="smart-card-input">Smart Card / IUC Number</Label>
+              <Input // Using the Input component here
+                id="smart-card-input"
+                type="text"
+                placeholder={provider ? `Enter ${getSmartCardLength(provider).join(" or ")}-digit card number` : "Select a TV Provider first"}
                 value={smartCardNumber}
-                onChange={(e: { target: { value: string } }) => {
+                onChange={(e) => { // Type of event parameter corrected
                   const v = e.target.value.replace(/\D/g, "")
                   setSmartCardNumber(v)
+                  // Reset verification states immediately on input change
                   setVerificationError("")
                   setVerificationSuccess(false)
                   setCustomerName("")
@@ -271,7 +288,8 @@ export default function TVPage() {
                   setDueDate("")
                   setRenewalAmount("")
                 }}
-                maxLength={12}
+                maxLength={12} // Max length based on the SMART_CARD_LENGTHS values
+                disabled={!provider} // Disable if no provider is selected
               />
               {verifyingCard && (
                 <div className="flex items-center space-x-2 text-sm text-blue-600">
@@ -297,25 +315,25 @@ export default function TVPage() {
             {customerName && (
               <div className="space-y-2">
                 <Label>Customer Name</Label>
-                <input value={customerName} readOnly className="bg-green-50" />
+                <Input value={customerName} readOnly className="bg-green-50" />
               </div>
             )}
             {currentBouquet && (
               <div className="space-y-2">
                 <Label>Current Bouquet</Label>
-                <input value={currentBouquet} readOnly className="bg-green-50" />
+                <Input value={currentBouquet} readOnly className="bg-green-50" />
               </div>
             )}
             {dueDate && (
               <div className="space-y-2">
                 <Label>Due Date</Label>
-                <input value={dueDate} readOnly className="bg-green-50" />
+                <Input value={dueDate} readOnly className="bg-green-50" />
               </div>
             )}
             {renewalAmount && (
               <div className="space-y-2">
                 <Label>Renewal Amount</Label>
-                <input value={`₦${Number(renewalAmount).toLocaleString()}`} readOnly className="bg-green-50" />
+                <Input value={`₦${Number(renewalAmount).toLocaleString()}`} readOnly className="bg-green-50" />
               </div>
             )}
 
