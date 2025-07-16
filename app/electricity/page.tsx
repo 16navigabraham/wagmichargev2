@@ -1,15 +1,14 @@
 "use client"
-
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Badge } from "@/components/ui/badge"
+import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {Button} from "@/components/ui/button"
+import {Label} from "@/components/ui/label"
+import {Badge} from "@/components/ui/badge"
 import { Loader2, AlertCircle, CheckCircle } from "lucide-react"
 import BackToDashboard from "@/components/BackToDashboard"
 import AuthGuard from "@/components/AuthGuard"
+import { Input } from "@/components/ui/input"
 
 const CRYPTOS = [
   { symbol: "USDT", name: "Tether", coingeckoId: "tether" },
@@ -47,6 +46,10 @@ function generateRequestId() {
   return `${Date.now()}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`
 }
 
+function base64(str: string) {
+  return Buffer.from(str).toString("base64")
+}
+
 /* ---------- fetch helpers ---------- */
 async function fetchPrices() {
   const ids = CRYPTOS.map(c => c.coingeckoId).join(",")
@@ -62,14 +65,22 @@ async function fetchElectricityPlans(serviceID: string) {
 
 /* ---------- VTpass verify ---------- */
 async function verifyMeter(billersCode: string, serviceID: string, type: string) {
-  const res = await fetch("/api/vtpass/verify", {
+  const username = process.env.NEXT_PUBLIC_VTPASS_USERNAME
+  const password = process.env.NEXT_PUBLIC_VTPASS_PASSWORD
+  if (!username || !password) throw new Error("VTpass credentials missing")
+
+  const res = await fetch("https://vtpass.com/api/merchant-verify", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Basic ${base64(`${username}:${password}`)}`,
+    },
     body: JSON.stringify({ billersCode, serviceID, type }),
   })
+
   const data = await res.json()
-  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
-  return data.content || {} // safe object
+  if (!res.ok) throw new Error(data?.message || `HTTP ${res.status}`)
+  return data.content || {}
 }
 
 function getMeterLength(planCode: string): number[] {
@@ -79,7 +90,6 @@ function getMeterLength(planCode: string): number[] {
   return METER_LENGTHS.default
 }
 
-/* ---------- component ---------- */
 export default function ElectricityPage() {
   const [crypto, setCrypto] = useState("")
   const [provider, setProvider] = useState("")

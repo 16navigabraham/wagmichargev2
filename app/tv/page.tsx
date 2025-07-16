@@ -1,12 +1,7 @@
 "use client"
-
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Badge } from "@/components/ui/badge"
+import { Button, Input, Label, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Badge } from "@/components/ui"
 import { Loader2, AlertCircle, CheckCircle } from "lucide-react"
 import BackToDashboard from "@/components/BackToDashboard"
 import AuthGuard from "@/components/AuthGuard"
@@ -17,8 +12,15 @@ const CRYPTOS = [
   { symbol: "ETH", name: "Ethereum", coingeckoId: "ethereum" },
 ]
 
-interface TVProvider { serviceID: string; name: string }
-interface TVPlan { variation_code: string; name: string; variation_amount: string }
+interface TVProvider {
+  serviceID: string
+  name: string
+}
+interface TVPlan {
+  variation_code: string
+  name: string
+  variation_amount: string
+}
 
 const SMART_CARD_LENGTHS: Record<string, number[]> = {
   dstv: [10, 11],
@@ -30,6 +32,10 @@ const SMART_CARD_LENGTHS: Record<string, number[]> = {
 
 function generateRequestId() {
   return `${Date.now()}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`
+}
+
+function base64(str: string) {
+  return Buffer.from(str).toString("base64")
 }
 
 /* ---------- fetch helpers ---------- */
@@ -53,14 +59,22 @@ async function fetchTVPlans(serviceID: string) {
 
 /* ---------- VTpass verify ---------- */
 async function verifyCard(billersCode: string, serviceID: string) {
-  const res = await fetch("/api/vtpass/verify", {
+  const username = process.env.NEXT_PUBLIC_VTPASS_USERNAME
+  const password = process.env.NEXT_PUBLIC_VTPASS_PASSWORD
+  if (!username || !password) throw new Error("VTpass credentials missing")
+
+  const res = await fetch("https://vtpass.com/api/merchant-verify", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Basic ${base64(`${username}:${password}`)}`,
+    },
     body: JSON.stringify({ billersCode, serviceID }),
   })
+
   const data = await res.json()
-  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
-  return data.content || {} // safe object
+  if (!res.ok) throw new Error(data?.message || `HTTP ${res.status}`)
+  return data.content || {}
 }
 
 function getSmartCardLength(serviceID: string): number[] {
@@ -68,7 +82,6 @@ function getSmartCardLength(serviceID: string): number[] {
   return SMART_CARD_LENGTHS[id] ?? SMART_CARD_LENGTHS.default
 }
 
-/* ---------- component ---------- */
 export default function TVPage() {
   const [crypto, setCrypto] = useState("")
   const [provider, setProvider] = useState("")
@@ -99,30 +112,28 @@ export default function TVPage() {
     })
   }, [])
 
-  /* plans when provider changes */
   useEffect(() => {
     if (!provider) return
     setLoadingPlans(true)
     fetchTVPlans(provider).then(setPlans).finally(() => setLoadingPlans(false))
   }, [provider])
 
-  /* requestId generator */
   useEffect(() => {
     if (crypto && provider && plan && smartCardNumber && customerName && !requestId)
       setRequestId(generateRequestId())
   }, [crypto, provider, plan, smartCardNumber, customerName, requestId])
 
-  /* auto-verify smart-card */
+  /* auto-verify */
   useEffect(() => {
     if (!provider || !smartCardNumber) return
     const validLengths = getSmartCardLength(provider)
     if (!validLengths.includes(smartCardNumber.length)) {
-      setVerificationError("")
-      setVerificationSuccess(false)
       setCustomerName("")
       setCurrentBouquet("")
       setDueDate("")
       setRenewalAmount("")
+      setVerificationError("")
+      setVerificationSuccess(false)
       return
     }
 
@@ -158,7 +169,6 @@ export default function TVPage() {
     return () => clearTimeout(id)
   }, [smartCardNumber, provider])
 
-  /* derived values */
   const selectedCrypto = CRYPTOS.find(c => c.symbol === crypto)
   const selectedPlan   = plans.find(p => p.variation_code === plan)
   const priceNGN       = selectedCrypto ? prices[selectedCrypto.coingeckoId]?.ngn : null
