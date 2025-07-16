@@ -6,8 +6,8 @@ import { Badge } from "@/components/ui/badge"
 import { DollarSign, Wallet } from "lucide-react"
 
 // Base chain contract addresses (update if needed)
-const USDT_CONTRACT = "0xA7D7079b0FEAD91F3e65f86E8915Cb59c1a4C664"
-const USDC_CONTRACT = "0xd9AAEC86B65d86F6A7B5b1b0c42FFA531710b6CA"
+const USDT_CONTRACT = "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2"
+const USDC_CONTRACT = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
 
 const supportedTokens = [
 	{ symbol: "ETH", name: "Ethereum", coingeckoId: "ethereum", color: "from-blue-500 to-purple-600" },

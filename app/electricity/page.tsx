@@ -309,13 +309,15 @@ export default function ElectricityPage() {
             {customerName && (
               <div className="space-y-2">
                 <Label>Customer Name</Label>
-                <Input value={customerName} readOnly className="bg-green-50" />
+                {/* FIX: Changed class to ensure text is visible */}
+                <Input value={customerName} readOnly className="bg-green-50 text-black" />
               </div>
             )}
             {customerAddress && (
               <div className="space-y-2">
                 <Label>Address</Label>
-                <Input value={customerAddress} readOnly className="bg-green-50" />
+                {/* FIX: Changed class to ensure text is visible */}
+                <Input value={customerAddress} readOnly className="bg-green-50 text-black" />
               </div>
             )}
 
