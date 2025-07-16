@@ -311,31 +311,36 @@ export default function TVPage() {
               )}
             </div>
 
-            {/* customer details */}
+          {/* customer details */}
             {customerName && (
               <div className="space-y-2">
                 <Label>Customer Name</Label>
-                <Input value={customerName} readOnly className="bg-green-50" />
+                {/* FIX: Changed class to ensure text is visible */}
+                <Input value={customerName} readOnly className="bg-green-50 text-black" />
               </div>
             )}
             {currentBouquet && (
               <div className="space-y-2">
                 <Label>Current Bouquet</Label>
-                <Input value={currentBouquet} readOnly className="bg-green-50" />
+                {/* FIX: Changed class to ensure text is visible */}
+                <Input value={currentBouquet} readOnly className="bg-green-50 text-black" />
               </div>
             )}
             {dueDate && (
               <div className="space-y-2">
                 <Label>Due Date</Label>
-                <Input value={dueDate} readOnly className="bg-green-50" />
+                {/* FIX: Changed class to ensure text is visible */}
+                <Input value={dueDate} readOnly className="bg-green-50 text-black" />
               </div>
             )}
             {renewalAmount && (
               <div className="space-y-2">
                 <Label>Renewal Amount</Label>
-                <Input value={`₦${Number(renewalAmount).toLocaleString()}`} readOnly className="bg-green-50" />
+                {/* FIX: Changed class to ensure text is visible */}
+                <Input value={`₦${Number(renewalAmount).toLocaleString()}`} readOnly className="bg-green-50 text-black" />
               </div>
             )}
+
 
             {/* summary */}
             <div className="border-t pt-4 space-y-2 text-sm">
