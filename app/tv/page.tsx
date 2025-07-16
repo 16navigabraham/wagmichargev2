@@ -1,7 +1,10 @@
 "use client"
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Button, Input, Label, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Badge } from "@/components/ui"
+import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {Button} from "@/components/ui/button"
+import {Label} from "@/components/ui/label"
+import {Badge} from "@/components/ui/badge"
 import { Loader2, AlertCircle, CheckCircle } from "lucide-react"
 import BackToDashboard from "@/components/BackToDashboard"
 import AuthGuard from "@/components/AuthGuard"
@@ -255,10 +258,10 @@ export default function TVPage() {
             {/* smart-card */}
             <div className="space-y-2">
               <Label>Smart Card / IUC Number</Label>
-              <Input
+              <input
                 placeholder={provider ? `Enter ${getSmartCardLength(provider).join(" or ")}-digit card number` : "Enter card number"}
                 value={smartCardNumber}
-                onChange={e => {
+                onChange={(e: { target: { value: string } }) => {
                   const v = e.target.value.replace(/\D/g, "")
                   setSmartCardNumber(v)
                   setVerificationError("")
@@ -294,25 +297,25 @@ export default function TVPage() {
             {customerName && (
               <div className="space-y-2">
                 <Label>Customer Name</Label>
-                <Input value={customerName} readOnly className="bg-green-50" />
+                <input value={customerName} readOnly className="bg-green-50" />
               </div>
             )}
             {currentBouquet && (
               <div className="space-y-2">
                 <Label>Current Bouquet</Label>
-                <Input value={currentBouquet} readOnly className="bg-green-50" />
+                <input value={currentBouquet} readOnly className="bg-green-50" />
               </div>
             )}
             {dueDate && (
               <div className="space-y-2">
                 <Label>Due Date</Label>
-                <Input value={dueDate} readOnly className="bg-green-50" />
+                <input value={dueDate} readOnly className="bg-green-50" />
               </div>
             )}
             {renewalAmount && (
               <div className="space-y-2">
                 <Label>Renewal Amount</Label>
-                <Input value={`₦${Number(renewalAmount).toLocaleString()}`} readOnly className="bg-green-50" />
+                <input value={`₦${Number(renewalAmount).toLocaleString()}`} readOnly className="bg-green-50" />
               </div>
             )}
 
