@@ -1,17 +1,20 @@
 // components/TransactionStatusModal.tsx
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Loader2, CheckCircle, XCircle, Clock } from "lucide-react";
+import { Loader2, CheckCircle, XCircle, Clock, KeyRound } from "lucide-react"; // Added KeyRound icon for approval
 import Link from "next/link";
 import { Hex } from 'viem';
 
+// Extend the txStatus types to include backend processing states AND approval states
 interface TransactionStatusModalProps {
   isOpen: boolean;
   onClose: () => void;
-  txStatus: 'idle' | 'waitingForSignature' | 'sending' | 'confirming' | 'success' | 'error' | 'backendProcessing' | 'backendSuccess' | 'backendError';
-  transactionHash?: Hex;
+  txStatus: 'idle' | 'waitingForSignature' | 'sending' | 'confirming' | 'success' | 'error' |
+            'waitingForApprovalSignature' | 'approving' | 'approvalSuccess' | 'approvalError' | // New approval states
+            'backendProcessing' | 'backendSuccess' | 'backendError';
+  transactionHash?: Hex; // This will be used for both main transaction and approval transaction hash
   errorMessage?: string | null;
-  explorerUrl?: string;
+  explorerUrl?: string; // Base explorer URL (e.g., "https://basescan.org")
   backendMessage?: string | null;
   requestId?: string;
 }
@@ -22,24 +25,52 @@ export function TransactionStatusModal({
   txStatus,
   transactionHash,
   errorMessage,
-  explorerUrl = "https://basescan.org",
+  explorerUrl = "https://basescan.org", // Default to BaseScan
   backendMessage,
   requestId
 }: TransactionStatusModalProps) {
   const isPendingBlockchain = txStatus === 'waitingForSignature' || txStatus === 'sending' || txStatus === 'confirming';
   const isSuccessBlockchainConfirmed = txStatus === 'success';
-  const isErrorBlockchain = txStatus === 'error'; // This covers both writeError and confirmError now
+  const isErrorBlockchain = txStatus === 'error';
 
   const isBackendProcessing = txStatus === 'backendProcessing';
   const isBackendSuccess = txStatus === 'backendSuccess';
   const isBackendError = txStatus === 'backendError';
+
+  // New flags for approval status
+  const isWaitingForApprovalSignature = txStatus === 'waitingForApprovalSignature';
+  const isApproving = txStatus === 'approving';
+  const isApprovalSuccess = txStatus === 'approvalSuccess';
+  const isApprovalError = txStatus === 'approvalError';
 
   let title = "Transaction Status";
   let description = "";
   let icon = null;
   let iconColor = "";
 
-  if (txStatus === 'waitingForSignature') {
+  if (isWaitingForApprovalSignature) {
+    title = "Awaiting Approval Signature";
+    description = "Please approve the token spend in your wallet to continue.";
+    icon = <KeyRound className="w-12 h-12 animate-pulse text-blue-500" />;
+    iconColor = "text-blue-500";
+  } else if (isApproving) {
+    title = "Approving Token";
+    description = "Your token approval transaction is being processed on the blockchain.";
+    icon = <Loader2 className="w-12 h-12 animate-spin text-yellow-500" />;
+    iconColor = "text-yellow-500";
+  } else if (isApprovalSuccess) {
+    title = "Token Approved!";
+    description = "Your token has been successfully approved. Proceeding with payment...";
+    icon = <CheckCircle className="w-12 h-12 text-green-500" />;
+    iconColor = "text-green-500";
+  } else if (isApprovalError) {
+    title = "Token Approval Failed";
+    description = errorMessage || "The token approval transaction could not be completed.";
+    icon = <XCircle className="w-12 h-12 text-red-500" />;
+    iconColor = "text-red-500";
+  }
+  // Existing states for main transaction and backend processing
+  else if (txStatus === 'waitingForSignature') {
     title = "Awaiting Wallet Signature";
     description = "Please confirm the transaction in your wallet.";
     icon = <Loader2 className="w-12 h-12 animate-spin text-blue-500" />;
@@ -54,9 +85,8 @@ export function TransactionStatusModal({
     description = "Your transaction is on the blockchain and awaiting final confirmation.";
     icon = <Loader2 className="w-12 h-12 animate-spin text-purple-500" />;
     iconColor = "text-purple-500";
-  } else if (isErrorBlockchain) { // <-- Handle blockchain errors first, before backend-related success states
+  } else if (isErrorBlockchain) {
     title = "Blockchain Transaction Failed";
-    // Prioritize the specific error message if available
     description = errorMessage || "The blockchain transaction could not be completed. Check the explorer for details.";
     icon = <XCircle className="w-12 h-12 text-red-500" />;
     iconColor = "text-red-500";
@@ -110,7 +140,7 @@ export function TransactionStatusModal({
             </Link>
           </div>
         )}
-        {requestId && (txStatus !== 'idle' && txStatus !== 'waitingForSignature') && (
+        {requestId && (txStatus !== 'idle' && txStatus !== 'waitingForSignature' && !isWaitingForApprovalSignature) && (
           <div className="mt-4 text-sm break-words">
             <p className="font-medium">Request ID:</p>
             <span className="text-muted-foreground font-mono text-xs">{requestId}</span>
@@ -119,7 +149,7 @@ export function TransactionStatusModal({
 
         <DialogFooter className="mt-6 flex justify-center">
           <Button onClick={onClose}>
-            {isBackendSuccess || isBackendError || isErrorBlockchain ? "Done" : "Close"}
+            {isBackendSuccess || isBackendError || isErrorBlockchain || isApprovalError ? "Done" : "Close"}
           </Button>
         </DialogFooter>
       </DialogContent>

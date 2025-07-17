@@ -1,7 +1,7 @@
 // app/internet/page.tsx
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react" // Added useCallback
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,17 +10,24 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import BackToDashboard from '@/components/BackToDashboard'
 import AuthGuard from "@/components/AuthGuard"
+
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from "@/config/contract";
-import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
+import { ERC20_ABI } from "@/config/erc20Abi"; // Import ERC20 ABI
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi'; // Added useReadContract
 import { usePrivy } from '@privy-io/react-auth';
-import { parseEther, parseUnits, toBytes, toHex, Hex } from 'viem'; // Import toHex and Hex type
+import { parseEther, parseUnits, toBytes, toHex, Hex } from 'viem';
 import { toast } from 'sonner';
-import { TransactionStatusModal } from "@/components/TransactionStatusModal"; // Import the modal
+import { TransactionStatusModal } from "@/components/TransactionStatusModal";
+import { useBaseNetworkEnforcer } from '@/hooks/useBaseNetworkEnforcer'; // Import the network enforcer hook
+
+// Base chain contract addresses (ensure these are correct for Base Mainnet)
+const USDT_CONTRACT_ADDRESS = "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2"; // Replace with actual USDT contract on Base
+const USDC_CONTRACT_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"; // Replace with actual USDC contract on Base
 
 const CRYPTOS = [
-	{ symbol: "ETH", name: "Ethereum", coingeckoId: "ethereum", tokenType: 0, decimals: 18 },
-	{ symbol: "USDT", name: "Tether", coingeckoId: "tether", tokenType: 1, decimals: 6 },
-	{ symbol: "USDC", name: "USD Coin", coingeckoId: "usd-coin", tokenType: 2, decimals: 6 },
+	{ symbol: "ETH", name: "Ethereum", coingeckoId: "ethereum", tokenType: 0, decimals: 18, contract: undefined }, // ETH has no contract address
+	{ symbol: "USDT", name: "Tether", coingeckoId: "tether", tokenType: 1, decimals: 6, contract: USDT_CONTRACT_ADDRESS },
+	{ symbol: "USDC", name: "USD Coin", coingeckoId: "usd-coin", tokenType: 2, decimals: 6, contract: USDC_CONTRACT_ADDRESS },
 ]
 
 interface InternetPlan {
@@ -101,18 +108,27 @@ export default function InternetPage() {
 	const [loading, setLoading] = useState(false)
 	const [loadingPlans, setLoadingPlans] = useState(false)
 	const [availableProviders, setAvailableProviders] = useState<any[]>([])
-	const [requestId, setRequestId] = useState<string | undefined>(undefined); // Allow requestId to be undefined initially
-	
-    // --- START OF ADDITIONS: Transaction States ---
-	const [txStatus, setTxStatus] = useState<'idle' | 'waitingForSignature' | 'sending' | 'confirming' | 'success' | 'error' | 'backendProcessing' | 'backendSuccess' | 'backendError'>('idle');
+	const [requestId, setRequestId] = useState<string | undefined>(undefined);
+
+	// --- START OF MODIFICATIONS: Transaction and Approval States ---
+	const [txStatus, setTxStatus] = useState<'idle' | 'waitingForSignature' | 'sending' | 'confirming' | 'success' | 'error' | 'backendProcessing' | 'backendSuccess' | 'backendError' | 'waitingForApprovalSignature' | 'approving' | 'approvalSuccess' | 'approvalError'>('idle');
 	const [transactionError, setTransactionError] = useState<string | null>(null);
-    const [backendMessage, setBackendMessage] = useState<string | null>(null); // New state for backend message
+	const [backendMessage, setBackendMessage] = useState<string | null>(null);
 	const [showTransactionModal, setShowTransactionModal] = useState(false);
 	const [transactionHashForModal, setTransactionHashForModal] = useState<Hex | undefined>(undefined);
-    // --- END OF ADDITIONS ---
+
+	// New states for ERC20 approval process
+	const [currentAllowance, setCurrentAllowance] = useState<bigint | undefined>(undefined);
+	const [isApprovalConfirmed, setIsApprovalConfirmed] = useState(false);
+	const [approvalError, setApprovalError] = useState<string | null>(null);
+	// --- END OF MODIFICATIONS ---
 
 	const { connectWallet, authenticated, user } = usePrivy();
 	const { isConnected, address } = useAccount();
+
+	// --- START OF MODIFICATIONS: Network Enforcer Hook ---
+	const { isOnBaseChain, isSwitchingChain, promptSwitchToBase } = useBaseNetworkEnforcer();
+	// --- END OF MODIFICATIONS ---
 
 	const selectedCrypto = CRYPTOS.find((c) => c.symbol === crypto)
 	const selectedPlan = plans.find((p) => p.variation_code === plan)
@@ -120,15 +136,39 @@ export default function InternetPage() {
 	const amountNGN = selectedPlan ? Number(selectedPlan.variation_amount) : 0
 	const cryptoNeeded = priceNGN && amountNGN ? amountNGN / priceNGN : 0
 
-	// --- Wagmi Hook for Contract Interaction ---
+	// --- START OF MODIFICATIONS: Wagmi Hooks for Main Transaction and Approval ---
 	const { writeContract, data: hash, isPending: isWritePending, isError: isWriteError, error: writeError } = useWriteContract();
 
 	const { isLoading: isConfirming, isSuccess: isConfirmed, isError: isConfirmError, error: confirmError } = useWaitForTransactionReceipt({
-		hash: hash as Hex, // Cast hash to Hex here, as it's enabled only when truthy
+		hash: hash as Hex,
 		query: {
 			enabled: Boolean(hash),
 		},
 	});
+
+	// Hook to read current allowance
+	const { data: allowanceData, refetch: refetchAllowance, isLoading: isAllowanceLoading } = useReadContract({
+		abi: ERC20_ABI,
+		address: selectedCrypto?.contract ? selectedCrypto.contract as Hex : undefined,
+		functionName: 'allowance',
+		args: address && CONTRACT_ADDRESS ? [address, CONTRACT_ADDRESS] : undefined,
+		query: {
+			enabled: Boolean(selectedCrypto?.contract && address && CONTRACT_ADDRESS && selectedCrypto?.tokenType !== 0),
+			refetchInterval: 5000,
+		},
+	});
+
+	// Hook to write approve transaction
+	const { writeContract: writeApprove, data: approveHash, isPending: isApprovePending, isError: isApproveError, error: approveWriteError } = useWriteContract();
+
+	// Hook to wait for approval transaction receipt
+	const { isLoading: isApprovalConfirming, isSuccess: isApprovalTxConfirmed, isError: isApprovalConfirmError, error: approveConfirmError } = useWaitForTransactionReceipt({
+		hash: approveHash as Hex,
+		query: {
+			enabled: Boolean(approveHash),
+		},
+	});
+	// --- END OF MODIFICATIONS ---
 
 	useEffect(() => {
 		setLoading(true)
@@ -158,70 +198,174 @@ export default function InternetPage() {
 		}
 	}, [provider])
 
+	// Update currentAllowance state when allowanceData changes
+	useEffect(() => {
+		if (allowanceData !== undefined) {
+			setCurrentAllowance(allowanceData);
+		}
+	}, [allowanceData]);
+
 	// Generate requestId when user starts filling form
 	useEffect(() => {
 		if ((crypto || provider || plan || customerID) && !requestId) {
 			setRequestId(generateRequestId())
+		} else if (!(crypto || provider || plan || customerID) && requestId) {
+			setRequestId(undefined);
 		}
 	}, [crypto, provider, plan, customerID, requestId])
 
-    // --- START OF ADDITIONS: Handle transaction status feedback and modal display ---
+	// --- START OF MODIFICATIONS: handlePostTransaction with useCallback ---
+	const handlePostTransaction = useCallback(async (transactionHash: Hex) => {
+		setTxStatus('backendProcessing');
+		setBackendMessage("Processing your order...");
+		toast.loading("Processing order with VTpass...", { id: 'backend-status' });
+
+		try {
+			const orderData = {
+				requestId,
+				crypto: selectedCrypto?.symbol, // Safely access symbol
+				provider,
+				plan,
+				customerID,
+				amount: amountNGN,
+				cryptoNeeded,
+				type: 'internet',
+				transactionHash,
+				userAddress: address,
+			};
+			console.log('Submitting order to backend:', orderData);
+			const backendResponse = await fetch('/api/internet', {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					requestId,
+					phone: customerID,
+					serviceID: provider,
+					variation_code: plan,
+					amount: amountNGN,
+					cryptoUsed: cryptoNeeded,
+					cryptoSymbol: selectedCrypto?.symbol, // Safely access symbol
+					transactionHash
+				}),
+			});
+
+			const responseData = await backendResponse.json();
+
+			if (!backendResponse.ok) {
+				throw new Error(responseData.message || responseData.error || "Failed to deliver internet data via backend.");
+			}
+
+			setTxStatus('backendSuccess');
+			setBackendMessage(responseData.message || "Internet data delivered successfully!");
+			toast.success("Internet data delivered successfully!", { id: 'backend-status' });
+			setCrypto("");
+			setProvider("");
+			setPlan("");
+			setCustomerID("");
+			setRequestId(undefined);
+			setIsApprovalConfirmed(false); // Reset approval state
+			setCurrentAllowance(undefined); // Reset allowance
+		} catch (backendError: any) {
+			console.error("Backend API call failed:", backendError);
+			setTxStatus('backendError');
+			const msg = `Backend processing failed: ${backendError.message}. Please contact support with Request ID: ${requestId}`;
+			setBackendMessage(msg);
+			toast.error(msg, { id: 'backend-status' });
+		}
+	}, [requestId, selectedCrypto?.symbol, provider, plan, customerID, amountNGN, cryptoNeeded, address]);
+	// --- END OF MODIFICATIONS ---
+
+	// --- START OF MODIFICATIONS: Handle transaction status feedback and modal display ---
+	// Effect to monitor approval transaction status
 	useEffect(() => {
-        // Handle immediate writeContract errors (e.g., user rejected, simulation failed)
-        if (isWriteError) {
-            setTxStatus('error');
-            const errorMsg = writeError?.message?.split('\n')[0] || "Wallet transaction failed or was rejected.";
-            setTransactionError(errorMsg);
-            setShowTransactionModal(true);
-            toast.error(`Transaction failed: ${errorMsg}`, { id: 'tx-status' });
-            return; // Exit early if there's a write error
-        }
+		if (isApprovePending) {
+			setTxStatus('waitingForApprovalSignature');
+			setShowTransactionModal(true);
+			setTransactionHashForModal(undefined);
+			setTransactionError(null);
+			setBackendMessage(null);
+			setApprovalError(null);
+			toast.info("Awaiting token approval signature...");
+		} else if (approveHash) {
+			setTxStatus('approving');
+			setShowTransactionModal(true);
+			setTransactionHashForModal(approveHash);
+			toast.loading("Token approval sent, waiting for confirmation...", { id: 'approval-status' });
+		} else if (isApprovalTxConfirmed) {
+			setTxStatus('approvalSuccess');
+			setShowTransactionModal(true);
+			setApprovalError(null);
+			setIsApprovalConfirmed(true);
+			refetchAllowance();
+			toast.success("Token approved! You can now proceed with payment.", { id: 'approval-status' });
+		} else if (isApproveError || isApprovalConfirmError) {
+			setTxStatus('approvalError');
+			const errorMsg = (approveWriteError?.message || approveConfirmError?.message || "Token approval failed").split('\n')[0];
+			setApprovalError(errorMsg);
+			setTransactionError(errorMsg);
+			setShowTransactionModal(true);
+			setIsApprovalConfirmed(false);
+			toast.error(`Approval failed: ${errorMsg}`, { id: 'approval-status' });
+		}
+	}, [isApprovePending, approveHash, isApprovalTxConfirmed, isApprovalConfirming, isApproveError, isApprovalConfirmError, approveWriteError, approveConfirmError, refetchAllowance]);
 
-        if (isWritePending) {
-            setTxStatus('waitingForSignature');
-            setShowTransactionModal(true);
-            setTransactionHashForModal(undefined);
-            setTransactionError(null);
-            setBackendMessage(null);
-            toast.info("Awaiting wallet signature...");
-        } else if (hash) {
-            // Once we have a hash, we're in the 'sending' or 'confirming' phase
-            if (isConfirming) {
-                setTxStatus('confirming');
-                setShowTransactionModal(true);
-                toast.loading("Transaction sent, confirming on blockchain...", { id: 'tx-status' });
-            } else if (isConfirmed) {
-                setTxStatus('success');
-                setShowTransactionModal(true);
-                toast.success("Blockchain transaction confirmed! Processing order...", { id: 'tx-status' });
-                // IMPORTANT: Call your backend post-transaction logic here
-                if (hash) {
-                    handlePostTransaction(hash); // Ensure this function is defined in each page
-                }
-            } else if (isConfirmError) { // Handle errors during transaction receipt
-                setTxStatus('error');
-                const errorMsg = confirmError?.message?.split('\n')[0] || "Blockchain transaction failed to confirm.";
-                setTransactionError(errorMsg);
-                setShowTransactionModal(true);
-                toast.error(`Transaction failed: ${errorMsg}`, { id: 'tx-status' });
-            } else {
-                // If hash exists but not confirming, confirmed, or error, it's just sent
-                setTxStatus('sending'); // Set to sending initially once hash is available
-                setShowTransactionModal(true);
-                setTransactionHashForModal(hash);
-                toast.loading("Transaction sent, waiting for blockchain confirmation...", { id: 'tx-status' });
-            }
-        } else {
-            // No hash, no pending write, no error means idle
-            setTxStatus('idle');
-            setTransactionError(null);
-            setBackendMessage(null);
-            setTransactionHashForModal(undefined);
-        }
-    }, [isWritePending, hash, isConfirming, isConfirmed, isWriteError, isConfirmError, writeError, confirmError]);
-    // --- END OF ADDITIONS ---
+	// Effect to monitor main transaction status
+	useEffect(() => {
+		if (['waitingForApprovalSignature', 'approving', 'approvalSuccess', 'approvalError'].includes(txStatus)) {
+			return;
+		}
 
-	// Simplified: Ensure user is authenticated and Wagmi sees an address
+		if (isWriteError) {
+			setTxStatus('error');
+			const errorMsg = writeError?.message?.split('\n')[0] || "Wallet transaction failed or was rejected.";
+			setTransactionError(errorMsg);
+			setShowTransactionModal(true);
+			toast.error(`Transaction failed: ${errorMsg}`, { id: 'tx-status' });
+			return;
+		}
+
+		if (isWritePending) {
+			setTxStatus('waitingForSignature');
+			setShowTransactionModal(true);
+			setTransactionHashForModal(undefined);
+			setTransactionError(null);
+			setBackendMessage(null);
+			toast.info("Awaiting wallet signature...");
+		} else if (hash) {
+			if (isConfirming) {
+				setTxStatus('confirming');
+				setShowTransactionModal(true);
+				toast.loading("Transaction sent, confirming on blockchain...", { id: 'tx-status' });
+			} else if (isConfirmed) {
+				setTxStatus('success');
+				setShowTransactionModal(true);
+				toast.success("Blockchain transaction confirmed! Processing order...", { id: 'tx-status' });
+				if (hash) {
+					handlePostTransaction(hash);
+				}
+			} else if (isConfirmError) {
+				setTxStatus('error');
+				const errorMsg = confirmError?.message?.split('\n')[0] || "Blockchain transaction failed to confirm.";
+				setTransactionError(errorMsg);
+				setShowTransactionModal(true);
+				toast.error(`Transaction failed: ${errorMsg}`, { id: 'tx-status' });
+			} else {
+				setTxStatus('sending');
+				setShowTransactionModal(true);
+				setTransactionHashForModal(hash);
+				toast.loading("Transaction sent, waiting for blockchain confirmation...", { id: 'tx-status' });
+			}
+		} else {
+			if (!['waitingForApprovalSignature', 'approving', 'approvalSuccess', 'approvalError'].includes(txStatus)) {
+				setTxStatus('idle');
+				setTransactionError(null);
+				setBackendMessage(null);
+				setTransactionHashForModal(undefined);
+			}
+		}
+	}, [isWritePending, hash, isConfirming, isConfirmed, isWriteError, isConfirmError, writeError, confirmError, txStatus, handlePostTransaction]);
+	// --- END OF MODIFICATIONS ---
+
 	const ensureWalletConnected = async () => {
 		if (!authenticated) {
 			toast.error("Please log in to proceed.");
@@ -233,56 +377,120 @@ export default function InternetPage() {
 			await connectWallet();
 			return false;
 		}
+		// Use the network enforcer hook
+		if (!isOnBaseChain) {
+			promptSwitchToBase();
+			return false;
+		}
 		return true;
 	};
 
 	const handlePurchase = async () => {
 		setTransactionError(null);
-        setBackendMessage(null); // Clear backend message on new purchase attempt
-		setTxStatus('waitingForSignature'); // Set status to trigger modal early
+		setBackendMessage(null);
+		setApprovalError(null);
+		setIsApprovalConfirmed(false);
 
-		const walletConnected = await ensureWalletConnected();
-		if (!walletConnected) {
-            setTxStatus('idle'); // Reset if connection fails
-            return;
-        }
+		const walletConnectedAndOnBase = await ensureWalletConnected();
+		if (!walletConnectedAndOnBase) {
+			setTxStatus('idle');
+			return;
+		}
 
 		if (!address) {
 			toast.error("Wallet address not found after connection. Please refresh and try again.");
-            setTxStatus('error');
+			setTxStatus('error');
 			return;
 		}
-        if (!requestId) {
-            toast.error("Request ID not generated. Please fill all form details.");
-            setTxStatus('error');
-            return;
-        }
-        if (!selectedPlan) {
-            toast.error("Please select a data plan.");
+		if (!requestId) {
+			toast.error("Request ID not generated. Please fill all form details.");
+			setTxStatus('error');
+			return;
+		}
+		if (!selectedPlan) {
+			toast.error("Please select a data plan.");
+			setTxStatus('error');
+			return;
+		}
+		if (amountNGN <= 0) {
+			toast.error("Selected plan has an invalid amount.");
+			setTxStatus('error');
+			return;
+		}
+        // Ensure selectedCrypto is not undefined here
+        if (!selectedCrypto) {
+            toast.error("Please select a cryptocurrency.");
             setTxStatus('error');
             return;
         }
 
 
 		// Prepare transaction arguments
-		const tokenAmount = selectedCrypto
-			? parseUnits(cryptoNeeded.toFixed(selectedCrypto.decimals), selectedCrypto.decimals)
-			: BigInt(0);
+		const tokenAmount = parseUnits(cryptoNeeded.toFixed(selectedCrypto.decimals), selectedCrypto.decimals);
 
-		const value = selectedCrypto?.symbol === 'ETH' && cryptoNeeded > 0
+		const value = selectedCrypto.symbol === 'ETH' && cryptoNeeded > 0
 			? parseEther(cryptoNeeded.toFixed(18))
 			: BigInt(0);
 
-		const bytes32RequestId: Hex = toHex(toBytes(requestId), { size: 32 }); // Convert string to bytes32 hex
+		const bytes32RequestId: Hex = toHex(toBytes(requestId), { size: 32 });
+
+		// --- START OF MODIFICATIONS: Token Approval Logic ---
+		if (selectedCrypto.tokenType !== 0) { // If it's an ERC20 token (USDT or USDC)
+			if (isAllowanceLoading) {
+				toast.info("Checking token allowance, please wait...");
+				setTxStatus('idle');
+				return;
+			}
+
+			if (currentAllowance === undefined || currentAllowance < tokenAmount) {
+				toast.info("Approving token spend for the contract...");
+				setTxStatus('waitingForApprovalSignature');
+				try {
+					if (selectedCrypto.contract) { // Ensure contract address exists for ERC20
+						writeApprove({
+							abi: ERC20_ABI,
+							address: selectedCrypto.contract as Hex,
+							functionName: 'approve',
+							args: [CONTRACT_ADDRESS, tokenAmount],
+						});
+					} else {
+						toast.error("Selected crypto has no contract address for approval.");
+						setTxStatus('error');
+						return;
+					}
+					return;
+				} catch (error: any) {
+					console.error("Error sending approval transaction:", error);
+					const errorMsg = error.message || "Failed to send approval transaction.";
+					setApprovalError(errorMsg);
+					setTransactionError(errorMsg);
+					setTxStatus('approvalError');
+					toast.error(errorMsg);
+					return;
+				}
+			} else {
+				setIsApprovalConfirmed(true);
+			}
+		} else {
+			setIsApprovalConfirmed(true);
+		}
+
+		if (!isApprovalConfirmed) {
+			toast.error("Token approval is required before proceeding with the payment.");
+			setTxStatus('idle');
+			return;
+		}
+		// --- END OF MODIFICATIONS ---
 
 		try {
+			setTxStatus('waitingForSignature');
 			writeContract({
 				address: CONTRACT_ADDRESS,
 				abi: CONTRACT_ABI,
 				functionName: 'createOrder',
 				args: [
 					bytes32RequestId,
-					selectedCrypto ? selectedCrypto.tokenType : 0, // Pass as number if ABI expects number
+					selectedCrypto.tokenType, // selectedCrypto is now guaranteed to be defined
 					tokenAmount,
 				],
 				value: value,
@@ -295,80 +503,24 @@ export default function InternetPage() {
 		}
 	};
 
-	const handlePostTransaction = async (transactionHash: Hex) => { // Type transactionHash as Hex
-        setTxStatus('backendProcessing'); // Set status for backend processing
-        setBackendMessage("Processing your order...");
-        toast.loading("Processing order with VTpass...", { id: 'backend-status' });
-
-		try {
-			const orderData = {
-				requestId,
-				crypto: selectedCrypto?.symbol,
-				provider,
-				plan,
-				customerID,
-				amount: amountNGN,
-				cryptoNeeded,
-				type: 'internet',
-				transactionHash,
-				userAddress: address,
-			};
-			console.log('Submitting order to backend:', orderData);
-			const backendResponse = await fetch('/api/internet', { // Changed to /api/internet for consistency
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({
-					requestId,
-					phone: customerID, // VTpass often uses 'phone' for customer ID in data services
-					serviceID: provider,
-					variation_code: plan,
-					amount: amountNGN,
-					cryptoUsed: cryptoNeeded,
-					cryptoSymbol: selectedCrypto?.symbol,
-					transactionHash
-				}),
-			});
-
-            const responseData = await backendResponse.json(); // Parse JSON for both success and error
-
-			if (!backendResponse.ok) {
-				throw new Error(responseData.message || responseData.error || "Failed to deliver internet data via backend.");
-			}
-
-            setTxStatus('backendSuccess');
-            setBackendMessage(responseData.message || "Internet data delivered successfully!");
-			toast.success("Internet data delivered successfully!", { id: 'backend-status' });
-			setCrypto("");
-			setProvider("");
-			setPlan("");
-			setCustomerID("");
-			setRequestId(undefined); // Reset requestId to undefined to trigger regeneration
-		} catch (backendError: any) {
-			console.error("Backend API call failed:", backendError);
-            setTxStatus('backendError');
-            const msg = `Backend processing failed: ${backendError.message}. Please contact support with Request ID: ${requestId}`;
-            setBackendMessage(msg);
-			toast.error(msg, { id: 'backend-status' });
-		}
+	const handleCloseModal = () => {
+		setShowTransactionModal(false);
+		setTxStatus('idle');
+		setTransactionError(null);
+		setBackendMessage(null);
+		setTransactionHashForModal(undefined);
+		setApprovalError(null);
 	};
-
-    // --- START OF ADDITIONS: handleCloseModal ---
-    const handleCloseModal = () => {
-        setShowTransactionModal(false);
-        // Reset all transaction states when modal is closed, especially after success or error
-        setTxStatus('idle');
-        setTransactionError(null);
-        setBackendMessage(null);
-        setTransactionHashForModal(undefined);
-    };
-    // --- END OF ADDITIONS ---
 
 	const providersToShow = availableProviders.length > 0 ? availableProviders : [];
 
 	const isFormValid = Boolean(crypto && provider && plan && customerID && requestId && cryptoNeeded > 0);
-	// --- START OF ADDITIONS: Updated isButtonDisabled logic ---
-	const isButtonDisabled = loading || loadingPlans || isWritePending || isConfirming || txStatus === 'backendProcessing' || !isFormValid;
-    // --- END OF ADDITIONS ---
+	// --- START OF MODIFICATIONS: Updated isButtonDisabled logic ---
+	const isButtonDisabled = loading || loadingPlans || isWritePending || isConfirming || txStatus === 'backendProcessing' || !isFormValid ||
+							isApprovePending || isApprovalConfirming || isAllowanceLoading || // Disable during approval steps
+							!isOnBaseChain || isSwitchingChain || // Disable if not on Base or switching
+							(selectedCrypto?.tokenType !== 0 && !isApprovalConfirmed); // If ERC20, must be approved
+	// --- END OF MODIFICATIONS ---
 
 	return (
 		<AuthGuard>
@@ -485,37 +637,41 @@ export default function InternetPage() {
 									)}
 								</span>
 							</div>
-							{/* Removed direct transactionError display here as modal will handle all errors */}
 						</div>
 						<Button
 							className="w-full"
 							onClick={handlePurchase}
-							// disabled={isButtonDisabled} 
+							disabled={isButtonDisabled}
 						>
-                            {txStatus === 'waitingForSignature' && "Awaiting Signature..."}
-                            {txStatus === 'sending' && "Sending Transaction..."}
-                            {txStatus === 'confirming' && "Confirming Blockchain..."}
-                            {txStatus === 'success' && "Blockchain Confirmed!"}
-                            {txStatus === 'backendProcessing' && "Processing Order..."}
-                            {txStatus === 'backendSuccess' && "Payment Successful!"}
-                            {txStatus === 'backendError' && "Payment Failed - Try Again"}
-                            {txStatus === 'error' && "Blockchain Failed - Try Again"}
-                            {txStatus === 'idle' && isFormValid && "Purchase Internet Data"}
-                            {!isFormValid && "Fill all details"}
+							{isSwitchingChain ? "Switching Network..." :
+							!isOnBaseChain ? "Switch to Base Network" :
+							isAllowanceLoading ? "Checking Allowance..." :
+							isApprovePending ? "Awaiting Approval Signature..." :
+							isApprovalConfirming ? "Approving Token..." :
+							(txStatus === 'approvalSuccess' && selectedCrypto?.tokenType !== 0) ? "Approval Confirmed! Click to Pay" :
+							txStatus === 'waitingForSignature' ? "Awaiting Payment Signature..." :
+							txStatus === 'sending' ? "Sending Transaction..." :
+							txStatus === 'confirming' ? "Confirming Blockchain..." :
+							txStatus === 'success' ? "Blockchain Confirmed!" :
+							txStatus === 'backendProcessing' ? "Processing Order..." :
+							txStatus === 'backendSuccess' ? "Payment Successful!" :
+							txStatus === 'backendError' ? "Payment Failed - Try Again" :
+							txStatus === 'error' ? "Blockchain Failed - Try Again" :
+							isFormValid ? "Purchase Internet Data" :
+							"Fill all details"}
 						</Button>
 					</CardContent>
 				</Card>
 			</div>
-            {/* Transaction Status Modal */}
-            <TransactionStatusModal
-                isOpen={showTransactionModal}
-                onClose={handleCloseModal}
-                txStatus={txStatus}
-                transactionHash={transactionHashForModal}
-                errorMessage={transactionError}
-                backendMessage={backendMessage}
-                requestId={requestId}
-            />
+			<TransactionStatusModal
+				isOpen={showTransactionModal}
+				onClose={handleCloseModal}
+				txStatus={txStatus}
+				transactionHash={transactionHashForModal}
+				errorMessage={transactionError || approvalError}
+				backendMessage={backendMessage}
+				requestId={requestId}
+			/>
 		</AuthGuard>
 	)
 }
