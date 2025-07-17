@@ -6,89 +6,75 @@ import { Badge } from "@/components/ui/badge"
 import { DollarSign, Wallet, Eye, EyeOff } from "lucide-react" // Import Eye and EyeOff icons
 import { Button } from "@/components/ui/button" // Import Button component for the toggles
 
-// Base chain contract addresses (update if needed, these are placeholders for Base Mainnet)
-// IMPORTANT: Ensure these are the correct contract addresses on Base Mainnet.
-const USDT_CONTRACT = "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2" // Example address, replace with actual
-const USDC_CONTRACT = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" // Example address, replace with actual
+// Base chain contract addresses (update if needed)
+const USDT_CONTRACT = "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2"
+const USDC_CONTRACT = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
 
 const supportedTokens = [
-    { symbol: "ETH", name: "Ethereum", coingeckoId: "ethereum", color: "from-blue-500 to-purple-600" },
-    { symbol: "USDT", name: "Tether", coingeckoId: "tether", color: "from-green-500 to-emerald-600", contract: USDT_CONTRACT, decimals: 6 },
-    { symbol: "USDC", name: "USD Coin", coingeckoId: "usd-coin", color: "from-blue-400 to-cyan-600", contract: USDC_CONTRACT, decimals: 6 },
+	{ symbol: "ETH", name: "Ethereum", coingeckoId: "ethereum", color: "from-blue-500 to-purple-600" },
+	{ symbol: "USDT", name: "Tether", coingeckoId: "tether", color: "from-green-500 to-emerald-600", contract: USDT_CONTRACT, decimals: 6 },
+	{ symbol: "USDC", name: "USD Coin", coingeckoId: "usd-coin", color: "from-blue-400 to-cyan-600", contract: USDC_CONTRACT, decimals: 6 },
 ]
 
-// Corrected API endpoint for BaseScan (was etherscan.io previously)
 async function fetchEthBalance(address: string) {
-   const apiKey = process.env.NEXT_PUBLIC_ETHERSCAN_API_KEY // Using Etherscan API key for Base chain
-    const res = await fetch(
-        `https://api.etherscan.io/api?module=account&action=tokenbalance&address=${address}&tag=latest&apikey=${apiKey}`
-    )
-    const data = await res.json()
-    if (data.status === "1") {
-        return Number(data.result) / 1e18
-    }
-    console.error("Error fetching ETH balance from BaseScan:", data);
-    return 0
+	const apiKey = process.env.NEXT_PUBLIC_ETHERSCAN_API_KEY
+	const res = await fetch(
+		`https://api.etherscan.io/v2/api?chainid=8453&module=account&action=balance&address=${address}&tag=latest&apikey=${apiKey}`
+	)
+	const data = await res.json()
+	if (data.status === "1") {
+		return Number(data.result) / 1e18
+	}
+	return 0
 }
 
-// Corrected API endpoint for BaseScan (was etherscan.io previously)
 async function fetchErc20Balance(address: string, contract: string, decimals: number) {
-    const apiKey = process.env.NEXT_PUBLIC_BASESCAN_API_KEY // Use a BaseScan specific API key if you have one
-    const res = await fetch(
-        `https://api.basescan.org/api?module=account&action=tokenbalance&contractaddress=${contract}&address=${address}&tag=latest&apikey=${apiKey}`
-    )
-    const data = await res.json()
-    if (data.status === "1") {
-        return Number(data.result) / 10 ** decimals
-    }
-    console.error(`Error fetching ERC20 balance for ${contract} from BaseScan:`, data);
-    return 0
+	const apiKey = process.env.NEXT_PUBLIC_ETHERSCAN_API_KEY
+	const res = await fetch(
+		`https://api.etherscan.io/v2/api?chainid=8453&module=account&action=tokenbalance&contractaddress=${contract}&address=${address}&tag=latest&apikey=${apiKey}`
+	)
+	const data = await res.json()
+	if (data.status === "1") {
+		return Number(data.result) / 10 ** decimals
+	}
+	return 0
 }
 
 async function fetchPrices() {
-    const ids = supportedTokens.map((t) => t.coingeckoId).join(",")
-    const res = await fetch(
-        `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd,ngn`
-    )
-    if (!res.ok) {
-        console.error("Failed to fetch prices from CoinGecko:", res.statusText);
-        return {}; // Return empty object on error
-    }
-    return await res.json()
+	const ids = supportedTokens.map((t) => t.coingeckoId).join(",")
+	const res = await fetch(
+		`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd,ngn`
+	)
+	return await res.json()
 }
 
 export function PortfolioOverview({ wallet }: { wallet: any }) {
-    const [balances, setBalances] = useState<any[]>([])
-    const [prices, setPrices] = useState<any>({})
-    const [loading, setLoading] = useState(false)
+	const [balances, setBalances] = useState<any[]>([])
+	const [prices, setPrices] = useState<any>({})
+	const [loading, setLoading] = useState(false)
     const [showBalance, setShowBalance] = useState(true) // New state: true to show, false to hide
     const [currencyDisplay, setCurrencyDisplay] = useState<'usd' | 'ngn'>('usd') // New state: 'usd' or 'ngn'
 
-    useEffect(() => {
-        if (!wallet?.address) return
-        setLoading(true)
-        Promise.all([
-            fetchEthBalance(wallet.address),
-            fetchErc20Balance(wallet.address, USDT_CONTRACT, 6),
-            fetchErc20Balance(wallet.address, USDC_CONTRACT, 6),
-            fetchPrices(),
-        ]).then(([eth, usdt, usdc, priceData]) => {
-            setBalances([
-                { symbol: "ETH", name: "Ethereum", balance: eth, color: "from-blue-500 to-purple-600" },
-                { symbol: "USDT", name: "Tether", balance: usdt, color: "from-green-500 to-emerald-600" },
-                { symbol: "USDC", name: "USD Coin", balance: usdc, color: "from-blue-400 to-cyan-600" },
-            ])
-            setPrices(priceData)
-            setLoading(false)
-        }).catch(error => {
-            console.error("Error fetching portfolio data:", error);
-            setLoading(false);
-            setBalances([]); // Clear balances on error
-            setPrices({});   // Clear prices on error
-        })
-    }, [wallet])
+	useEffect(() => {
+		if (!wallet?.address) return
+		setLoading(true)
+		Promise.all([
+			fetchEthBalance(wallet.address),
+			fetchErc20Balance(wallet.address, USDT_CONTRACT, 6),
+			fetchErc20Balance(wallet.address, USDC_CONTRACT, 6),
+			fetchPrices(),
+		]).then(([eth, usdt, usdc, priceData]) => {
+			setBalances([
+				{ symbol: "ETH", name: "Ethereum", balance: eth, color: "from-blue-500 to-purple-600" },
+				{ symbol: "USDT", name: "Tether", balance: usdt, color: "from-green-500 to-emerald-600" },
+				{ symbol: "USDC", name: "USD Coin", balance: usdc, color: "from-blue-400 to-cyan-600" },
+			])
+			setPrices(priceData)
+			setLoading(false)
+		})
+	}, [wallet])
 
-    // Calculate total value in USD
+	 // Calculate total value in USD
     const totalValueUSD = balances.reduce((sum, b) => {
         const token = supportedTokens.find((t) => t.symbol === b.symbol)
         const price = token && prices[token.coingeckoId]?.usd ? prices[token.coingeckoId].usd : 0
@@ -101,7 +87,6 @@ export function PortfolioOverview({ wallet }: { wallet: any }) {
         const price = token && prices[token.coingeckoId]?.ngn ? prices[token.coingeckoId].ngn : 0
         return sum + b.balance * price
     }, 0)
-
     // Helper function to format the value based on visibility and selected currency
     const formatValue = (value: number, currency: 'usd' | 'ngn') => {
         if (!showBalance) {
@@ -116,7 +101,7 @@ export function PortfolioOverview({ wallet }: { wallet: any }) {
     const toggleBalanceVisibility = () => setShowBalance((prev) => !prev)
     const toggleCurrencyDisplay = () => setCurrencyDisplay((prev) => (prev === 'usd' ? 'ngn' : 'usd'))
 
-    return (
+return (
         <Card className="shadow-lg border-2 hover:shadow-xl transition-shadow">
             <CardHeader>
                 <CardTitle className="flex items-center justify-between"> {/* Added justify-between */}
@@ -166,8 +151,7 @@ export function PortfolioOverview({ wallet }: { wallet: any }) {
                             </div>
                         </div>
                     </div>
-
-                    <div className="grid gap-4 md:grid-cols-2">
+                        <div className="grid gap-4 md:grid-cols-2">
                         {balances.map((crypto) => {
                             const token = supportedTokens.find((t) => t.symbol === crypto.symbol)
                             const price = token ? prices[token.coingeckoId] : undefined
@@ -208,7 +192,7 @@ export function PortfolioOverview({ wallet }: { wallet: any }) {
                                                         : `$${usdValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}`
                                                 ) : "********"
                                             )}
-                                        </Badge>
+                                      </Badge>
                                     </div>
                                 </div>
                             )
