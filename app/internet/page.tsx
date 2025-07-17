@@ -503,14 +503,14 @@ export default function InternetPage() {
 		}
 	};
 
-	const handleCloseModal = () => {
-		setShowTransactionModal(false);
-		setTxStatus('idle');
-		setTransactionError(null);
-		setBackendMessage(null);
-		setTransactionHashForModal(undefined);
-		setApprovalError(null);
-	};
+	 const handleCloseModal = useCallback(() => {
+    setShowTransactionModal(false);
+    setTxStatus('idle');
+    setTransactionError(null);
+    setBackendMessage(null);
+    setTransactionHashForModal(undefined);
+    setApprovalError(null);
+  }, []); 
 
 	const providersToShow = availableProviders.length > 0 ? availableProviders : [];
 
@@ -641,7 +641,7 @@ export default function InternetPage() {
 						<Button
 							className="w-full"
 							onClick={handlePurchase}
-							disabled={isButtonDisabled}
+							// disabled={isButtonDisabled}
 						>
 							{isSwitchingChain ? "Switching Network..." :
 							!isOnBaseChain ? "Switch to Base Network" :

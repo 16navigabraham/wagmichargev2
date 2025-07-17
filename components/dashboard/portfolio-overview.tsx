@@ -19,9 +19,9 @@ const supportedTokens = [
 
 // Corrected API endpoint for BaseScan (was etherscan.io previously)
 async function fetchEthBalance(address: string) {
-    const apiKey = process.env.NEXT_PUBLIC_BASESCAN_API_KEY // Use a BaseScan specific API key if you have one
+   const apiKey = process.env.NEXT_PUBLIC_ETHERSCAN_API_KEY // Using Etherscan API key for Base chain
     const res = await fetch(
-        `https://api.basescan.org/api?module=account&action=balance&address=${address}&tag=latest&apikey=${apiKey}`
+        `https://api.etherscan.io/api?module=account&action=tokenbalance&address=${address}&tag=latest&apikey=${apiKey}`
     )
     const data = await res.json()
     if (data.status === "1") {
