@@ -183,11 +183,11 @@ export default function ElectricityPage() {
   });
 
   // Update currentAllowance state when allowanceData changes (moved after allowanceData declaration)
-  useEffect(() => {
-    if (allowanceData !== undefined) {
-        setCurrentAllowance(allowanceData);
-    }
-  }, [allowanceData]);
+  // useEffect(() => {
+  //   if (allowanceData !== undefined) {
+  //       setCurrentAllowance(allowanceData);
+  //   }
+  // }, [allowanceData]);
 
   // Hook to write approve transaction
   const { writeContract: writeApprove, data: approveHash, isPending: isApprovePending, isError: isApproveError, error: approveWriteError } = useWriteContract();
