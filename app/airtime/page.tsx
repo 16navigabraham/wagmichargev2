@@ -1,3 +1,4 @@
+// app/airtime/page.tsx
 "use client"
 
 import { useState, useEffect } from "react"
@@ -12,8 +13,9 @@ import AuthGuard from "@/components/AuthGuard"
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from "@/config/contract";
 import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { usePrivy } from '@privy-io/react-auth';
-import { parseEther, parseUnits, toBytes, toHex, Hex } from 'viem'; // Import toHex and Hex type
+import { parseEther, parseUnits, toBytes, toHex, Hex } from 'viem';
 import { toast } from 'sonner';
+import { TransactionStatusModal } from "@/components/TransactionStatusModal"; // Import the modal
 
 const CRYPTOS = [
 	{ symbol: "ETH", name: "Ethereum", coingeckoId: "ethereum", tokenType: 0, decimals: 18 },
@@ -48,9 +50,14 @@ export default function AirtimePage() {
 	const [phone, setPhone] = useState("")
 	const [prices, setPrices] = useState<any>({})
 	const [loading, setLoading] = useState(false)
-	const [requestId, setRequestId] = useState<string | undefined>(undefined); // Allow requestId to be undefined initially
-	const [txStatus, setTxStatus] = useState<'idle' | 'waitingForSignature' | 'sending' | 'confirming' | 'success' | 'error'>('idle');
+	const [requestId, setRequestId] = useState<string | undefined>(undefined);
+	
+	// Combined transaction status state
+	const [txStatus, setTxStatus] = useState<'idle' | 'waitingForSignature' | 'sending' | 'confirming' | 'success' | 'error' | 'backendProcessing' | 'backendSuccess' | 'backendError'>('idle');
 	const [transactionError, setTransactionError] = useState<string | null>(null);
+	const [backendMessage, setBackendMessage] = useState<string | null>(null); // New state for backend message
+	const [showTransactionModal, setShowTransactionModal] = useState(false);
+	const [transactionHashForModal, setTransactionHashForModal] = useState<Hex | undefined>(undefined);
 
 	const { connectWallet, authenticated, user } = usePrivy();
 	const { isConnected, address } = useAccount();
@@ -64,7 +71,7 @@ export default function AirtimePage() {
 	const { writeContract, data: hash, isPending: isWritePending, isError: isWriteError, error: writeError } = useWriteContract();
 
 	const { isLoading: isConfirming, isSuccess: isConfirmed, isError: isConfirmError, error: confirmError } = useWaitForTransactionReceipt({
-		hash: hash as Hex, // Cast hash to Hex here, as it's enabled only when truthy
+		hash: hash as Hex,
 		query: {
 			enabled: Boolean(hash),
 		},
@@ -85,43 +92,53 @@ export default function AirtimePage() {
 		}
 	}, [crypto, provider, amount, phone, requestId])
 
-	// Handle transaction status feedback
+	// Handle transaction status feedback and modal display
 	useEffect(() => {
 		if (isWritePending) {
 			setTxStatus('waitingForSignature');
+			setShowTransactionModal(true);
+			setTransactionHashForModal(undefined);
+			setTransactionError(null); // Clear previous errors
+			setBackendMessage(null); // Clear previous backend messages
 			toast.info("Awaiting wallet signature...");
 		} else if (hash) {
 			setTxStatus('sending');
+			setShowTransactionModal(true);
+			setTransactionHashForModal(hash);
 			toast.loading("Transaction sent, confirming on blockchain...", { id: 'tx-status' });
 		} else if (isConfirming) {
 			setTxStatus('confirming');
+			setShowTransactionModal(true);
 		} else if (isConfirmed) {
-			setTxStatus('success');
-			toast.success("Transaction confirmed!", { id: 'tx-status' });
-			if (hash) { // Ensure hash is not undefined before passing to post-transaction handler
-				handlePostTransaction(hash);
+			setTxStatus('success'); // Blockchain TX is successful, now trigger backend call
+			setShowTransactionModal(true);
+			toast.success("Blockchain transaction confirmed! Processing order...", { id: 'tx-status' });
+			if (hash) {
+				handlePostTransaction(hash); // Call backend here
 			}
 		} else if (isWriteError || isConfirmError) {
-			setTxStatus('error');
-			const errorMsg = (writeError?.message || confirmError?.message || "Transaction failed").split('\n')[0];
+			setTxStatus('error'); // Blockchain-level error
+			const errorMsg = (writeError?.message || confirmError?.message || "Blockchain transaction failed").split('\n')[0];
 			setTransactionError(errorMsg);
+			setShowTransactionModal(true);
 			toast.error(`Transaction failed: ${errorMsg}`, { id: 'tx-status' });
 		} else {
-			setTxStatus('idle');
+			setTxStatus('idle'); // Default idle state
 			setTransactionError(null);
+			setBackendMessage(null);
+			setTransactionHashForModal(undefined);
 		}
 	}, [isWritePending, hash, isConfirming, isConfirmed, isWriteError, isConfirmError, writeError, confirmError]);
 
-	// Simplified: Ensure user is authenticated and Wagmi sees an address
 	const ensureWalletConnected = async () => {
 		if (!authenticated) {
 			toast.error("Please log in to proceed.");
-			await connectWallet(); // Attempt to trigger Privy login
+			await connectWallet();
 			return false;
 		}
 		if (!address) {
 			toast.error("No wallet found. Please ensure a wallet is connected via Privy.");
-			await connectWallet(); // Attempt to make Privy expose a wallet
+			await connectWallet();
 			return false;
 		}
 		return true;
@@ -129,21 +146,26 @@ export default function AirtimePage() {
 
 	const handlePurchase = async () => {
 		setTransactionError(null);
-		setTxStatus('waitingForSignature');
+		setBackendMessage(null); // Clear backend message on new purchase attempt
+		setTxStatus('waitingForSignature'); // Set status to trigger modal early
 
 		const walletConnected = await ensureWalletConnected();
-		if (!walletConnected) return;
+		if (!walletConnected) {
+			setTxStatus('idle'); // Reset if connection fails
+			return;
+		}
 
 		if (!address) {
 			toast.error("Wallet address not found after connection. Please refresh and try again.");
+			setTxStatus('error');
 			return;
 		}
         if (!requestId) {
             toast.error("Request ID not generated. Please fill all form details.");
+            setTxStatus('error');
             return;
         }
 
-		// Prepare transaction arguments
 		const tokenAmount = selectedCrypto
 			? parseUnits(cryptoNeeded.toFixed(selectedCrypto.decimals), selectedCrypto.decimals)
 			: BigInt(0);
@@ -152,8 +174,7 @@ export default function AirtimePage() {
 			? parseEther(cryptoNeeded.toFixed(18))
 			: BigInt(0);
 
-		// FIX: Convert toBytes to toHex for contract argument
-		const bytes32RequestId: Hex = toHex(toBytes(requestId), { size: 32 }); // Convert string to bytes32 hex
+		const bytes32RequestId: Hex = toHex(toBytes(requestId), { size: 32 });
 
 		try {
 			writeContract({
@@ -162,20 +183,26 @@ export default function AirtimePage() {
 				functionName: 'createOrder',
 				args: [
 					bytes32RequestId,
-					selectedCrypto ? selectedCrypto.tokenType : 0, // FIX: Pass as number if ABI expects number
+					selectedCrypto ? selectedCrypto.tokenType : 0,
 					tokenAmount,
 				],
 				value: value,
 			});
 		} catch (error: any) {
 			console.error("Error sending transaction:", error);
-			setTransactionError(error.message || "Failed to send transaction.");
+			// This catch block handles immediate errors before the transaction is sent (e.g., user rejects in wallet)
+			const errorMsg = error.message || "Failed to send transaction.";
+			setTransactionError(errorMsg);
 			setTxStatus('error');
-			toast.error(error.message || "Failed to send transaction.");
+			toast.error(errorMsg);
 		}
 	};
 
-	const handlePostTransaction = async (transactionHash: Hex) => { // Type transactionHash as Hex
+	const handlePostTransaction = async (transactionHash: Hex) => {
+		setTxStatus('backendProcessing'); // Set status for backend processing
+		setBackendMessage("Processing your order...");
+		toast.loading("Processing order with VTpass...", { id: 'backend-status' });
+
 		try {
 			const orderData = {
 				requestId,
@@ -208,20 +235,36 @@ export default function AirtimePage() {
 				throw new Error(errorData.message || "Failed to deliver airtime via backend.");
 			}
 
-			toast.success("Airtime delivered successfully!");
+			setTxStatus('backendSuccess');
+			setBackendMessage("Airtime delivered successfully!");
+			toast.success("Airtime delivered successfully!", { id: 'backend-status' });
+			// Reset form for next transaction
 			setCrypto("");
 			setProvider("");
 			setAmount("");
 			setPhone("");
-			setRequestId(undefined); // Reset requestId to undefined to trigger regeneration
+			setRequestId(undefined);
 		} catch (backendError: any) {
+			setTxStatus('backendError');
+			const msg = `Backend processing failed: ${backendError.message}. Please contact support with Request ID: ${requestId}`;
+			setBackendMessage(msg);
 			console.error("Backend API call failed:", backendError);
-			toast.error(`Backend processing failed: ${backendError.message}. Please contact support with Request ID: ${requestId}`);
+			toast.error(msg, { id: 'backend-status' });
 		}
 	};
 
+	const handleCloseModal = () => {
+		setShowTransactionModal(false);
+		// Reset all transaction states when modal is closed, especially after success or error
+		setTxStatus('idle');
+		setTransactionError(null);
+		setBackendMessage(null);
+		setTransactionHashForModal(undefined);
+	};
+
 	const isFormValid = Boolean(crypto && provider && amount && phone && requestId && cryptoNeeded > 0);
-	const isButtonDisabled = loading || isWritePending || isConfirming || !isFormValid;
+	// FIX: Corrected the disabled prop syntax
+	const isButtonDisabled = loading || isWritePending || isConfirming || txStatus === 'backendProcessing' || !isFormValid;
 
 	return (
 		<AuthGuard>
@@ -322,11 +365,7 @@ export default function AirtimePage() {
 									)}
 								</span>
 							</div>
-							{transactionError && (
-								<div className="text-red-500 text-sm mt-2">
-									Transaction Error: {transactionError}
-								</div>
-							)}
+							{/* Removed direct error display here as modal will handle all errors */}
 						</div>
 						<Button
 							className="w-full"
@@ -335,15 +374,27 @@ export default function AirtimePage() {
 						>
 							{txStatus === 'waitingForSignature' && "Awaiting Signature..."}
 							{txStatus === 'sending' && "Sending Transaction..."}
-							{txStatus === 'confirming' && "Confirming Transaction..."}
-							{txStatus === 'success' && "Purchase Successful!"}
-							{txStatus === 'error' && "Try Again"}
+							{txStatus === 'confirming' && "Confirming Blockchain..."}
+							{txStatus === 'success' && "Blockchain Confirmed!"}
+							{txStatus === 'backendProcessing' && "Processing Order..."}
+							{txStatus === 'backendSuccess' && "Payment Successful!"}
+							{txStatus === 'backendError' && "Payment Failed - Try Again"}
+							{txStatus === 'error' && "Blockchain Failed - Try Again"}
 							{txStatus === 'idle' && isFormValid && "Purchase Airtime"}
 							{!isFormValid && "Fill all details"}
 						</Button>
 					</CardContent>
 				</Card>
 			</div>
+			<TransactionStatusModal
+				isOpen={showTransactionModal}
+				onClose={handleCloseModal}
+				txStatus={txStatus}
+				transactionHash={transactionHashForModal}
+				errorMessage={transactionError}
+				backendMessage={backendMessage}
+                requestId={requestId}
+			/>
 		</AuthGuard>
 	)
 }
