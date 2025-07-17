@@ -505,14 +505,14 @@ export default function ElectricityPage() {
     }
   };
 
-  const handleCloseModal = () => {
+ const handleCloseModal = useCallback(() => {
     setShowTransactionModal(false);
     setTxStatus('idle');
     setTransactionError(null);
     setBackendMessage(null);
     setTransactionHashForModal(undefined);
     setApprovalError(null);
-  };
+  }, []); 
 
   /* requestId generator */
   useEffect(() => {
@@ -775,7 +775,7 @@ export default function ElectricityPage() {
             <Button
               className="w-full"
               onClick={handlePurchase}
-              disabled={isButtonDisabled}
+              // disabled={isButtonDisabled}
             >
               {isSwitchingChain ? "Switching Network..." :
               !isOnBaseChain ? "Switch to Base Network" :

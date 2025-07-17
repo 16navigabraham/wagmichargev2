@@ -441,15 +441,14 @@ export default function AirtimePage() {
 		}
 	};
 
-	const handleCloseModal = () => {
-		setShowTransactionModal(false);
-		setTxStatus('idle');
-		setTransactionError(null);
-		setBackendMessage(null);
-		setTransactionHashForModal(undefined);
-		setApprovalError(null); // Clear approval errors
-		// Do NOT reset isApprovalConfirmed here, as it's managed by the approval useEffect
-	};
+ const handleCloseModal = useCallback(() => {
+    setShowTransactionModal(false);
+    setTxStatus('idle');
+    setTransactionError(null);
+    setBackendMessage(null);
+    setTransactionHashForModal(undefined);
+    setApprovalError(null);
+  }, []); 
 
 	const isFormValid = Boolean(crypto && provider && amount && phone && requestId && cryptoNeeded > 0);
 

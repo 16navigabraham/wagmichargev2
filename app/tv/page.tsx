@@ -157,11 +157,11 @@ export default function TVPage() {
   }, [provider])
 
   // Update currentAllowance state when allowanceData changes
-  useEffect(() => {
-    if (allowanceData !== undefined) {
-        setCurrentAllowance(allowanceData);
-    }
-  }, [allowanceData]);
+  // useEffect(() => {
+  //   if (allowanceData !== undefined) {
+  //       setCurrentAllowance(allowanceData);
+  //   }
+  // }, [allowanceData]);
 
   /* requestId generator */
   useEffect(() => {
@@ -555,14 +555,14 @@ export default function TVPage() {
     }
   };
 
-  const handleCloseModal = () => {
+ const handleCloseModal = useCallback(() => {
     setShowTransactionModal(false);
     setTxStatus('idle');
     setTransactionError(null);
     setBackendMessage(null);
     setTransactionHashForModal(undefined);
     setApprovalError(null);
-  };
+  }, []); 
 
   const canPay =
     crypto &&
@@ -751,7 +751,7 @@ export default function TVPage() {
             <Button
                 className="w-full"
                 onClick={handlePurchase}
-                disabled={isButtonDisabled}
+                // disabled={isButtonDisabled}
             >
                 {isSwitchingChain ? "Switching Network..." :
                 !isOnBaseChain ? "Switch to Base Network" :
