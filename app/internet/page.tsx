@@ -167,42 +167,58 @@ export default function InternetPage() {
 
     // --- START OF ADDITIONS: Handle transaction status feedback and modal display ---
 	useEffect(() => {
-		if (isWritePending) {
-			setTxStatus('waitingForSignature');
-			setShowTransactionModal(true); // Show modal
-			setTransactionHashForModal(undefined); // Clear hash
-			setTransactionError(null); // Clear previous errors
-            setBackendMessage(null); // Clear previous backend messages
-			toast.info("Awaiting wallet signature...");
-		} else if (hash) {
-			setTxStatus('sending');
-			setShowTransactionModal(true); // Show modal
-			setTransactionHashForModal(hash);
-			toast.loading("Transaction sent, confirming on blockchain...", { id: 'tx-status' });
-		} else if (isConfirming) {
-			setTxStatus('confirming');
-			setShowTransactionModal(true); // Show modal
-		} else if (isConfirmed) {
-			setTxStatus('success'); // Blockchain TX is successful, now trigger backend call
-			setShowTransactionModal(true); // Keep modal open
-			toast.success("Blockchain transaction confirmed! Processing order...", { id: 'tx-status' });
-			if (hash) {
-				handlePostTransaction(hash); // Call backend here
-			}
-		} else if (isWriteError || isConfirmError) {
-			setTxStatus('error'); // Blockchain-level error
-			const errorMsg = (writeError?.message || confirmError?.message || "Blockchain transaction failed").split('\n')[0];
-			setTransactionError(errorMsg);
-			setShowTransactionModal(true); // Show modal with error
-			toast.error(`Transaction failed: ${errorMsg}`, { id: 'tx-status' });
-		} else {
-			setTxStatus('idle'); // Default idle state
-			setTransactionError(null);
+        // Handle immediate writeContract errors (e.g., user rejected, simulation failed)
+        if (isWriteError) {
+            setTxStatus('error');
+            const errorMsg = writeError?.message?.split('\n')[0] || "Wallet transaction failed or was rejected.";
+            setTransactionError(errorMsg);
+            setShowTransactionModal(true);
+            toast.error(`Transaction failed: ${errorMsg}`, { id: 'tx-status' });
+            return; // Exit early if there's a write error
+        }
+
+        if (isWritePending) {
+            setTxStatus('waitingForSignature');
+            setShowTransactionModal(true);
+            setTransactionHashForModal(undefined);
+            setTransactionError(null);
             setBackendMessage(null);
-			setTransactionHashForModal(undefined);
-            setShowTransactionModal(false); // Hide modal if idle and no active transaction
-		}
-	}, [isWritePending, hash, isConfirming, isConfirmed, isWriteError, isConfirmError, writeError, confirmError]);
+            toast.info("Awaiting wallet signature...");
+        } else if (hash) {
+            // Once we have a hash, we're in the 'sending' or 'confirming' phase
+            if (isConfirming) {
+                setTxStatus('confirming');
+                setShowTransactionModal(true);
+                toast.loading("Transaction sent, confirming on blockchain...", { id: 'tx-status' });
+            } else if (isConfirmed) {
+                setTxStatus('success');
+                setShowTransactionModal(true);
+                toast.success("Blockchain transaction confirmed! Processing order...", { id: 'tx-status' });
+                // IMPORTANT: Call your backend post-transaction logic here
+                if (hash) {
+                    handlePostTransaction(hash); // Ensure this function is defined in each page
+                }
+            } else if (isConfirmError) { // Handle errors during transaction receipt
+                setTxStatus('error');
+                const errorMsg = confirmError?.message?.split('\n')[0] || "Blockchain transaction failed to confirm.";
+                setTransactionError(errorMsg);
+                setShowTransactionModal(true);
+                toast.error(`Transaction failed: ${errorMsg}`, { id: 'tx-status' });
+            } else {
+                // If hash exists but not confirming, confirmed, or error, it's just sent
+                setTxStatus('sending'); // Set to sending initially once hash is available
+                setShowTransactionModal(true);
+                setTransactionHashForModal(hash);
+                toast.loading("Transaction sent, waiting for blockchain confirmation...", { id: 'tx-status' });
+            }
+        } else {
+            // No hash, no pending write, no error means idle
+            setTxStatus('idle');
+            setTransactionError(null);
+            setBackendMessage(null);
+            setTransactionHashForModal(undefined);
+        }
+    }, [isWritePending, hash, isConfirming, isConfirmed, isWriteError, isConfirmError, writeError, confirmError]);
     // --- END OF ADDITIONS ---
 
 	// Simplified: Ensure user is authenticated and Wagmi sees an address
