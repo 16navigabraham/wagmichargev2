@@ -1,20 +1,19 @@
 // components/TransactionStatusModal.tsx
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Loader2, CheckCircle, XCircle, Clock } from "lucide-react"; // Added Clock icon
+import { Loader2, CheckCircle, XCircle, Clock } from "lucide-react";
 import Link from "next/link";
 import { Hex } from 'viem';
 
-// Extend the txStatus types to include backend processing states
 interface TransactionStatusModalProps {
   isOpen: boolean;
   onClose: () => void;
   txStatus: 'idle' | 'waitingForSignature' | 'sending' | 'confirming' | 'success' | 'error' | 'backendProcessing' | 'backendSuccess' | 'backendError';
   transactionHash?: Hex;
   errorMessage?: string | null;
-  explorerUrl?: string; // Base explorer URL (e.g., "https://basescan.org")
-  backendMessage?: string | null; // New prop for backend-specific messages
-  requestId?: string; // <--- FIX: ADDED THIS PROP
+  explorerUrl?: string;
+  backendMessage?: string | null;
+  requestId?: string;
 }
 
 export function TransactionStatusModal({
@@ -23,15 +22,14 @@ export function TransactionStatusModal({
   txStatus,
   transactionHash,
   errorMessage,
-  explorerUrl = "https://basescan.org", // Default to BaseScan
+  explorerUrl = "https://basescan.org",
   backendMessage,
-  requestId // <--- FIX: DESTRUCTURED IT HERE
+  requestId
 }: TransactionStatusModalProps) {
   const isPendingBlockchain = txStatus === 'waitingForSignature' || txStatus === 'sending' || txStatus === 'confirming';
-  const isSuccessBlockchainConfirmed = txStatus === 'success'; // Renamed for clarity: blockchain confirmed, but backend might still be processing
-  const isErrorBlockchain = txStatus === 'error';
-  
-  // New flags for backend status
+  const isSuccessBlockchainConfirmed = txStatus === 'success';
+  const isErrorBlockchain = txStatus === 'error'; // This covers both writeError and confirmError now
+
   const isBackendProcessing = txStatus === 'backendProcessing';
   const isBackendSuccess = txStatus === 'backendSuccess';
   const isBackendError = txStatus === 'backendError';
@@ -56,11 +54,16 @@ export function TransactionStatusModal({
     description = "Your transaction is on the blockchain and awaiting final confirmation.";
     icon = <Loader2 className="w-12 h-12 animate-spin text-purple-500" />;
     iconColor = "text-purple-500";
+  } else if (isErrorBlockchain) { // <-- Handle blockchain errors first, before backend-related success states
+    title = "Blockchain Transaction Failed";
+    // Prioritize the specific error message if available
+    description = errorMessage || "The blockchain transaction could not be completed. Check the explorer for details.";
+    icon = <XCircle className="w-12 h-12 text-red-500" />;
+    iconColor = "text-red-500";
   } else if (isSuccessBlockchainConfirmed) {
-    // Transition state: Blockchain TX success, but waiting for backend
     title = "Blockchain Confirmed!";
     description = "Now processing your order with our payment provider...";
-    icon = <Clock className="w-12 h-12 animate-spin text-green-500" />; // New icon for backend processing
+    icon = <Clock className="w-12 h-12 animate-spin text-green-500" />;
     iconColor = "text-green-500";
   } else if (isBackendProcessing) {
     title = "Processing Payment";
@@ -77,11 +80,6 @@ export function TransactionStatusModal({
     description = backendMessage || errorMessage || "The payment could not be completed by the service provider.";
     icon = <XCircle className="w-12 h-12 text-red-600" />;
     iconColor = "text-red-600";
-  } else if (isErrorBlockchain) { // This is for pure blockchain transaction errors (e.g. user rejected)
-    title = "Blockchain Transaction Failed";
-    description = errorMessage || "The blockchain transaction could not be completed. Funds may have been refunded by the contract.";
-    icon = <XCircle className="w-12 h-12 text-red-500" />;
-    iconColor = "text-red-500";
   }
 
   const explorerLink = transactionHash ? `${explorerUrl}/tx/${transactionHash}` : '#';
@@ -112,12 +110,11 @@ export function TransactionStatusModal({
             </Link>
           </div>
         )}
-        {/* FIX: Directly use requestId prop, and simplify condition */}
         {requestId && (txStatus !== 'idle' && txStatus !== 'waitingForSignature') && (
-             <div className="mt-4 text-sm break-words">
-                 <p className="font-medium">Request ID:</p>
-                 <span className="text-muted-foreground font-mono text-xs">{requestId}</span>
-             </div>
+          <div className="mt-4 text-sm break-words">
+            <p className="font-medium">Request ID:</p>
+            <span className="text-muted-foreground font-mono text-xs">{requestId}</span>
+          </div>
         )}
 
         <DialogFooter className="mt-6 flex justify-center">
