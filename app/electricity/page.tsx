@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input"
 
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from "@/config/contract";
 import { ERC20_ABI } from "@/config/erc20Abi"; // Import ERC20 ABI
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi'; // Added useReadContract
+import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'; // Removed useReadContract
 import { usePrivy } from '@privy-io/react-auth';
 import { parseEther, parseUnits, toBytes, toHex, Hex } from 'viem';
 import { toast } from 'sonner';
@@ -94,7 +94,6 @@ async function verifyMeter(billersCode: string, serviceID: string, type: string)
 
 function getMeterLength(planCode: string): number[] {
   const lc = planCode.toLowerCase()
-  // FIX: Corrected to use METER_LENGTHS instead of SMART_CARD_LENGTHS
   if (lc.includes("prepaid")) return METER_LENGTHS.prepaid
   if (lc.includes("postpaid")) return METER_LENGTHS.postpaid
   return METER_LENGTHS.default
@@ -125,9 +124,7 @@ export default function ElectricityPage() {
   const [showTransactionModal, setShowTransactionModal] = useState(false);
   const [transactionHashForModal, setTransactionHashForModal] = useState<Hex | undefined>(undefined);
 
-  // New states for ERC20 approval process
-  const [currentAllowance, setCurrentAllowance] = useState<bigint | undefined>(undefined);
-  const [isApprovalConfirmed, setIsApprovalConfirmed] = useState(false);
+  // Removed currentAllowance and isApprovalConfirmed states as per "no storing of approval"
   const [approvalError, setApprovalError] = useState<string | null>(null);
   // --- END OF MODIFICATIONS ---
 
@@ -167,27 +164,12 @@ export default function ElectricityPage() {
     hash: hash as Hex,
     query: {
       enabled: Boolean(hash),
+      refetchInterval: 1000, // FIX: Faster polling for main transaction
     },
   });
 
-  // Hook to read current allowance
-  const { data: allowanceData, refetch: refetchAllowance, isLoading: isAllowanceLoading } = useReadContract({
-    abi: ERC20_ABI,
-    address: selectedCrypto?.contract ? selectedCrypto.contract as Hex : undefined, // Safely access contract
-    functionName: 'allowance',
-    args: address && CONTRACT_ADDRESS ? [address, CONTRACT_ADDRESS] : undefined, // Ensure args are defined
-    query: {
-        enabled: Boolean(selectedCrypto?.contract && address && CONTRACT_ADDRESS && selectedCrypto?.tokenType !== 0), // Only enabled for ERC20 tokens when address is present
-        refetchInterval: 5000, // Refetch allowance periodically
-    },
-  });
-
-  // Update currentAllowance state when allowanceData changes (moved after allowanceData declaration)
-  // useEffect(() => {
-  //   if (allowanceData !== undefined) {
-  //       setCurrentAllowance(allowanceData);
-  //   }
-  // }, [allowanceData]);
+  // Removed useReadContract for allowance as per "no storing of approval"
+  // const { data: allowanceData, refetch: refetchAllowance, isLoading: isAllowanceLoading } = useReadContract(...)
 
   // Hook to write approve transaction
   const { writeContract: writeApprove, data: approveHash, isPending: isApprovePending, isError: isApproveError, error: approveWriteError } = useWriteContract();
@@ -197,6 +179,7 @@ export default function ElectricityPage() {
     hash: approveHash as Hex,
     query: {
         enabled: Boolean(approveHash),
+        refetchInterval: 1000, // FIX: Faster polling for approval transaction
     },
   });
   // --- END OF MODIFICATIONS ---
@@ -256,8 +239,7 @@ export default function ElectricityPage() {
       setCustomerAddress("");
       setVerificationSuccess(false);
       setRequestId(undefined);
-      setIsApprovalConfirmed(false); // Reset approval state
-      setCurrentAllowance(undefined); // Reset allowance
+      // Removed setIsApprovalConfirmed(false); and setCurrentAllowance(undefined);
     } catch (backendError: any) {
       setTxStatus('backendError');
       const msg = `Backend processing failed: ${backendError.message}. Please contact support with Request ID: ${requestId}`;
@@ -288,19 +270,54 @@ export default function ElectricityPage() {
         setTxStatus('approvalSuccess');
         setShowTransactionModal(true);
         setApprovalError(null); // Clear any previous approval errors
-        setIsApprovalConfirmed(true); // Mark approval as successful
-        refetchAllowance(); // Re-fetch allowance immediately after approval
-        toast.success("Token approved! You can now proceed with payment.", { id: 'approval-status' });
+        toast.success("Token approved! Proceeding with payment...", { id: 'approval-status' });
+        console.log("Approval: Blockchain confirmed! Initiating main transaction...");
+
+        // Directly initiate the main transaction after approval success
+        if (selectedCrypto) { // Ensure selectedCrypto is defined
+            const tokenAmount = parseUnits(cryptoNeeded.toFixed(selectedCrypto.decimals), selectedCrypto.decimals);
+            const value = selectedCrypto.symbol === 'ETH' && cryptoNeeded > 0
+                ? parseEther(cryptoNeeded.toFixed(18))
+                : BigInt(0);
+            const bytes32RequestId: Hex = toHex(toBytes(requestId || ""), { size: 32 }); // Ensure requestId is not undefined
+
+            try {
+                setTxStatus('waitingForSignature'); // Update status for main transaction
+                writeContract({
+                    address: CONTRACT_ADDRESS,
+                    abi: CONTRACT_ABI,
+                    functionName: 'createOrder',
+                    args: [
+                        bytes32RequestId,
+                        selectedCrypto.tokenType,
+                        tokenAmount,
+                    ],
+                    value: value,
+                });
+                console.log("Main transaction initiated after approval.");
+            } catch (error: any) {
+                console.error("Error initiating main transaction after approval:", error);
+                const errorMsg = error.message || "Failed to send main transaction after approval.";
+                setTransactionError(errorMsg);
+                setTxStatus('error');
+                toast.error(errorMsg);
+            }
+        } else {
+            console.error("Selected crypto is undefined after approval, cannot initiate main transaction.");
+            setTransactionError("Selected cryptocurrency is missing. Cannot proceed with payment.");
+            setTxStatus('error');
+            toast.error("An internal error occurred. Please try again.");
+        }
+
     } else if (isApproveError || isApprovalConfirmError) {
         setTxStatus('approvalError');
         const errorMsg = (approveWriteError?.message || approveConfirmError?.message || "Token approval failed").split('\n')[0];
         setApprovalError(errorMsg);
         setTransactionError(errorMsg); // Use main error state for modal display
         setShowTransactionModal(true);
-        setIsApprovalConfirmed(false); // Ensure approval is not marked as confirmed
         toast.error(`Approval failed: ${errorMsg}`, { id: 'approval-status' });
     }
-  }, [isApprovePending, approveHash, isApprovalTxConfirmed, isApprovalConfirming, isApproveError, isApprovalConfirmError, approveWriteError, approveConfirmError, refetchAllowance]);
+  }, [isApprovePending, approveHash, isApprovalTxConfirmed, isApprovalConfirming, isApproveError, isApprovalConfirmError, approveWriteError, approveConfirmError, writeContract, selectedCrypto, cryptoNeeded, requestId]);
 
   // Effect to monitor main transaction status
   useEffect(() => {
@@ -386,7 +403,7 @@ export default function ElectricityPage() {
     setTransactionError(null);
     setBackendMessage(null);
     setApprovalError(null);
-    setIsApprovalConfirmed(false);
+    // Removed setIsApprovalConfirmed(false); as it's no longer a persistent state
 
     const walletConnectedAndOnBase = await ensureWalletConnected();
     if (!walletConnectedAndOnBase) {
@@ -430,89 +447,68 @@ export default function ElectricityPage() {
 
     const bytes32RequestId: Hex = toHex(toBytes(requestId), { size: 32 });
 
-    // --- START OF MODIFICATIONS: Token Approval Logic ---
+    // --- START OF MODIFICATIONS: Token Approval Logic (Per-Transaction) ---
     if (selectedCrypto.tokenType !== 0) { // If it's an ERC20 token (USDT or USDC)
-        // Ensure allowance data is loaded before checking
-        if (isAllowanceLoading) {
-            toast.info("Checking token allowance, please wait...");
-            setTxStatus('idle');
-            return;
-        }
-
-        // If allowance is insufficient
-        if (currentAllowance === undefined || currentAllowance < tokenAmount) {
-            toast.info("Approving token spend for the contract...");
-            setTxStatus('waitingForApprovalSignature');
-            try {
-                // Ensure selectedCrypto.contract is not undefined before passing to writeApprove
-                if (selectedCrypto.contract) {
-                    writeApprove({
-                        abi: ERC20_ABI,
-                        address: selectedCrypto.contract as Hex, // Token contract address
-                        functionName: 'approve',
-                        args: [CONTRACT_ADDRESS, tokenAmount], // Spender: your escrow contract, Amount: tokenAmount
-                    });
-                } else {
-                    toast.error("Selected crypto has no contract address for approval.");
-                    setTxStatus('error');
-                    return;
-                }
-                return;
-            } catch (error: any) {
-                console.error("Error sending approval transaction:", error);
-                const errorMsg = error.message || "Failed to send approval transaction.";
-                setApprovalError(errorMsg);
-                setTransactionError(errorMsg); // Propagate to main error state for modal
-                setTxStatus('approvalError');
-                toast.error(errorMsg);
+        toast.info("Approving token spend for this transaction...");
+        setTxStatus('waitingForApprovalSignature'); // Set initial status for approval
+        try {
+            // Ensure selectedCrypto.contract is not undefined before passing to writeApprove
+            if (selectedCrypto.contract) {
+                writeApprove({
+                    abi: ERC20_ABI,
+                    address: selectedCrypto.contract as Hex, // Token contract address
+                    functionName: 'approve',
+                    args: [CONTRACT_ADDRESS, tokenAmount], // Spender: your escrow contract, Amount: exact tokenAmount
+                });
+            } else {
+                toast.error("Selected crypto has no contract address for approval.");
+                setTxStatus('error');
                 return;
             }
-        } else {
-            // Allowance is sufficient, proceed with main transaction immediately
-            setIsApprovalConfirmed(true);
+            return; // After initiating approval, stop here. The approval useEffect will handle next steps.
+        } catch (error: any) {
+            console.error("Error sending approval transaction:", error);
+            const errorMsg = error.message || "Failed to send approval transaction.";
+            setApprovalError(errorMsg);
+            setTransactionError(errorMsg); // Propagate to main error state for modal
+            setTxStatus('approvalError');
+            toast.error(errorMsg);
+            return;
         }
     } else {
-        // If ETH, no approval needed, so mark approval as confirmed
-        setIsApprovalConfirmed(true);
-    }
-
-    if (!isApprovalConfirmed) {
-        toast.error("Token approval is required before proceeding with the payment.");
-        setTxStatus('idle');
-        return;
-    }
-    // --- END OF MODIFICATIONS ---
-
-    try {
-      setTxStatus('waitingForSignature');
-      writeContract({
-        address: CONTRACT_ADDRESS,
-        abi: CONTRACT_ABI,
-        functionName: 'createOrder',
-        args: [
-          bytes32RequestId,
-          selectedCrypto.tokenType, // selectedCrypto is now guaranteed to be defined
-          tokenAmount,
-        ],
-        value: value,
-      });
-    } catch (error: any) {
-      console.error("Error sending transaction:", error);
-      const errorMsg = error.message || "Failed to send transaction.";
-      setTransactionError(errorMsg);
-      setTxStatus('error');
-      toast.error(errorMsg);
+        // If ETH, no approval needed, proceed directly with main transaction
+        try {
+          setTxStatus('waitingForSignature'); // Set status for main transaction signature
+          writeContract({
+            address: CONTRACT_ADDRESS,
+            abi: CONTRACT_ABI,
+            functionName: 'createOrder',
+            args: [
+              bytes32RequestId,
+              selectedCrypto.tokenType,
+              tokenAmount,
+            ],
+            value: value,
+          });
+        } catch (error: any) {
+          console.error("Error sending main transaction:", error);
+          const errorMsg = error.message || "Failed to send transaction.";
+          setTransactionError(errorMsg);
+          setTxStatus('error');
+          toast.error(errorMsg);
+        }
     }
   };
 
- const handleCloseModal = useCallback(() => {
+  // FIX: Wrapped handleCloseModal in useCallback
+  const handleCloseModal = useCallback(() => {
     setShowTransactionModal(false);
-    setTxStatus('idle');
-    setTransactionError(null);
-    setBackendMessage(null);
-    setTransactionHashForModal(undefined);
-    setApprovalError(null);
-  }, []); 
+    setTxStatus('idle'); // Reset status to idle when modal closes
+    setTransactionError(null); // Clear any errors
+    setBackendMessage(null); // Clear backend messages
+    setTransactionHashForModal(undefined); // Clear hash
+    setApprovalError(null); // Clear approval specific errors
+  }, []); // Empty dependency array as it doesn't depend on any changing state
 
   /* requestId generator */
   useEffect(() => {
@@ -585,9 +581,9 @@ export default function ElectricityPage() {
 
   // --- START OF MODIFICATIONS: Updated isButtonDisabled logic ---
   const isButtonDisabled = loading || loadingPlans || verifyingMeter || isWritePending || isConfirming || txStatus === 'backendProcessing' || !canPay ||
-                           isApprovePending || isApprovalConfirming || isAllowanceLoading || // Disable during approval steps
-                           !isOnBaseChain || isSwitchingChain || // Disable if not on Base or switching
-                           (selectedCrypto?.tokenType !== 0 && !isApprovalConfirmed); // If ERC20, must be approved
+                           isApprovePending || isApprovalConfirming || // Disable during approval steps
+                           !isOnBaseChain || isSwitchingChain; // Disable if not on Base or switching
+  // Removed isAllowanceLoading and (selectedCrypto?.tokenType !== 0 && !isApprovalConfirmed) as they are no longer relevant
   // --- END OF MODIFICATIONS ---
 
   if (loading) return <div className="p-10 text-center">Loading…</div>
@@ -779,10 +775,8 @@ export default function ElectricityPage() {
             >
               {isSwitchingChain ? "Switching Network..." :
               !isOnBaseChain ? "Switch to Base Network" :
-              isAllowanceLoading ? "Checking Allowance..." :
               isApprovePending ? "Awaiting Approval Signature..." :
               isApprovalConfirming ? "Approving Token..." :
-              (txStatus === 'approvalSuccess' && selectedCrypto?.tokenType !== 0) ? "Approval Confirmed! Click to Pay" :
               txStatus === 'waitingForSignature' ? "Awaiting Payment Signature..." :
               txStatus === 'sending' ? "Sending Transaction..." :
               txStatus === 'confirming' ? "Confirming Blockchain..." :
@@ -802,7 +796,7 @@ export default function ElectricityPage() {
         onClose={handleCloseModal}
         txStatus={txStatus}
         transactionHash={transactionHashForModal}
-        errorMessage={transactionError || approvalError}
+        errorMessage={transactionError || approvalError} // Pass approvalError to modal
         backendMessage={backendMessage}
         requestId={requestId}
       />

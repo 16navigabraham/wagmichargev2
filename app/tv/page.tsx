@@ -1,6 +1,6 @@
 // app/tv/page.tsx
 "use client"
-import { useState, useEffect, useCallback } from "react" // Added useCallback
+import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {Button} from "@/components/ui/button"
@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input"
 
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from "@/config/contract";
 import { ERC20_ABI } from "@/config/erc20Abi"; // Import ERC20 ABI
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi'; // Added useReadContract
+import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'; // Removed useReadContract
 import { usePrivy } from '@privy-io/react-auth';
 import { parseEther, parseUnits, toBytes, toHex, Hex } from 'viem';
 import { toast } from 'sonner';
@@ -38,6 +38,7 @@ interface TVPlan {
   variation_code: string
   name: string
   variation_amount: string
+  // fixedPrice: string // Added fixedPrice to match the structure from electricity/internet
 }
 
 const SMART_CARD_LENGTHS: Record<string, number[]> = {
@@ -122,9 +123,7 @@ export default function TVPage() {
   const [showTransactionModal, setShowTransactionModal] = useState(false);
   const [transactionHashForModal, setTransactionHashForModal] = useState<Hex | undefined>(undefined);
 
-  // New states for ERC20 approval process
-  const [currentAllowance, setCurrentAllowance] = useState<bigint | undefined>(undefined);
-  const [isApprovalConfirmed, setIsApprovalConfirmed] = useState(false);
+  // Removed currentAllowance and isApprovalConfirmed states as per "no storing of approval"
   const [approvalError, setApprovalError] = useState<string | null>(null);
   // --- END OF MODIFICATIONS ---
 
@@ -156,12 +155,8 @@ export default function TVPage() {
     fetchTVPlans(provider).then(setPlans).finally(() => setLoadingPlans(false))
   }, [provider])
 
-  // Update currentAllowance state when allowanceData changes
-  // useEffect(() => {
-  //   if (allowanceData !== undefined) {
-  //       setCurrentAllowance(allowanceData);
-  //   }
-  // }, [allowanceData]);
+  // Removed useEffect for currentAllowance as per "no storing of approval"
+  // useEffect(() => { ... }, [allowanceData]);
 
   /* requestId generator */
   useEffect(() => {
@@ -242,20 +237,12 @@ export default function TVPage() {
     hash: hash as Hex,
     query: {
       enabled: Boolean(hash),
+      refetchInterval: 1000, // FIX: Faster polling for main transaction
     },
   });
 
-  // Hook to read current allowance
-  const { data: allowanceData, refetch: refetchAllowance, isLoading: isAllowanceLoading } = useReadContract({
-    abi: ERC20_ABI,
-    address: selectedCrypto?.contract ? selectedCrypto.contract as Hex : undefined,
-    functionName: 'allowance',
-    args: address && CONTRACT_ADDRESS ? [address, CONTRACT_ADDRESS] : undefined,
-    query: {
-        enabled: Boolean(selectedCrypto?.contract && address && CONTRACT_ADDRESS && selectedCrypto?.tokenType !== 0),
-        refetchInterval: 5000,
-    },
-  });
+  // Removed useReadContract for allowance as per "no storing of approval"
+  // const { data: allowanceData, refetch: refetchAllowance, isLoading: isAllowanceLoading } = useReadContract(...)
 
   // Hook to write approve transaction
   const { writeContract: writeApprove, data: approveHash, isPending: isApprovePending, isError: isApproveError, error: approveWriteError } = useWriteContract();
@@ -265,6 +252,7 @@ export default function TVPage() {
     hash: approveHash as Hex,
     query: {
         enabled: Boolean(approveHash),
+        refetchInterval: 1000, // FIX: Faster polling for approval transaction
     },
   });
   // --- END OF MODIFICATIONS ---
@@ -285,7 +273,7 @@ export default function TVPage() {
           serviceID: provider,
           variation_code: plan,
           amount: amountNGN,
-          phone: smartCardNumber,
+          phone: smartCardNumber, // Assuming smartCardNumber can be used as phone for TV
           cryptoUsed: cryptoNeeded,
           cryptoSymbol: selectedCrypto?.symbol, // Safely access symbol
           transactionHash
@@ -311,8 +299,7 @@ export default function TVPage() {
       setVerificationError("");
       setVerificationSuccess(false);
       setRequestId(undefined);
-      setIsApprovalConfirmed(false); // Reset approval state
-      setCurrentAllowance(undefined); // Reset allowance
+      // Removed setIsApprovalConfirmed(false); and setCurrentAllowance(undefined);
     } catch (backendError: any) {
       setTxStatus('backendError');
       const msg = `Backend processing failed: ${backendError.message}. Please contact support with Request ID: ${requestId}`;
@@ -342,19 +329,54 @@ export default function TVPage() {
         setTxStatus('approvalSuccess');
         setShowTransactionModal(true);
         setApprovalError(null);
-        setIsApprovalConfirmed(true);
-        refetchAllowance();
-        toast.success("Token approved! You can now proceed with payment.", { id: 'approval-status' });
+        toast.success("Token approved! Proceeding with payment...", { id: 'approval-status' });
+        console.log("Approval: Blockchain confirmed! Initiating main transaction...");
+
+        // Directly initiate the main transaction after approval success
+        if (selectedCrypto) { // Ensure selectedCrypto is defined
+            const tokenAmount = parseUnits(cryptoNeeded.toFixed(selectedCrypto.decimals), selectedCrypto.decimals);
+            const value = selectedCrypto.symbol === 'ETH' && cryptoNeeded > 0
+                ? parseEther(cryptoNeeded.toFixed(18))
+                : BigInt(0);
+            const bytes32RequestId: Hex = toHex(toBytes(requestId || ""), { size: 32 }); // Ensure requestId is not undefined
+
+            try {
+                setTxStatus('waitingForSignature'); // Update status for main transaction
+                writeContract({
+                    address: CONTRACT_ADDRESS,
+                    abi: CONTRACT_ABI,
+                    functionName: 'createOrder', // Or your TV specific function
+                    args: [
+                        bytes32RequestId,
+                        selectedCrypto.tokenType,
+                        tokenAmount,
+                    ],
+                    value: value,
+                });
+                console.log("Main transaction initiated after approval.");
+            } catch (error: any) {
+                console.error("Error initiating main transaction after approval:", error);
+                const errorMsg = error.message || "Failed to send main transaction after approval.";
+                setTransactionError(errorMsg);
+                setTxStatus('error');
+                toast.error(errorMsg);
+            }
+        } else {
+            console.error("Selected crypto is undefined after approval, cannot initiate main transaction.");
+            setTransactionError("Selected cryptocurrency is missing. Cannot proceed with payment.");
+            setTxStatus('error');
+            toast.error("An internal error occurred. Please try again.");
+        }
+
     } else if (isApproveError || isApprovalConfirmError) {
         setTxStatus('approvalError');
         const errorMsg = (approveWriteError?.message || approveConfirmError?.message || "Token approval failed").split('\n')[0];
         setApprovalError(errorMsg);
         setTransactionError(errorMsg);
         setShowTransactionModal(true);
-        setIsApprovalConfirmed(false);
         toast.error(`Approval failed: ${errorMsg}`, { id: 'approval-status' });
     }
-  }, [isApprovePending, approveHash, isApprovalTxConfirmed, isApprovalConfirming, isApproveError, isApprovalConfirmError, approveWriteError, approveConfirmError, refetchAllowance]);
+  }, [isApprovePending, approveHash, isApprovalTxConfirmed, isApprovalConfirming, isApproveError, isApprovalConfirmError, approveWriteError, approveConfirmError, writeContract, selectedCrypto, cryptoNeeded, requestId]);
 
   // Effect to monitor main transaction status
   useEffect(() => {
@@ -436,7 +458,7 @@ export default function TVPage() {
     setTransactionError(null);
     setBackendMessage(null);
     setApprovalError(null);
-    setIsApprovalConfirmed(false);
+    // Removed setIsApprovalConfirmed(false); as it's no longer a persistent state
 
     const walletConnectedAndOnBase = await ensureWalletConnected();
     if (!walletConnectedAndOnBase) {
@@ -485,84 +507,67 @@ export default function TVPage() {
 
     const bytes32RequestId: Hex = toHex(toBytes(requestId), { size: 32 });
 
-    // --- START OF MODIFICATIONS: Token Approval Logic ---
+    // --- START OF MODIFICATIONS: Token Approval Logic (Per-Transaction) ---
     if (selectedCrypto.tokenType !== 0) { // If it's an ERC20 token (USDT or USDC)
-        if (isAllowanceLoading) {
-            toast.info("Checking token allowance, please wait...");
-            setTxStatus('idle');
-            return;
-        }
-
-        if (currentAllowance === undefined || currentAllowance < tokenAmount) {
-            toast.info("Approving token spend for the contract...");
-            setTxStatus('waitingForApprovalSignature');
-            try {
-                if (selectedCrypto.contract) { // Ensure contract address exists for ERC20
-                    writeApprove({
-                        abi: ERC20_ABI,
-                        address: selectedCrypto.contract as Hex,
-                        functionName: 'approve',
-                        args: [CONTRACT_ADDRESS, tokenAmount],
-                    });
-                } else {
-                    toast.error("Selected crypto has no contract address for approval.");
-                    setTxStatus('error');
-                    return;
-                }
-                return;
-            } catch (error: any) {
-                console.error("Error sending approval transaction:", error);
-                const errorMsg = error.message || "Failed to send approval transaction.";
-                setApprovalError(errorMsg);
-                setTransactionError(errorMsg);
-                setTxStatus('approvalError');
-                toast.error(errorMsg);
+        toast.info("Approving token spend for this transaction...");
+        setTxStatus('waitingForApprovalSignature'); // Set initial status for approval
+        try {
+            if (selectedCrypto.contract) { // Ensure contract address exists for ERC20
+                writeApprove({
+                    abi: ERC20_ABI,
+                    address: selectedCrypto.contract as Hex,
+                    functionName: 'approve',
+                    args: [CONTRACT_ADDRESS, tokenAmount], // Spender: your escrow contract, Amount: exact tokenAmount
+                });
+            } else {
+                toast.error("Selected crypto has no contract address for approval.");
+                setTxStatus('error');
                 return;
             }
-        } else {
-            setIsApprovalConfirmed(true);
+            return; // After initiating approval, stop here. The approval useEffect will handle next steps.
+        } catch (error: any) {
+            console.error("Error sending approval transaction:", error);
+            const errorMsg = error.message || "Failed to send approval transaction.";
+            setApprovalError(errorMsg);
+            setTransactionError(errorMsg); // Propagate to main error state for modal
+            setTxStatus('approvalError');
+            toast.error(errorMsg);
+            return;
         }
     } else {
-        setIsApprovalConfirmed(true);
-    }
-
-    if (!isApprovalConfirmed) {
-        toast.error("Token approval is required before proceeding with the payment.");
-        setTxStatus('idle');
-        return;
-    }
-    // --- END OF MODIFICATIONS ---
-
-    try {
-      setTxStatus('waitingForSignature');
-      writeContract({
-        address: CONTRACT_ADDRESS,
-        abi: CONTRACT_ABI,
-        functionName: 'createOrder',
-        args: [
-          bytes32RequestId,
-          selectedCrypto.tokenType, // selectedCrypto is now guaranteed to be defined
-          tokenAmount,
-        ],
-        value: value,
-      });
-    } catch (error: any) {
-      console.error("Error sending transaction:", error);
-      const errorMsg = error.message || "Failed to send transaction.";
-      setTransactionError(errorMsg);
-      setTxStatus('error');
-      toast.error(errorMsg);
+        // If ETH, no approval needed, proceed directly with main transaction
+        try {
+          setTxStatus('waitingForSignature'); // Set status for main transaction signature
+          writeContract({
+            address: CONTRACT_ADDRESS,
+            abi: CONTRACT_ABI,
+            functionName: 'createOrder',
+            args: [
+              bytes32RequestId,
+              selectedCrypto.tokenType, // selectedCrypto is now guaranteed to be defined
+              tokenAmount,
+            ],
+            value: value,
+          });
+        } catch (error: any) {
+          console.error("Error sending main transaction:", error);
+          const errorMsg = error.message || "Failed to send transaction.";
+          setTransactionError(errorMsg);
+          setTxStatus('error');
+          toast.error(errorMsg);
+        }
     }
   };
 
- const handleCloseModal = useCallback(() => {
+  // FIX: Wrapped handleCloseModal in useCallback
+  const handleCloseModal = useCallback(() => {
     setShowTransactionModal(false);
-    setTxStatus('idle');
-    setTransactionError(null);
-    setBackendMessage(null);
-    setTransactionHashForModal(undefined);
-    setApprovalError(null);
-  }, []); 
+    setTxStatus('idle'); // Reset status to idle when modal closes
+    setTransactionError(null); // Clear any errors
+    setBackendMessage(null); // Clear backend messages
+    setTransactionHashForModal(undefined); // Clear hash
+    setApprovalError(null); // Clear approval specific errors
+  }, []); // Empty dependency array as it doesn't depend on any changing state
 
   const canPay =
     crypto &&
@@ -577,9 +582,9 @@ export default function TVPage() {
 
   // --- START OF MODIFICATIONS: Updated isButtonDisabled logic ---
   const isButtonDisabled = loading || loadingProviders || loadingPlans || verifyingCard || isWritePending || isConfirming || txStatus === 'backendProcessing' || !canPay ||
-                           isApprovePending || isApprovalConfirming || isAllowanceLoading || // Disable during approval steps
-                           !isOnBaseChain || isSwitchingChain || // Disable if not on Base or switching
-                           (selectedCrypto?.tokenType !== 0 && !isApprovalConfirmed); // If ERC20, must be approved
+                           isApprovePending || isApprovalConfirming || // Disable during approval steps
+                           !isOnBaseChain || isSwitchingChain; // Disable if not on Base or switching
+  // Removed isAllowanceLoading and (selectedCrypto?.tokenType !== 0 && !isApprovalConfirmed) as they are no longer relevant
   // --- END OF MODIFICATIONS ---
 
   if (loading) return <div className="p-10 text-center">Loading…</div>
@@ -755,10 +760,8 @@ export default function TVPage() {
             >
                 {isSwitchingChain ? "Switching Network..." :
                 !isOnBaseChain ? "Switch to Base Network" :
-                isAllowanceLoading ? "Checking Allowance..." :
                 isApprovePending ? "Awaiting Approval Signature..." :
                 isApprovalConfirming ? "Approving Token..." :
-                (txStatus === 'approvalSuccess' && selectedCrypto?.tokenType !== 0) ? "Approval Confirmed! Click to Pay" :
                 txStatus === 'waitingForSignature' ? "Awaiting Payment Signature..." :
                 txStatus === 'sending' ? "Sending Transaction..." :
                 txStatus === 'confirming' ? "Confirming Blockchain..." :
