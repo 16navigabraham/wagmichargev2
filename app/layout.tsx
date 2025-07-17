@@ -9,7 +9,7 @@ const inter = Inter({ subsets: ["latin"] })
 export const metadata: Metadata = {
   title: "wagmi charge v2 - Crypto to Utilities",
   description: "Convert cryptocurrency to pay for airtime, TV subscriptions, electricity bills, and more",
-  generator: 'v0.dev'
+  generator: 'TEAM MEMEVIBE'
 }
 
 export default function RootLayout({
