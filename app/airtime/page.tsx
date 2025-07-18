@@ -208,41 +208,45 @@ export default function AirtimePage() {
             toast.success("Token approved! Proceeding with payment...", { id: 'approval-status' });
             console.log("Approval: Blockchain confirmed! Initiating main transaction...");
 
-            // Directly initiate the main transaction after approval success
-            if (selectedCrypto) { // Ensure selectedCrypto is defined
-                const tokenAmount = parseUnits(cryptoNeeded.toFixed(selectedCrypto.decimals), selectedCrypto.decimals);
-                const value = selectedCrypto.symbol === 'ETH' && cryptoNeeded > 0
-                    ? parseEther(cryptoNeeded.toFixed(18))
-                    : BigInt(0);
-                const bytes32RequestId: Hex = toHex(toBytes(requestId || ""), { size: 32 }); // Ensure requestId is not undefined
+            // FIX: Add a small delay to allow UI to update to 'approvalSuccess' before triggering next step
+            const initiateMainTransaction = setTimeout(() => {
+                if (selectedCrypto) { // Ensure selectedCrypto is defined
+                    const tokenAmount = parseUnits(cryptoNeeded.toFixed(selectedCrypto.decimals), selectedCrypto.decimals);
+                    const value = selectedCrypto.symbol === 'ETH' && cryptoNeeded > 0
+                        ? parseEther(cryptoNeeded.toFixed(18))
+                        : BigInt(0);
+                    const bytes32RequestId: Hex = toHex(toBytes(requestId || ""), { size: 32 }); // Ensure requestId is not undefined
 
-                try {
-                    setTxStatus('waitingForSignature'); // Update status for main transaction
-                    writeContract({
-                        address: CONTRACT_ADDRESS,
-                        abi: CONTRACT_ABI,
-                        functionName: 'createOrder', // Or your airtime specific function
-                        args: [
-                            bytes32RequestId,
-                            selectedCrypto.tokenType,
-                            tokenAmount,
-                        ],
-                        value: value,
-                    });
-                    console.log("Main transaction initiated after approval.");
-                } catch (error: any) {
-                    console.error("Error initiating main transaction after approval:", error);
-                    const errorMsg = error.message || "Failed to send main transaction after approval.";
-                    setTransactionError(errorMsg);
+                    try {
+                        setTxStatus('waitingForSignature'); // Update status for main transaction
+                        writeContract({
+                            address: CONTRACT_ADDRESS,
+                            abi: CONTRACT_ABI,
+                            functionName: 'createOrder', // Or your airtime specific function
+                            args: [
+                                bytes32RequestId,
+                                selectedCrypto.tokenType,
+                                tokenAmount,
+                            ],
+                            value: value,
+                        });
+                        console.log("Main transaction initiated after approval.");
+                    } catch (error: any) {
+                        console.error("Error initiating main transaction after approval:", error);
+                        const errorMsg = error.message || "Failed to send main transaction after approval.";
+                        setTransactionError(errorMsg);
+                        setTxStatus('error');
+                        toast.error(errorMsg);
+                    }
+                } else {
+                    console.error("Selected crypto is undefined after approval, cannot initiate main transaction.");
+                    setTransactionError("Selected cryptocurrency is missing. Cannot proceed with payment.");
                     setTxStatus('error');
-                    toast.error(errorMsg);
+                    toast.error("An internal error occurred. Please try again.");
                 }
-            } else {
-                console.error("Selected crypto is undefined after approval, cannot initiate main transaction.");
-                setTransactionError("Selected cryptocurrency is missing. Cannot proceed with payment.");
-                setTxStatus('error');
-                toast.error("An internal error occurred. Please try again.");
-            }
+            }, 500); // 500ms delay
+
+            return () => clearTimeout(initiateMainTransaction); // Cleanup timeout on unmount or re-render
 
         } else if (isApproveError || isApprovalConfirmError) {
             setTxStatus('approvalError');
@@ -339,6 +343,8 @@ export default function AirtimePage() {
     };
 
     const handlePurchase = async () => {
+        // FIX: Show modal immediately on purchase attempt
+        setShowTransactionModal(true);
         setTransactionError(null);
         setBackendMessage(null);
         setApprovalError(null); // Clear approval errors on new purchase attempt
@@ -346,7 +352,8 @@ export default function AirtimePage() {
 
         const walletConnectedAndOnBase = await ensureWalletConnected();
         if (!walletConnectedAndOnBase) {
-            setTxStatus('idle');
+            setTxStatus('idle'); // Reset status if wallet not connected or not on Base
+            setShowTransactionModal(false); // Hide modal if initial checks fail
             return;
         }
 
