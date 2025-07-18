@@ -463,7 +463,7 @@ export default function InternetPage() {
         // Prepare transaction arguments
         const tokenAmountForOrder = parseUnits(cryptoNeeded.toFixed(18), selectedCrypto.decimals); // Use 18 for toFixed for safety, parseUnits will handle actual decimals
         // For approval, use the maximum uint256 value for unlimited approval.
-        const unlimitedApprovalAmount = BigInt(2**256 - 1); // Represents type(uint256).max
+        const unlimitedApprovalAmount = parseUnits('115792089237316195423570985008687907853269984665640564039457584007913129639935', 0);
 
 
         const value = selectedCrypto.symbol === 'ETH' && cryptoNeeded > 0
