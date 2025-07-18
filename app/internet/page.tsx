@@ -13,7 +13,7 @@ import AuthGuard from "@/components/AuthGuard"
 
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from "@/config/contract";
 import { ERC20_ABI } from "@/config/erc20Abi"; // Import ERC20 ABI
-import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'; // Removed useReadContract
+import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { usePrivy } from '@privy-io/react-auth';
 import { parseEther, parseUnits, toBytes, toHex, Hex } from 'viem';
 import { toast } from 'sonner';
@@ -256,7 +256,7 @@ export default function InternetPage() {
     useEffect(() => {
         if (isApprovePending) {
             setTxStatus('waitingForApprovalSignature');
-            setShowTransactionModal(true);
+            // Removed setShowTransactionModal(true);
             setTransactionHashForModal(undefined);
             setTransactionError(null);
             setBackendMessage(null);
@@ -265,29 +265,39 @@ export default function InternetPage() {
         } else if (approveHash && !isApprovalTxConfirmed && !isApprovalConfirming) {
             // This state means the approval transaction has been sent, but not yet confirming or confirmed
             setTxStatus('sending'); // Use 'sending' for approval hash available but not yet confirming
-            setShowTransactionModal(true);
+            // Removed setShowTransactionModal(true);
             setTransactionHashForModal(approveHash);
             toast.loading("Token approval sent, waiting for confirmation...", { id: 'approval-status' });
         } else if (isApprovalConfirming) {
             setTxStatus('approving'); // Use 'approving' when it's actively confirming
-            setShowTransactionModal(true);
+            // Removed setShowTransactionModal(true);
             setTransactionHashForModal(approveHash);
             toast.loading("Token approval confirming on blockchain...", { id: 'approval-status' });
         } else if (isApprovalTxConfirmed) {
             setTxStatus('approvalSuccess');
-            setShowTransactionModal(true);
             setApprovalError(null);
-            toast.success("Token approved! Proceeding with payment...", { id: 'approval-status' });
+            toast.success("Token approved for unlimited spending! Proceeding with payment...", { id: 'approval-status' }); // Updated message
             console.log("Approval: Blockchain confirmed! Initiating main transaction...");
 
             // Add a small delay to allow UI to update to 'approvalSuccess' before triggering next step
             const initiateMainTransaction = setTimeout(() => {
                 if (selectedCrypto) { // Ensure selectedCrypto is defined
-                    const tokenAmount = parseUnits(cryptoNeeded.toFixed(selectedCrypto.decimals), selectedCrypto.decimals);
+                    const tokenAmount = parseUnits(cryptoNeeded.toFixed(18), selectedCrypto.decimals);
                     const value = selectedCrypto.symbol === 'ETH' && cryptoNeeded > 0
                         ? parseEther(cryptoNeeded.toFixed(18))
                         : BigInt(0);
                     const bytes32RequestId: Hex = toHex(toBytes(requestId || ""), { size: 32 }); // Ensure requestId is not undefined
+
+                    // Debugging logs for contract call parameters
+                    console.log("--- Initiating Main Contract Call (after approval) ---");
+                    console.log("RequestId (bytes32):", bytes32RequestId);
+                    console.log("TokenType:", selectedCrypto.tokenType);
+                    console.log("TokenAmount (parsed):", tokenAmount.toString()); // Log as string to see full BigInt
+                    console.log("Value (for ETH, 0 for ERC20):", value.toString()); // Log as string to see full BigInt
+                    console.log("Selected Crypto:", selectedCrypto.symbol);
+                    console.log("Crypto Needed (float):", cryptoNeeded);
+                    console.log("Selected Crypto Decimals:", selectedCrypto.decimals);
+                    console.log("----------------------------------------------------");
 
                     try {
                         setTxStatus('waitingForSignature'); // Update status for main transaction
@@ -325,7 +335,7 @@ export default function InternetPage() {
             const errorMsg = (approveWriteError?.message || approveConfirmError?.message || "Token approval failed").split('\n')[0];
             setApprovalError(errorMsg);
             setTransactionError(errorMsg);
-            setShowTransactionModal(true);
+            // Removed setShowTransactionModal(true);
             toast.error(`Approval failed: ${errorMsg}`, { id: 'approval-status' });
         }
     }, [isApprovePending, approveHash, isApprovalTxConfirmed, isApprovalConfirming, isApproveError, isApprovalConfirmError, approveWriteError, approveConfirmError, writeContract, selectedCrypto, cryptoNeeded, requestId]);
@@ -340,14 +350,14 @@ export default function InternetPage() {
             setTxStatus('error');
             const errorMsg = writeError?.message?.split('\n')[0] || "Wallet transaction failed or was rejected.";
             setTransactionError(errorMsg);
-            setShowTransactionModal(true);
+            // Removed setShowTransactionModal(true);
             toast.error(`Transaction failed: ${errorMsg}`, { id: 'tx-status' });
             return;
         }
 
         if (isWritePending) {
             setTxStatus('waitingForSignature');
-            setShowTransactionModal(true);
+            // Removed setShowTransactionModal(true);
             setTransactionHashForModal(undefined);
             setTransactionError(null);
             setBackendMessage(null);
@@ -355,17 +365,17 @@ export default function InternetPage() {
         } else if (hash && !isConfirmed && !isConfirming) {
             // This state means the main transaction has been sent, but not yet confirming or confirmed
             setTxStatus('sending');
-            setShowTransactionModal(true);
+            // Removed setShowTransactionModal(true);
             setTransactionHashForModal(hash);
             toast.loading("Transaction sent, waiting for blockchain confirmation...", { id: 'tx-status' });
         } else if (isConfirming) {
             setTxStatus('confirming');
-            setShowTransactionModal(true);
+            // Removed setShowTransactionModal(true);
             setTransactionHashForModal(hash);
             toast.loading("Transaction confirming on blockchain...", { id: 'tx-status' });
         } else if (isConfirmed) {
             setTxStatus('success');
-            setShowTransactionModal(true);
+            // Removed setShowTransactionModal(true);
             setTransactionHashForModal(hash);
             toast.success("Blockchain transaction confirmed! Processing order...", { id: 'tx-status' });
             if (hash) {
@@ -375,7 +385,7 @@ export default function InternetPage() {
             setTxStatus('error');
             const errorMsg = confirmError?.message?.split('\n')[0] || "Blockchain transaction failed to confirm.";
             setTransactionError(errorMsg);
-            setShowTransactionModal(true);
+            // Removed setShowTransactionModal(true);
             setTransactionHashForModal(hash);
             toast.error(`Transaction failed: ${errorMsg}`, { id: 'tx-status' });
         } else {
@@ -409,7 +419,7 @@ export default function InternetPage() {
     };
 
     const handlePurchase = async () => {
-        // FIX: Show modal immediately on purchase attempt
+        // FIX: Show modal immediately on purchase attempt (ONLY place to set true)
         setShowTransactionModal(true);
         setTransactionError(null);
         setBackendMessage(null);
@@ -451,13 +461,28 @@ export default function InternetPage() {
 
 
         // Prepare transaction arguments
-        const tokenAmount = parseUnits(cryptoNeeded.toFixed(selectedCrypto.decimals), selectedCrypto.decimals);
+        const tokenAmountForOrder = parseUnits(cryptoNeeded.toFixed(18), selectedCrypto.decimals); // Use 18 for toFixed for safety, parseUnits will handle actual decimals
+        // For approval, use the maximum uint256 value for unlimited approval.
+        const unlimitedApprovalAmount = BigInt(2**256 - 1); // Represents type(uint256).max
+
 
         const value = selectedCrypto.symbol === 'ETH' && cryptoNeeded > 0
             ? parseEther(cryptoNeeded.toFixed(18))
             : BigInt(0);
 
         const bytes32RequestId: Hex = toHex(toBytes(requestId), { size: 32 });
+
+        // Debugging logs for contract call parameters
+        console.log("--- Initiating Contract Call ---");
+        console.log("RequestId (bytes32):", bytes32RequestId);
+        console.log("TokenType:", selectedCrypto.tokenType);
+        console.log("TokenAmount for Order (parsed):", tokenAmountForOrder.toString()); // Log as string to see full BigInt
+        console.log("Value (for ETH, 0 for ERC20):", value.toString()); // Log as string to see full BigInt
+        console.log("Selected Crypto:", selectedCrypto.symbol);
+        console.log("Crypto Needed (float):", cryptoNeeded);
+        console.log("Selected Crypto Decimals:", selectedCrypto.decimals);
+        console.log("--------------------------------");
+
 
         // --- START OF MODIFICATIONS: Token Approval Logic (Per-Transaction) ---
         if (selectedCrypto.tokenType !== 0) { // If it's an ERC20 token (USDT or USDC)
@@ -469,7 +494,7 @@ export default function InternetPage() {
                         abi: ERC20_ABI,
                         address: selectedCrypto.contract as Hex,
                         functionName: 'approve',
-                        args: [CONTRACT_ADDRESS, tokenAmount], // Spender: your escrow contract, Amount: exact tokenAmount
+                        args: [CONTRACT_ADDRESS, unlimitedApprovalAmount], // MODIFICATION: Use unlimitedApprovalAmount here
                     });
                 } else {
                     toast.error("Selected crypto has no contract address for approval.");
@@ -497,7 +522,7 @@ export default function InternetPage() {
                     args: [
                         bytes32RequestId,
                         selectedCrypto.tokenType, // selectedCrypto is now guaranteed to be defined
-                        tokenAmount,
+                        tokenAmountForOrder, // Use the exact amount for the order
                     ],
                     value: value,
                 });
@@ -664,7 +689,7 @@ export default function InternetPage() {
                             txStatus === 'backendSuccess' ? "Payment Successful!" :
                             txStatus === 'backendError' ? "Payment Failed - Try Again" :
                             txStatus === 'error' ? "Blockchain Failed - Try Again" :
-                            isFormValid ? "Buy Internet Data" :
+                            isFormValid ? "Purchase Internet Data" :
                             "Fill all details"}
                         </Button>
                     </CardContent>

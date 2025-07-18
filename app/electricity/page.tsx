@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input"
 
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from "@/config/contract";
 import { ERC20_ABI } from "@/config/erc20Abi"; // Import ERC20 ABI
-import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'; // Removed useReadContract
+import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { usePrivy } from '@privy-io/react-auth';
 import { parseEther, parseUnits, toBytes, toHex, Hex } from 'viem';
 import { toast } from 'sonner';
@@ -124,7 +124,6 @@ export default function ElectricityPage() {
   const [showTransactionModal, setShowTransactionModal] = useState(false);
   const [transactionHashForModal, setTransactionHashForModal] = useState<Hex | undefined>(undefined);
 
-  // Removed currentAllowance and isApprovalConfirmed states as per "no storing of approval"
   const [approvalError, setApprovalError] = useState<string | null>(null);
   // --- END OF MODIFICATIONS ---
 
@@ -151,6 +150,62 @@ export default function ElectricityPage() {
     fetchElectricityPlans(provider).then(setPlans).finally(() => setLoadingPlans(false))
   }, [provider])
 
+  /* requestId generator */
+  useEffect(() => {
+    if ((crypto || provider || plan || meterNumber || amount || phone) && !requestId) {
+        setRequestId(generateRequestId());
+    } else if (!(crypto || provider || plan || meterNumber || amount || phone) && requestId) {
+        setRequestId(undefined);
+    }
+  }, [crypto, provider, plan, meterNumber, amount, phone, requestId]);
+
+
+  /* auto-verify meter */
+  useEffect(() => {
+    if (!provider || !plan || !meterNumber) {
+      setCustomerName("")
+      setCustomerAddress("")
+      setVerificationError("")
+      setVerificationSuccess(false)
+      return
+    }
+
+    const validLengths = getMeterLength(plan)
+    if (!validLengths.includes(meterNumber.length)) {
+      setCustomerName("")
+      setCustomerAddress("")
+      setVerificationError(`Please enter a valid ${validLengths.join(" or ")} digit meter number for ${ELECTRICITY_PROVIDERS.find(p => p.serviceID === provider)?.name || 'this provider'}.`)
+      setVerificationSuccess(false)
+      return
+    }
+
+    const id = setTimeout(async () => {
+      setVerifyingMeter(true)
+      setVerificationError("")
+      setVerificationSuccess(false)
+      setCustomerName("")
+      setCustomerAddress("")
+
+      try {
+        const content = await verifyMeter(meterNumber, provider, plan) // Pass 'plan' as type
+
+        const name    = String(content?.Customer_Name || "").trim()
+        const address = String(content?.Customer_Address || "").trim()
+
+        if (!name) throw new Error("Customer name not found. Please check the meter number.")
+
+        setCustomerName(name)
+        setCustomerAddress(address)
+        setVerificationSuccess(true)
+      } catch (err: any) {
+        setVerificationError(err.message || "Verification failed. Please try again.")
+      } finally {
+        setVerifyingMeter(false)
+      }
+    }, 700)
+    return () => clearTimeout(id)
+  }, [meterNumber, provider, plan])
+
   /* derived values */
   const selectedCrypto = CRYPTOS.find(c => c.symbol === crypto)
   const priceNGN = selectedCrypto ? prices[selectedCrypto.coingeckoId]?.ngn : null
@@ -167,9 +222,6 @@ export default function ElectricityPage() {
       refetchInterval: 1000, // FIX: Faster polling for main transaction
     },
   });
-
-  // Removed useReadContract for allowance as per "no storing of approval"
-  // const { data: allowanceData, refetch: refetchAllowance, isLoading: isAllowanceLoading } = useReadContract(...)
 
   // Hook to write approve transaction
   const { writeContract: writeApprove, data: approveHash, isPending: isApprovePending, isError: isApproveError, error: approveWriteError } = useWriteContract();
@@ -239,7 +291,6 @@ export default function ElectricityPage() {
       setCustomerAddress("");
       setVerificationSuccess(false);
       setRequestId(undefined);
-      // Removed setIsApprovalConfirmed(false); and setCurrentAllowance(undefined);
     } catch (backendError: any) {
       setTxStatus('backendError');
       const msg = `Backend processing failed: ${backendError.message}. Please contact support with Request ID: ${requestId}`;
@@ -255,7 +306,7 @@ export default function ElectricityPage() {
   useEffect(() => {
     if (isApprovePending) {
         setTxStatus('waitingForApprovalSignature');
-        setShowTransactionModal(true);
+        // Removed setShowTransactionModal(true);
         setTransactionHashForModal(undefined); // Clear main tx hash
         setTransactionError(null);
         setBackendMessage(null);
@@ -264,29 +315,39 @@ export default function ElectricityPage() {
     } else if (approveHash && !isApprovalTxConfirmed && !isApprovalConfirming) {
         // This state means the approval transaction has been sent, but not yet confirming or confirmed
         setTxStatus('sending'); // Use 'sending' for approval hash available but not yet confirming
-        setShowTransactionModal(true);
+        // Removed setShowTransactionModal(true);
         setTransactionHashForModal(approveHash); // Show approval hash in modal
         toast.loading("Token approval sent, waiting for confirmation...", { id: 'approval-status' });
     } else if (isApprovalConfirming) {
         setTxStatus('approving'); // Use 'approving' when it's actively confirming
-        setShowTransactionModal(true);
+        // Removed setShowTransactionModal(true);
         setTransactionHashForModal(approveHash);
         toast.loading("Token approval confirming on blockchain...", { id: 'approval-status' });
     } else if (isApprovalTxConfirmed) {
         setTxStatus('approvalSuccess');
-        setShowTransactionModal(true);
         setApprovalError(null); // Clear any previous approval errors
-        toast.success("Token approved! Proceeding with payment...", { id: 'approval-status' });
+        toast.success("Token approved for unlimited spending! Proceeding with payment...", { id: 'approval-status' }); // Updated message
         console.log("Approval: Blockchain confirmed! Initiating main transaction...");
 
         // Add a small delay to allow UI to update to 'approvalSuccess' before triggering next step
         const initiateMainTransaction = setTimeout(() => {
             if (selectedCrypto) { // Ensure selectedCrypto is defined
-                const tokenAmount = parseUnits(cryptoNeeded.toFixed(selectedCrypto.decimals), selectedCrypto.decimals);
+                const tokenAmount = parseUnits(cryptoNeeded.toFixed(18), selectedCrypto.decimals);
                 const value = selectedCrypto.symbol === 'ETH' && cryptoNeeded > 0
                     ? parseEther(cryptoNeeded.toFixed(18))
                     : BigInt(0);
                 const bytes32RequestId: Hex = toHex(toBytes(requestId || ""), { size: 32 }); // Ensure requestId is not undefined
+
+                // Debugging logs for contract call parameters
+                console.log("--- Initiating Main Contract Call (after approval) ---");
+                console.log("RequestId (bytes32):", bytes32RequestId);
+                console.log("TokenType:", selectedCrypto.tokenType);
+                console.log("TokenAmount (parsed):", tokenAmount.toString()); // Log as string to see full BigInt
+                console.log("Value (for ETH, 0 for ERC20):", value.toString()); // Log as string to see full BigInt
+                console.log("Selected Crypto:", selectedCrypto.symbol);
+                console.log("Crypto Needed (float):", cryptoNeeded);
+                console.log("Selected Crypto Decimals:", selectedCrypto.decimals);
+                console.log("----------------------------------------------------");
 
                 try {
                     setTxStatus('waitingForSignature'); // Update status for main transaction
@@ -324,7 +385,7 @@ export default function ElectricityPage() {
         const errorMsg = (approveWriteError?.message || approveConfirmError?.message || "Token approval failed").split('\n')[0];
         setApprovalError(errorMsg);
         setTransactionError(errorMsg); // Use main error state for modal display
-        setShowTransactionModal(true);
+        // Removed setShowTransactionModal(true);
         toast.error(`Approval failed: ${errorMsg}`, { id: 'approval-status' });
     }
   }, [isApprovePending, approveHash, isApprovalTxConfirmed, isApprovalConfirming, isApproveError, isApprovalConfirmError, approveWriteError, approveConfirmError, writeContract, selectedCrypto, cryptoNeeded, requestId]);
@@ -341,14 +402,14 @@ export default function ElectricityPage() {
         setTxStatus('error');
         const errorMsg = writeError?.message?.split('\n')[0] || "Wallet transaction failed or was rejected.";
         setTransactionError(errorMsg);
-        setShowTransactionModal(true);
+        // Removed setShowTransactionModal(true);
         toast.error(`Transaction failed: ${errorMsg}`, { id: 'tx-status' });
         return; // Exit early if there's a write error
     }
 
     if (isWritePending) {
         setTxStatus('waitingForSignature');
-        setShowTransactionModal(true);
+        // Removed setShowTransactionModal(true);
         setTransactionHashForModal(undefined); // Clear main tx hash
         setTransactionError(null);
         setBackendMessage(null);
@@ -356,17 +417,17 @@ export default function ElectricityPage() {
     } else if (hash && !isConfirmed && !isConfirming) {
         // This state means the main transaction has been sent, but not yet confirming or confirmed
         setTxStatus('sending');
-        setShowTransactionModal(true);
+        // Removed setShowTransactionModal(true);
         setTransactionHashForModal(hash);
         toast.loading("Transaction sent, waiting for blockchain confirmation...", { id: 'tx-status' });
     } else if (isConfirming) {
         setTxStatus('confirming');
-        setShowTransactionModal(true);
+        // Removed setShowTransactionModal(true);
         setTransactionHashForModal(hash); // Ensure hash is shown during confirming
         toast.loading("Transaction confirming on blockchain...", { id: 'tx-status' });
     } else if (isConfirmed) {
         setTxStatus('success');
-        setShowTransactionModal(true);
+        // Removed setShowTransactionModal(true);
         setTransactionHashForModal(hash); // Ensure hash is shown during success
         toast.success("Blockchain transaction confirmed! Processing order...", { id: 'tx-status' });
         if (hash) {
@@ -376,7 +437,7 @@ export default function ElectricityPage() {
         setTxStatus('error');
         const errorMsg = confirmError?.message?.split('\n')[0] || "Blockchain transaction failed to confirm.";
         setTransactionError(errorMsg);
-        setShowTransactionModal(true);
+        // Removed setShowTransactionModal(true);
         setTransactionHashForModal(hash); // Show hash for failed tx
         toast.error(`Transaction failed: ${errorMsg}`, { id: 'tx-status' });
     } else {
@@ -410,12 +471,11 @@ export default function ElectricityPage() {
   };
 
   const handlePurchase = async () => {
-    // FIX: Show modal immediately on purchase attempt
+    // FIX: Show modal immediately on purchase attempt (ONLY place to set true)
     setShowTransactionModal(true);
     setTransactionError(null);
     setBackendMessage(null);
     setApprovalError(null);
-    // Removed setIsApprovalConfirmed(false); as it's no longer a persistent state
 
     const walletConnectedAndOnBase = await ensureWalletConnected();
     if (!walletConnectedAndOnBase) {
@@ -452,7 +512,10 @@ export default function ElectricityPage() {
         return;
     }
 
-    const tokenAmount = parseUnits(cryptoNeeded.toFixed(selectedCrypto.decimals), selectedCrypto.decimals);
+    // For the main contract call, use the exact amount needed.
+    const tokenAmountForOrder = parseUnits(cryptoNeeded.toFixed(18), selectedCrypto.decimals);
+    // For approval, use the maximum uint256 value for unlimited approval.
+    const unlimitedApprovalAmount = BigInt(2**256 - 1); // Represents type(uint256).max
 
     const value = selectedCrypto.symbol === 'ETH' && cryptoNeeded > 0
       ? parseEther(cryptoNeeded.toFixed(18))
@@ -460,7 +523,17 @@ export default function ElectricityPage() {
 
     const bytes32RequestId: Hex = toHex(toBytes(requestId), { size: 32 });
 
-    // --- START OF MODIFICATIONS: Token Approval Logic (Per-Transaction) ---
+    // Debugging logs for contract call parameters
+    console.log("--- Initiating Contract Call ---");
+    console.log("RequestId (bytes32):", bytes32RequestId);
+    console.log("TokenType:", selectedCrypto.tokenType);
+    console.log("TokenAmount for Order (parsed):", tokenAmountForOrder.toString()); // Log as string to see full BigInt
+    console.log("Value (for ETH, 0 for ERC20):", value.toString()); // Log as string to see full BigInt
+    console.log("Selected Crypto:", selectedCrypto.symbol);
+    console.log("Crypto Needed (float):", cryptoNeeded);
+    console.log("Selected Crypto Decimals:", selectedCrypto.decimals);
+    console.log("--------------------------------");
+
     if (selectedCrypto.tokenType !== 0) { // If it's an ERC20 token (USDT or USDC)
         toast.info("Approving token spend for this transaction...");
         setTxStatus('waitingForApprovalSignature'); // Set initial status for approval
@@ -471,7 +544,7 @@ export default function ElectricityPage() {
                     abi: ERC20_ABI,
                     address: selectedCrypto.contract as Hex, // Token contract address
                     functionName: 'approve',
-                    args: [CONTRACT_ADDRESS, tokenAmount], // Spender: your escrow contract, Amount: exact tokenAmount
+                    args: [CONTRACT_ADDRESS, unlimitedApprovalAmount], // MODIFICATION: Use unlimitedApprovalAmount here
                 });
             } else {
                 toast.error("Selected crypto has no contract address for approval.");
@@ -499,7 +572,7 @@ export default function ElectricityPage() {
             args: [
               bytes32RequestId,
               selectedCrypto.tokenType,
-              tokenAmount,
+              tokenAmountForOrder, // Use the exact amount for the order
             ],
             value: value,
           });
@@ -540,7 +613,6 @@ export default function ElectricityPage() {
   const isButtonDisabled = loading || loadingPlans || verifyingMeter || isWritePending || isConfirming || txStatus === 'backendProcessing' || !canPay ||
                            isApprovePending || isApprovalConfirming || // Disable during approval steps
                            !isOnBaseChain || isSwitchingChain; // Disable if not on Base or switching
-  // Removed isAllowanceLoading and (selectedCrypto?.tokenType !== 0 && !isApprovalConfirmed) as they are no longer relevant
   // --- END OF MODIFICATIONS ---
 
   if (loading) return <div className="p-10 text-center">Loading…</div>
@@ -735,20 +807,20 @@ export default function ElectricityPage() {
                 txStatus === 'backendError' ? "Payment Failed - Try Again" :
                 txStatus === 'error' ? "Blockchain Failed - Try Again" :
                 canPay ? "Pay Electricity Bill" :
-                "Complete form and verify meter"}
+                "Fill all details and verify meter"}
             </Button>
           </CardContent>
         </Card>
       </div>
-        <TransactionStatusModal
-            isOpen={showTransactionModal}
-            onClose={handleCloseModal}
-            txStatus={txStatus}
-            transactionHash={transactionHashForModal}
-            errorMessage={transactionError || approvalError} // Pass approvalError to modal
-            backendMessage={backendMessage}
-            requestId={requestId}
-        />
+      <TransactionStatusModal
+        isOpen={showTransactionModal}
+        onClose={handleCloseModal}
+        txStatus={txStatus}
+        transactionHash={transactionHashForModal}
+        errorMessage={transactionError || approvalError}
+        backendMessage={backendMessage}
+        requestId={requestId}
+      />
     </AuthGuard>
   )
 }
