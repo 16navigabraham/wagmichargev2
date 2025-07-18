@@ -261,11 +261,17 @@ export default function ElectricityPage() {
         setBackendMessage(null);
         setApprovalError(null);
         toast.info("Awaiting token approval signature...");
-    } else if (approveHash) {
-        setTxStatus('approving');
+    } else if (approveHash && !isApprovalTxConfirmed && !isApprovalConfirming) {
+        // This state means the approval transaction has been sent, but not yet confirming or confirmed
+        setTxStatus('sending'); // Use 'sending' for approval hash available but not yet confirming
         setShowTransactionModal(true);
         setTransactionHashForModal(approveHash); // Show approval hash in modal
         toast.loading("Token approval sent, waiting for confirmation...", { id: 'approval-status' });
+    } else if (isApprovalConfirming) {
+        setTxStatus('approving'); // Use 'approving' when it's actively confirming
+        setShowTransactionModal(true);
+        setTransactionHashForModal(approveHash);
+        toast.loading("Token approval confirming on blockchain...", { id: 'approval-status' });
     } else if (isApprovalTxConfirmed) {
         setTxStatus('approvalSuccess');
         setShowTransactionModal(true);
@@ -273,7 +279,7 @@ export default function ElectricityPage() {
         toast.success("Token approved! Proceeding with payment...", { id: 'approval-status' });
         console.log("Approval: Blockchain confirmed! Initiating main transaction...");
 
-        // FIX: Add a small delay to allow UI to update to 'approvalSuccess' before triggering next step
+        // Add a small delay to allow UI to update to 'approvalSuccess' before triggering next step
         const initiateMainTransaction = setTimeout(() => {
             if (selectedCrypto) { // Ensure selectedCrypto is defined
                 const tokenAmount = parseUnits(cryptoNeeded.toFixed(selectedCrypto.decimals), selectedCrypto.decimals);
@@ -325,8 +331,8 @@ export default function ElectricityPage() {
 
   // Effect to monitor main transaction status
   useEffect(() => {
-    // Only run if an approval flow is active or just completed successfully/with error
-    if (['waitingForApprovalSignature', 'approving', 'approvalSuccess', 'approvalError'].includes(txStatus)) {
+    // Only run if not currently in an approval flow (or just finished with approval error)
+    if (['waitingForApprovalSignature', 'approving', 'approvalSuccess'].includes(txStatus)) {
         return;
     }
 
@@ -347,34 +353,34 @@ export default function ElectricityPage() {
         setTransactionError(null);
         setBackendMessage(null);
         toast.info("Awaiting wallet signature...");
-    } else if (hash) {
-        // Once we have a hash, we're in the 'sending' or 'confirming' phase
-        if (isConfirming) {
-            setTxStatus('confirming');
-            setShowTransactionModal(true);
-            toast.loading("Transaction sent, confirming on blockchain...", { id: 'tx-status' });
-        } else if (isConfirmed) {
-            setTxStatus('success');
-            setShowTransactionModal(true);
-            toast.success("Blockchain transaction confirmed! Processing order...", { id: 'tx-status' });
-            if (hash) {
-                handlePostTransaction(hash);
-            }
-        } else if (isConfirmError) { // Handle errors during transaction receipt
-            setTxStatus('error');
-            const errorMsg = confirmError?.message?.split('\n')[0] || "Blockchain transaction failed to confirm.";
-            setTransactionError(errorMsg);
-            setShowTransactionModal(true);
-            toast.error(`Transaction failed: ${errorMsg}`, { id: 'tx-status' });
-        } else {
-            // If hash exists but not confirming, confirmed, or error, it's just sent
-            setTxStatus('sending'); // Set to sending initially once hash is available
-            setShowTransactionModal(true);
-            setTransactionHashForModal(hash);
-            toast.loading("Transaction sent, waiting for blockchain confirmation...", { id: 'tx-status' });
+    } else if (hash && !isConfirmed && !isConfirming) {
+        // This state means the main transaction has been sent, but not yet confirming or confirmed
+        setTxStatus('sending');
+        setShowTransactionModal(true);
+        setTransactionHashForModal(hash);
+        toast.loading("Transaction sent, waiting for blockchain confirmation...", { id: 'tx-status' });
+    } else if (isConfirming) {
+        setTxStatus('confirming');
+        setShowTransactionModal(true);
+        setTransactionHashForModal(hash); // Ensure hash is shown during confirming
+        toast.loading("Transaction confirming on blockchain...", { id: 'tx-status' });
+    } else if (isConfirmed) {
+        setTxStatus('success');
+        setShowTransactionModal(true);
+        setTransactionHashForModal(hash); // Ensure hash is shown during success
+        toast.success("Blockchain transaction confirmed! Processing order...", { id: 'tx-status' });
+        if (hash) {
+            handlePostTransaction(hash);
         }
+    } else if (isConfirmError) { // Handle errors during transaction receipt
+        setTxStatus('error');
+        const errorMsg = confirmError?.message?.split('\n')[0] || "Blockchain transaction failed to confirm.";
+        setTransactionError(errorMsg);
+        setShowTransactionModal(true);
+        setTransactionHashForModal(hash); // Show hash for failed tx
+        toast.error(`Transaction failed: ${errorMsg}`, { id: 'tx-status' });
     } else {
-        // No hash, no pending write, no error means idle, but only if not in approval flow
+        // If no active transaction state, and not in an approval flow, reset to idle
         if (!['waitingForApprovalSignature', 'approving', 'approvalSuccess', 'approvalError'].includes(txStatus)) {
             setTxStatus('idle');
             setTransactionError(null);
@@ -424,14 +430,14 @@ export default function ElectricityPage() {
       return;
     }
     if (!requestId) {
-        toast.error("Request ID not generated. Please fill all form details.");
-        setTxStatus('error');
-        return;
+      toast.error("Request ID not generated. Please fill all form details.");
+      setTxStatus('error');
+      return;
     }
     if (!verificationSuccess || !customerName) {
-        toast.error("Please verify meter number before proceeding with purchase.");
-        setTxStatus('error');
-        return;
+      toast.error("Please verify meter number before proceeding with purchase.");
+      setTxStatus('error');
+      return;
     }
     if (amountNGN <= 0) {
         toast.error("Please enter a valid amount.");
@@ -516,62 +522,6 @@ export default function ElectricityPage() {
     setTransactionHashForModal(undefined); // Clear hash
     setApprovalError(null); // Clear approval specific errors
   }, []); // Empty dependency array as it doesn't depend on any changing state
-
-  /* requestId generator */
-  useEffect(() => {
-    if (crypto && provider && plan && amount && meterNumber && customerName && phone && verificationSuccess && !requestId) {
-      setRequestId(generateRequestId())
-    } else if (! (crypto && provider && plan && amount && meterNumber && customerName && phone && verificationSuccess) && requestId) {
-      setRequestId(undefined)
-    }
-  }, [crypto, provider, plan, amount, meterNumber, customerName, phone, verificationSuccess, requestId])
-
-  /* auto-verify meter */
-  useEffect(() => {
-    if (!plan || !meterNumber || !provider) {
-      setVerificationError("")
-      setVerificationSuccess(false)
-      setCustomerName("")
-      setCustomerAddress("")
-      return
-    }
-
-    const validLengths = getMeterLength(plan)
-    if (!validLengths.includes(meterNumber.length)) {
-      setVerificationError(`Please enter a valid ${validLengths.join(" or ")} digit meter number for ${plans.find(p => p.variation_code === plan)?.name || 'this meter type'}.`)
-      setVerificationSuccess(false)
-      setCustomerName("")
-     setCustomerAddress("")
-      return
-    }
-
-    const id = setTimeout(async () => {
-      setVerifyingMeter(true)
-      setVerificationError("")
-      setVerificationSuccess(false)
-      setCustomerName("")
-      setCustomerAddress("")
-
-      try {
-        const content = await verifyMeter(meterNumber, provider, plan)
-
-        const name    = String(content?.Customer_Name || "").trim()
-        const address = String(content?.Address || "").trim()
-
-        if (!name) throw new Error("Customer name not found. Please check the meter number.")
-
-        setCustomerName(name)
-        setCustomerAddress(address)
-        setVerificationSuccess(true)
-      } catch (err: any) {
-        setVerificationError(err.message || "Verification failed. Please try again.")
-      } finally {
-        setVerifyingMeter(false)
-      }
-    }, 700)
-    return () => clearTimeout(id)
-  }, [meterNumber, provider, plan, plans])
-
 
   const canPay =
     crypto &&

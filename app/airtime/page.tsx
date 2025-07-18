@@ -14,7 +14,7 @@ import AuthGuard from "@/components/AuthGuard"
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from "@/config/contract";
 import { ERC20_ABI } from "@/config/erc20Abi"; // Import ERC20 ABI
 import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'; // Removed useReadContract
-import { usePrivy } from '@privy-io/react-auth';
+import { usePrivy } from '@privy-io/react-auth'; // Corrected import: removed '= from'
 import { parseEther, parseUnits, toBytes, toHex, Hex } from 'viem';
 import { toast } from 'sonner';
 import { TransactionStatusModal } from "@/components/TransactionStatusModal";
@@ -66,7 +66,6 @@ export default function AirtimePage() {
     const [showTransactionModal, setShowTransactionModal] = useState(false);
     const [transactionHashForModal, setTransactionHashForModal] = useState<Hex | undefined>(undefined);
 
-    // Removed currentAllowance and isApprovalConfirmed states as per "no storing of approval"
     const [approvalError, setApprovalError] = useState<string | null>(null);
     // --- END OF MODIFICATIONS: Transaction and Approval States ---
 
@@ -93,9 +92,6 @@ export default function AirtimePage() {
         },
     });
 
-    // Removed useReadContract for allowance as per "no storing of approval"
-    // const { data: allowanceData, refetch: refetchAllowance, isLoading: isAllowanceLoading } = useReadContract(...)
-
     // Wagmi Hooks for TOKEN APPROVAL Transaction
     const { writeContract: writeApprove, data: approveHash, isPending: isApprovePending, isError: isApproveError, error: approveWriteError } = useWriteContract();
 
@@ -115,9 +111,6 @@ export default function AirtimePage() {
             setLoading(false)
         })
     }, [])
-
-    // Removed useEffect for currentAllowance as per "no storing of approval"
-    // useEffect(() => { ... }, [allowanceData]);
 
     // Generate requestId when user starts filling form
     useEffect(() => {
@@ -175,7 +168,6 @@ export default function AirtimePage() {
             setAmount("");
             setPhone("");
             setRequestId(undefined);
-            // Removed setIsApprovalConfirmed(false); and setCurrentAllowance(undefined);
         } catch (backendError: any) {
             setTxStatus('backendError');
             const msg = `Backend processing failed: ${backendError.message}. Please contact support with Request ID: ${requestId}`;
@@ -196,11 +188,17 @@ export default function AirtimePage() {
             setBackendMessage(null);
             setApprovalError(null);
             toast.info("Awaiting token approval signature...");
-        } else if (approveHash) {
-            setTxStatus('approving');
+        } else if (approveHash && !isApprovalTxConfirmed && !isApprovalConfirming) {
+            // This state means the approval transaction has been sent, but not yet confirming or confirmed
+            setTxStatus('sending'); // Use 'sending' for approval hash available but not yet confirming
             setShowTransactionModal(true);
             setTransactionHashForModal(approveHash); // Show approval hash in modal
             toast.loading("Token approval sent, waiting for confirmation...", { id: 'approval-status' });
+        } else if (isApprovalConfirming) {
+            setTxStatus('approving'); // Use 'approving' when it's actively confirming
+            setShowTransactionModal(true);
+            setTransactionHashForModal(approveHash);
+            toast.loading("Token approval confirming on blockchain...", { id: 'approval-status' });
         } else if (isApprovalTxConfirmed) {
             setTxStatus('approvalSuccess');
             setShowTransactionModal(true);
@@ -208,7 +206,7 @@ export default function AirtimePage() {
             toast.success("Token approved! Proceeding with payment...", { id: 'approval-status' });
             console.log("Approval: Blockchain confirmed! Initiating main transaction...");
 
-            // FIX: Add a small delay to allow UI to update to 'approvalSuccess' before triggering next step
+            // Add a small delay to allow UI to update to 'approvalSuccess' before triggering next step
             const initiateMainTransaction = setTimeout(() => {
                 if (selectedCrypto) { // Ensure selectedCrypto is defined
                     const tokenAmount = parseUnits(cryptoNeeded.toFixed(selectedCrypto.decimals), selectedCrypto.decimals);
@@ -261,8 +259,8 @@ export default function AirtimePage() {
 
     // Effect to monitor main transaction status
     useEffect(() => {
-        // Only run if an approval flow is active or just completed successfully/with error
-        if (['waitingForApprovalSignature', 'approving', 'approvalSuccess', 'approvalError'].includes(txStatus)) {
+        // Only run if not currently in an approval flow (or just finished with approval error)
+        if (['waitingForApprovalSignature', 'approving', 'approvalSuccess'].includes(txStatus)) {
             return;
         }
 
@@ -283,35 +281,34 @@ export default function AirtimePage() {
             setTransactionError(null);
             setBackendMessage(null);
             toast.info("Awaiting wallet signature...");
-        } else if (hash) {
-            // Once we have a hash, we're in the 'sending' or 'confirming' phase
-            if (isConfirming) {
-                setTxStatus('confirming');
-                setShowTransactionModal(true);
-                toast.loading("Transaction sent, confirming on blockchain...", { id: 'tx-status' });
-            } else if (isConfirmed) {
-                setTxStatus('success');
-                setShowTransactionModal(true);
-                toast.success("Blockchain transaction confirmed! Processing order...", { id: 'tx-status' });
-                if (hash) {
-                    handlePostTransaction(hash);
-                }
-            } else if (isConfirmError) { // Handle errors during transaction receipt
-                setTxStatus('error');
-                const errorMsg = confirmError?.message?.split('\n')[0] || "Blockchain transaction failed to confirm.";
-                setTransactionError(errorMsg);
-                setShowTransactionModal(true);
-                toast.error(`Transaction failed: ${errorMsg}`, { id: 'tx-status' });
-            } else {
-                // If hash exists but not confirming, confirmed, or error, it's just sent
-                setTxStatus('sending'); // Set to sending initially once hash is available
-                setShowTransactionModal(true);
-                setTransactionHashForModal(hash);
-                toast.loading("Transaction sent, waiting for blockchain confirmation...", { id: 'tx-status' });
+        } else if (hash && !isConfirmed && !isConfirming) {
+            // This state means the main transaction has been sent, but not yet confirming or confirmed
+            setTxStatus('sending');
+            setShowTransactionModal(true);
+            setTransactionHashForModal(hash);
+            toast.loading("Transaction sent, waiting for blockchain confirmation...", { id: 'tx-status' });
+        } else if (isConfirming) {
+            setTxStatus('confirming');
+            setShowTransactionModal(true);
+            setTransactionHashForModal(hash); // Ensure hash is shown during confirming
+            toast.loading("Transaction confirming on blockchain...", { id: 'tx-status' });
+        } else if (isConfirmed) {
+            setTxStatus('success');
+            setShowTransactionModal(true);
+            setTransactionHashForModal(hash); // Ensure hash is shown during success
+            toast.success("Blockchain transaction confirmed! Processing order...", { id: 'tx-status' });
+            if (hash) {
+                handlePostTransaction(hash);
             }
+        } else if (isConfirmError) { // Handle errors during transaction receipt
+            setTxStatus('error');
+            const errorMsg = confirmError?.message?.split('\n')[0] || "Blockchain transaction failed to confirm.";
+            setTransactionError(errorMsg);
+            setShowTransactionModal(true);
+            setTransactionHashForModal(hash); // Show hash for failed tx
+            toast.error(`Transaction failed: ${errorMsg}`, { id: 'tx-status' });
         } else {
-            // No hash, no pending write, no error means idle, but only if not in approval flow
-            // This else block should only reset to idle if no other specific status is active
+            // If no active transaction state, and not in an approval flow, reset to idle
             if (!['waitingForApprovalSignature', 'approving', 'approvalSuccess', 'approvalError'].includes(txStatus)) {
                 setTxStatus('idle');
                 setTransactionError(null);
@@ -319,7 +316,7 @@ export default function AirtimePage() {
                 setTransactionHashForModal(undefined);
             }
         }
-    }, [isWritePending, hash, isConfirming, isConfirmed, isWriteError, isConfirmError, writeError, confirmError, txStatus, handlePostTransaction]); // Added txStatus to dependencies
+    }, [isWritePending, hash, isConfirming, isConfirmed, isWriteError, isConfirmError, writeError, confirmError, txStatus, handlePostTransaction]);
 
     // --- END OF MODIFICATIONS: Handle Transaction Status Feedback and Modal Display ---
 
@@ -348,7 +345,6 @@ export default function AirtimePage() {
         setTransactionError(null);
         setBackendMessage(null);
         setApprovalError(null); // Clear approval errors on new purchase attempt
-        // Removed setIsApprovalConfirmed(false); as it's no longer a persistent state
 
         const walletConnectedAndOnBase = await ensureWalletConnected();
         if (!walletConnectedAndOnBase) {
@@ -428,7 +424,7 @@ export default function AirtimePage() {
                     functionName: 'createOrder',
                     args: [
                         bytes32RequestId,
-                        selectedCrypto.tokenType, // selectedCrypto is now guaranteed to be defined
+                        selectedCrypto.tokenType,
                         tokenAmount,
                     ],
                     value: value,
@@ -460,7 +456,6 @@ export default function AirtimePage() {
     const isButtonDisabled = loading || isWritePending || isConfirming || txStatus === 'backendProcessing' || !isFormValid ||
                              isApprovePending || isApprovalConfirming || // Disable during approval steps
                              !isOnBaseChain || isSwitchingChain; // Disable if not on Base or switching
-    // Removed isAllowanceLoading and (selectedCrypto?.tokenType !== 0 && !isApprovalConfirmed) as they are no longer relevant
     // --- END OF MODIFICATIONS: Button Disabled Logic ---
 
     return (

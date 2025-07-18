@@ -22,12 +22,12 @@ import { useBaseNetworkEnforcer } from '@/hooks/useBaseNetworkEnforcer'; // Impo
 
 // Base chain contract addresses (ensure these are correct for Base Mainnet)
 const USDT_CONTRACT_ADDRESS = "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2"; // Replace with actual USDT contract on Base
-const USDC_CONTRACT_ADDRESS = "0x833589fCD6eDb6E08f4f71b54bdA02913"; // Replace with actual USDC contract on Base
+const USDC_CONTRACT_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"; // Corrected USDC contract address for consistency
 
 const CRYPTOS = [
+  { symbol: "ETH", name: "Ethereum", coingeckoId: "ethereum", tokenType: 0, decimals: 18, contract: undefined }, // ETH has no contract address
   { symbol: "USDT", name: "Tether", coingeckoId: "tether", tokenType: 1, decimals: 6, contract: USDT_CONTRACT_ADDRESS },
   { symbol: "USDC", name: "USD Coin", coingeckoId: "usd-coin", tokenType: 2, decimals: 6, contract: USDC_CONTRACT_ADDRESS },
-  { symbol: "ETH", name: "Ethereum", coingeckoId: "ethereum", tokenType: 0, decimals: 18, contract: undefined }, // ETH has no contract address
 ]
 
 interface TVProvider {
@@ -123,7 +123,6 @@ export default function TVPage() {
   const [showTransactionModal, setShowTransactionModal] = useState(false);
   const [transactionHashForModal, setTransactionHashForModal] = useState<Hex | undefined>(undefined);
 
-  // Removed currentAllowance and isApprovalConfirmed states as per "no storing of approval"
   const [approvalError, setApprovalError] = useState<string | null>(null);
   // --- END OF MODIFICATIONS ---
 
@@ -154,9 +153,6 @@ export default function TVPage() {
     setLoadingPlans(true)
     fetchTVPlans(provider).then(setPlans).finally(() => setLoadingPlans(false))
   }, [provider])
-
-  // Removed useEffect for currentAllowance as per "no storing of approval"
-  // useEffect(() => { ... }, [allowanceData]);
 
   /* requestId generator */
   useEffect(() => {
@@ -241,9 +237,6 @@ export default function TVPage() {
     },
   });
 
-  // Removed useReadContract for allowance as per "no storing of approval"
-  // const { data: allowanceData, refetch: refetchAllowance, isLoading: isAllowanceLoading } = useReadContract(...)
-
   // Hook to write approve transaction
   const { writeContract: writeApprove, data: approveHash, isPending: isApprovePending, isError: isApproveError, error: approveWriteError } = useWriteContract();
 
@@ -299,7 +292,6 @@ export default function TVPage() {
       setVerificationError("");
       setVerificationSuccess(false);
       setRequestId(undefined);
-      // Removed setIsApprovalConfirmed(false); and setCurrentAllowance(undefined);
     } catch (backendError: any) {
       setTxStatus('backendError');
       const msg = `Backend processing failed: ${backendError.message}. Please contact support with Request ID: ${requestId}`;
@@ -320,11 +312,17 @@ export default function TVPage() {
         setBackendMessage(null);
         setApprovalError(null);
         toast.info("Awaiting token approval signature...");
-    } else if (approveHash) {
-        setTxStatus('approving');
+    } else if (approveHash && !isApprovalTxConfirmed && !isApprovalConfirming) {
+        // This state means the approval transaction has been sent, but not yet confirming or confirmed
+        setTxStatus('sending'); // Use 'sending' for approval hash available but not yet confirming
         setShowTransactionModal(true);
         setTransactionHashForModal(approveHash);
         toast.loading("Token approval sent, waiting for confirmation...", { id: 'approval-status' });
+    } else if (isApprovalConfirming) {
+        setTxStatus('approving'); // Use 'approving' when it's actively confirming
+        setShowTransactionModal(true);
+        setTransactionHashForModal(approveHash);
+        toast.loading("Token approval confirming on blockchain...", { id: 'approval-status' });
     } else if (isApprovalTxConfirmed) {
         setTxStatus('approvalSuccess');
         setShowTransactionModal(true);
@@ -384,7 +382,7 @@ export default function TVPage() {
 
   // Effect to monitor main transaction status
   useEffect(() => {
-    if (['waitingForApprovalSignature', 'approving', 'approvalSuccess', 'approvalError'].includes(txStatus)) {
+    if (['waitingForApprovalSignature', 'approving', 'approvalSuccess'].includes(txStatus)) {
         return;
     }
 
@@ -404,30 +402,32 @@ export default function TVPage() {
         setTransactionError(null);
         setBackendMessage(null);
         toast.info("Awaiting wallet signature...");
-    } else if (hash) {
-        if (isConfirming) {
-            setTxStatus('confirming');
-            setShowTransactionModal(true);
-            toast.loading("Transaction sent, confirming on blockchain...", { id: 'tx-status' });
-        } else if (isConfirmed) {
-            setTxStatus('success');
-            setShowTransactionModal(true);
-            toast.success("Blockchain transaction confirmed! Processing order...", { id: 'tx-status' });
-            if (hash) {
-                handlePostTransaction(hash);
-            }
-        } else if (isConfirmError) {
-            setTxStatus('error');
-            const errorMsg = confirmError?.message?.split('\n')[0] || "Blockchain transaction failed to confirm.";
-            setTransactionError(errorMsg);
-            setShowTransactionModal(true);
-            toast.error(`Transaction failed: ${errorMsg}`, { id: 'tx-status' });
-        } else {
-            setTxStatus('sending');
-            setShowTransactionModal(true);
-            setTransactionHashForModal(hash);
-            toast.loading("Transaction sent, waiting for blockchain confirmation...", { id: 'tx-status' });
+    } else if (hash && !isConfirmed && !isConfirming) {
+        // This state means the main transaction has been sent, but not yet confirming or confirmed
+        setTxStatus('sending');
+        setShowTransactionModal(true);
+        setTransactionHashForModal(hash);
+        toast.loading("Transaction sent, waiting for blockchain confirmation...", { id: 'tx-status' });
+    } else if (isConfirming) {
+        setTxStatus('confirming');
+        setShowTransactionModal(true);
+        setTransactionHashForModal(hash);
+        toast.loading("Transaction confirming on blockchain...", { id: 'tx-status' });
+    } else if (isConfirmed) {
+        setTxStatus('success');
+        setShowTransactionModal(true);
+        setTransactionHashForModal(hash);
+        toast.success("Blockchain transaction confirmed! Processing order...", { id: 'tx-status' });
+        if (hash) {
+            handlePostTransaction(hash);
         }
+    } else if (isConfirmError) {
+        setTxStatus('error');
+        const errorMsg = confirmError?.message?.split('\n')[0] || "Blockchain transaction failed to confirm.";
+        setTransactionError(errorMsg);
+        setShowTransactionModal(true);
+        setTransactionHashForModal(hash);
+        toast.error(`Transaction failed: ${errorMsg}`, { id: 'tx-status' });
     } else {
         if (!['waitingForApprovalSignature', 'approving', 'approvalSuccess', 'approvalError'].includes(txStatus)) {
             setTxStatus('idle');
@@ -464,7 +464,6 @@ export default function TVPage() {
     setTransactionError(null);
     setBackendMessage(null);
     setApprovalError(null);
-    // Removed setIsApprovalConfirmed(false); as it's no longer a persistent state
 
     const walletConnectedAndOnBase = await ensureWalletConnected();
     if (!walletConnectedAndOnBase) {
@@ -591,7 +590,6 @@ export default function TVPage() {
   const isButtonDisabled = loading || loadingProviders || loadingPlans || verifyingCard || isWritePending || isConfirming || txStatus === 'backendProcessing' || !canPay ||
                            isApprovePending || isApprovalConfirming || // Disable during approval steps
                            !isOnBaseChain || isSwitchingChain; // Disable if not on Base or switching
-  // Removed isAllowanceLoading and (selectedCrypto?.tokenType !== 0 && !isApprovalConfirmed) as they are no longer relevant
   // --- END OF MODIFICATIONS ---
 
   if (loading) return <div className="p-10 text-center">Loading…</div>
@@ -756,10 +754,17 @@ export default function TVPage() {
               </div>
               <div className="flex justify-between">
                 <span>You will pay:</span>
-                <Badge variant="outline">{cryptoNeeded.toFixed(6)} {crypto}</Badge>
+                <span>
+                  {crypto && selectedPlan && priceNGN ? (
+                    <Badge variant="outline">
+                      {cryptoNeeded.toFixed(6)} {crypto}
+                    </Badge>
+                  ) : (
+                    "--"
+                  )}
+                </span>
               </div>
             </div>
-
             <Button
                 className="w-full"
                 onClick={handlePurchase}
@@ -784,13 +789,13 @@ export default function TVPage() {
         </Card>
       </div>
       <TransactionStatusModal
-          isOpen={showTransactionModal}
-          onClose={handleCloseModal}
-          txStatus={txStatus}
-          transactionHash={transactionHashForModal}
-          errorMessage={transactionError || approvalError}
-          backendMessage={backendMessage}
-          requestId={requestId}
+        isOpen={showTransactionModal}
+        onClose={handleCloseModal}
+        txStatus={txStatus}
+        transactionHash={transactionHashForModal}
+        errorMessage={transactionError || approvalError}
+        backendMessage={backendMessage}
+        requestId={requestId}
       />
     </AuthGuard>
   )
