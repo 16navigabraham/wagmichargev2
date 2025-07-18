@@ -273,41 +273,45 @@ export default function ElectricityPage() {
         toast.success("Token approved! Proceeding with payment...", { id: 'approval-status' });
         console.log("Approval: Blockchain confirmed! Initiating main transaction...");
 
-        // Directly initiate the main transaction after approval success
-        if (selectedCrypto) { // Ensure selectedCrypto is defined
-            const tokenAmount = parseUnits(cryptoNeeded.toFixed(selectedCrypto.decimals), selectedCrypto.decimals);
-            const value = selectedCrypto.symbol === 'ETH' && cryptoNeeded > 0
-                ? parseEther(cryptoNeeded.toFixed(18))
-                : BigInt(0);
-            const bytes32RequestId: Hex = toHex(toBytes(requestId || ""), { size: 32 }); // Ensure requestId is not undefined
+        // FIX: Add a small delay to allow UI to update to 'approvalSuccess' before triggering next step
+        const initiateMainTransaction = setTimeout(() => {
+            if (selectedCrypto) { // Ensure selectedCrypto is defined
+                const tokenAmount = parseUnits(cryptoNeeded.toFixed(selectedCrypto.decimals), selectedCrypto.decimals);
+                const value = selectedCrypto.symbol === 'ETH' && cryptoNeeded > 0
+                    ? parseEther(cryptoNeeded.toFixed(18))
+                    : BigInt(0);
+                const bytes32RequestId: Hex = toHex(toBytes(requestId || ""), { size: 32 }); // Ensure requestId is not undefined
 
-            try {
-                setTxStatus('waitingForSignature'); // Update status for main transaction
-                writeContract({
-                    address: CONTRACT_ADDRESS,
-                    abi: CONTRACT_ABI,
-                    functionName: 'createOrder',
-                    args: [
-                        bytes32RequestId,
-                        selectedCrypto.tokenType,
-                        tokenAmount,
-                    ],
-                    value: value,
-                });
-                console.log("Main transaction initiated after approval.");
-            } catch (error: any) {
-                console.error("Error initiating main transaction after approval:", error);
-                const errorMsg = error.message || "Failed to send main transaction after approval.";
-                setTransactionError(errorMsg);
+                try {
+                    setTxStatus('waitingForSignature'); // Update status for main transaction
+                    writeContract({
+                        address: CONTRACT_ADDRESS,
+                        abi: CONTRACT_ABI,
+                        functionName: 'createOrder',
+                        args: [
+                            bytes32RequestId,
+                            selectedCrypto.tokenType,
+                            tokenAmount,
+                        ],
+                        value: value,
+                    });
+                    console.log("Main transaction initiated after approval.");
+                } catch (error: any) {
+                    console.error("Error initiating main transaction after approval:", error);
+                    const errorMsg = error.message || "Failed to send main transaction after approval.";
+                    setTransactionError(errorMsg);
+                    setTxStatus('error');
+                    toast.error(errorMsg);
+                }
+            } else {
+                console.error("Selected crypto is undefined after approval, cannot initiate main transaction.");
+                setTransactionError("Selected cryptocurrency is missing. Cannot proceed with payment.");
                 setTxStatus('error');
-                toast.error(errorMsg);
+                toast.error("An internal error occurred. Please try again.");
             }
-        } else {
-            console.error("Selected crypto is undefined after approval, cannot initiate main transaction.");
-            setTransactionError("Selected cryptocurrency is missing. Cannot proceed with payment.");
-            setTxStatus('error');
-            toast.error("An internal error occurred. Please try again.");
-        }
+        }, 500); // 500ms delay
+
+        return () => clearTimeout(initiateMainTransaction); // Cleanup timeout on unmount or re-render
 
     } else if (isApproveError || isApprovalConfirmError) {
         setTxStatus('approvalError');
@@ -400,6 +404,8 @@ export default function ElectricityPage() {
   };
 
   const handlePurchase = async () => {
+    // FIX: Show modal immediately on purchase attempt
+    setShowTransactionModal(true);
     setTransactionError(null);
     setBackendMessage(null);
     setApprovalError(null);
@@ -408,6 +414,7 @@ export default function ElectricityPage() {
     const walletConnectedAndOnBase = await ensureWalletConnected();
     if (!walletConnectedAndOnBase) {
       setTxStatus('idle');
+      setShowTransactionModal(false); // Hide modal if initial checks fail
       return;
     }
 
@@ -669,7 +676,7 @@ export default function ElectricityPage() {
                   setVerificationError("")
                   setVerificationSuccess(false)
                   setCustomerName("")
-                 setCustomerAddress("")
+                  setCustomerAddress("")
                 }}
                 maxLength={13}
                 disabled={!plan}
@@ -748,19 +755,11 @@ export default function ElectricityPage() {
                 </span>
               </div>
               <div className="flex justify-between text-sm">
-                <span>Conversion Rate:</span>
-                <span>
-                  {selectedCrypto && priceNGN
-                    ? `₦${priceNGN.toLocaleString()} / 1 ${selectedCrypto.symbol}`
-                    : "--"}
-                </span>
-              </div>
-              <div className="flex justify-between text-sm">
                 <span>You will pay:</span>
                 <span>
-                  {crypto && amount && priceNGN ? (
+                  {cryptoNeeded > 0 && selectedCrypto ? (
                     <Badge variant="outline">
-                      {cryptoNeeded.toFixed(6)} {crypto}
+                      {cryptoNeeded.toFixed(6)} {selectedCrypto.symbol}
                     </Badge>
                   ) : (
                     "--"
@@ -769,37 +768,37 @@ export default function ElectricityPage() {
               </div>
             </div>
             <Button
-              className="w-full"
-              onClick={handlePurchase}
-              // disabled={isButtonDisabled}
+                className="w-full"
+                onClick={handlePurchase}
+                // disabled={isButtonDisabled}
             >
-              {isSwitchingChain ? "Switching Network..." :
-              !isOnBaseChain ? "Switch to Base Network" :
-              isApprovePending ? "Awaiting Approval Signature..." :
-              isApprovalConfirming ? "Approving Token..." :
-              txStatus === 'waitingForSignature' ? "Awaiting Payment Signature..." :
-              txStatus === 'sending' ? "Sending Transaction..." :
-              txStatus === 'confirming' ? "Confirming Blockchain..." :
-              txStatus === 'success' ? "Blockchain Confirmed!" :
-              txStatus === 'backendProcessing' ? "Processing Order..." :
-              txStatus === 'backendSuccess' ? "Payment Successful!" :
-              txStatus === 'backendError' ? "Payment Failed - Try Again" :
-              txStatus === 'error' ? "Blockchain Failed - Try Again" :
-              canPay ? "Pay Bill" :
-              "Fill all details"}
+                {isSwitchingChain ? "Switching Network..." :
+                !isOnBaseChain ? "Switch to Base Network" :
+                isApprovePending ? "Awaiting Approval Signature..." :
+                isApprovalConfirming ? "Approving Token..." :
+                txStatus === 'waitingForSignature' ? "Awaiting Payment Signature..." :
+                txStatus === 'sending' ? "Sending Transaction..." :
+                txStatus === 'confirming' ? "Confirming Blockchain..." :
+                txStatus === 'success' ? "Blockchain Confirmed!" :
+                txStatus === 'backendProcessing' ? "Processing Order..." :
+                txStatus === 'backendSuccess' ? "Payment Successful!" :
+                txStatus === 'backendError' ? "Payment Failed - Try Again" :
+                txStatus === 'error' ? "Blockchain Failed - Try Again" :
+                canPay ? "Pay Electricity Bill" :
+                "Complete form and verify meter"}
             </Button>
           </CardContent>
         </Card>
       </div>
-      <TransactionStatusModal
-        isOpen={showTransactionModal}
-        onClose={handleCloseModal}
-        txStatus={txStatus}
-        transactionHash={transactionHashForModal}
-        errorMessage={transactionError || approvalError} // Pass approvalError to modal
-        backendMessage={backendMessage}
-        requestId={requestId}
-      />
+        <TransactionStatusModal
+            isOpen={showTransactionModal}
+            onClose={handleCloseModal}
+            txStatus={txStatus}
+            transactionHash={transactionHashForModal}
+            errorMessage={transactionError || approvalError} // Pass approvalError to modal
+            backendMessage={backendMessage}
+            requestId={requestId}
+        />
     </AuthGuard>
   )
 }
