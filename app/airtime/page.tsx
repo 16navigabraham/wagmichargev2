@@ -13,7 +13,7 @@ import AuthGuard from "@/components/AuthGuard"
 
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from "@/config/contract";
 import { ERC20_ABI } from "@/config/erc20Abi"; // Import ERC20 ABI
-import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, useSimulateContract } from 'wagmi'; // Added useSimulateContract
 import { usePrivy } from '@privy-io/react-auth';
 import { parseEther, parseUnits, toBytes, toHex, Hex } from 'viem';
 import { toast } from 'sonner';
@@ -77,14 +77,24 @@ export default function AirtimePage() {
     const amountNGN = Number(amount) || 0
     const cryptoNeeded = priceNGN ? amountNGN / priceNGN : 0
 
-    // Wagmi Hooks for MAIN PAYMENT Transaction
-    const { writeContract, data: hash, isPending: isWritePending, isError: isWriteError, error: writeError } = useWriteContract();
+    // For the main contract call, use the exact amount needed.
+    const tokenAmountForOrder = selectedCrypto ? parseUnits(cryptoNeeded.toFixed(18), selectedCrypto.decimals) : BigInt(0);
+    const valueForEth = selectedCrypto?.symbol === 'ETH' && cryptoNeeded > 0
+        ? parseEther(cryptoNeeded.toFixed(18))
+        : BigInt(0);
+    const bytes32RequestId: Hex = toHex(toBytes(requestId || ""), { size: 32 });
 
-    const { isLoading: isConfirming, isSuccess: isConfirmed, isError: isConfirmError, error: confirmError } = useWaitForTransactionReceipt({
-        hash: hash as Hex,
+    // For approval, use the maximum uint256 value for unlimited approval.
+    const unlimitedApprovalAmount = parseUnits('115792089237316195423570985008687907853269984665640564039457584007913129639935', 0);
+
+    // Wagmi Hooks for TOKEN APPROVAL Simulation
+    const { data: simulateApproveData, error: simulateApproveError, isLoading: isSimulatingApprove } = useSimulateContract({
+        address: selectedCrypto?.contract as Hex,
+        abi: ERC20_ABI,
+        functionName: 'approve',
+        args: [CONTRACT_ADDRESS, unlimitedApprovalAmount],
         query: {
-            enabled: Boolean(hash),
-            refetchInterval: 1000,
+            enabled: Boolean(selectedCrypto?.tokenType !== 0 && selectedCrypto?.contract && address && isConnected && isOnBaseChain),
         },
     });
 
@@ -95,6 +105,33 @@ export default function AirtimePage() {
         hash: approveHash as Hex,
         query: {
             enabled: Boolean(approveHash),
+            refetchInterval: 1000,
+        },
+    });
+
+    // Wagmi Hooks for MAIN PAYMENT Simulation
+    const { data: simulateWriteData, error: simulateWriteError, isLoading: isSimulatingWrite } = useSimulateContract({
+        address: CONTRACT_ADDRESS,
+        abi: CONTRACT_ABI,
+        functionName: 'createOrder',
+        args: [
+            bytes32RequestId,
+            selectedCrypto?.tokenType as any, // Cast as any for now, ensure selectedCrypto is defined
+            tokenAmountForOrder,
+        ],
+        value: valueForEth,
+        query: {
+            enabled: Boolean(selectedCrypto && requestId && cryptoNeeded > 0 && address && isConnected && isOnBaseChain && (selectedCrypto.tokenType === 0 || isApprovalTxConfirmed)), // Only simulate if ETH or after approval
+        },
+    });
+
+    // Wagmi Hooks for MAIN PAYMENT Transaction
+    const { writeContract, data: hash, isPending: isWritePending, isError: isWriteError, error: writeError } = useWriteContract();
+
+    const { isLoading: isConfirming, isSuccess: isConfirmed, isError: isConfirmError, error: confirmError } = useWaitForTransactionReceipt({
+        hash: hash as Hex,
+        query: {
+            enabled: Boolean(hash),
             refetchInterval: 1000,
         },
     });
@@ -175,7 +212,6 @@ export default function AirtimePage() {
     useEffect(() => {
         if (isApprovePending) {
             setTxStatus('waitingForApprovalSignature');
-            // Removed setShowTransactionModal(true);
             setTransactionHashForModal(undefined);
             setTransactionError(null);
             setBackendMessage(null);
@@ -183,67 +219,56 @@ export default function AirtimePage() {
             toast.info("Awaiting token approval signature...");
         } else if (approveHash && !isApprovalTxConfirmed && !isApprovalConfirming) {
             setTxStatus('sending');
-            // Removed setShowTransactionModal(true);
             setTransactionHashForModal(approveHash);
             toast.loading("Token approval sent, waiting for confirmation...", { id: 'approval-status' });
         } else if (isApprovalConfirming) {
             setTxStatus('approving');
-            // Removed setShowTransactionModal(true);
             setTransactionHashForModal(approveHash);
             toast.loading("Token approval confirming on blockchain...", { id: 'approval-status' });
         } else if (isApprovalTxConfirmed) {
             setTxStatus('approvalSuccess');
             setApprovalError(null);
-            // Changed message to reflect unlimited approval
             toast.success("Token approved for unlimited spending! Proceeding with payment...", { id: 'approval-status' });
             console.log("Approval: Blockchain confirmed! Initiating main transaction...");
 
             const initiateMainTransaction = setTimeout(() => {
-                if (selectedCrypto) {
-                    // Use a higher precision for toFixed before parseUnits for tokenAmount
-                    const tokenAmount = parseUnits(cryptoNeeded.toFixed(18), selectedCrypto.decimals); // Increased precision
-                    const value = selectedCrypto.symbol === 'ETH' && cryptoNeeded > 0
-                        ? parseEther(cryptoNeeded.toFixed(18))
-                        : BigInt(0);
-                    const bytes32RequestId: Hex = toHex(toBytes(requestId || ""), { size: 32 });
-
-                    // Debugging logs for contract call parameters
-                    console.log("--- Initiating Main Contract Call (after approval) ---");
-                    console.log("RequestId (bytes32):", bytes32RequestId);
-                    console.log("TokenType:", selectedCrypto.tokenType);
-                    console.log("TokenAmount (parsed):", tokenAmount.toString());
-                    console.log("Value (for ETH, 0 for ERC20):", value.toString());
-                    console.log("Selected Crypto:", selectedCrypto.symbol);
-                    console.log("Crypto Needed (float):", cryptoNeeded);
-                    console.log("Selected Crypto Decimals:", selectedCrypto.decimals);
-                    console.log("----------------------------------------------------");
-
-                    try {
+                // If ETH, no approval needed, proceed directly with main transaction
+                if (selectedCrypto?.tokenType === 0) {
+                    // This path should ideally not be hit if approval logic is correct
+                    // but as a fallback, ensure the main tx is initiated.
+                    if (simulateWriteData?.request) {
                         setTxStatus('waitingForSignature');
-                        writeContract({
-                            address: CONTRACT_ADDRESS,
-                            abi: CONTRACT_ABI,
-                            functionName: 'createOrder',
-                            args: [
-                                bytes32RequestId,
-                                selectedCrypto.tokenType,
-                                tokenAmount,
-                            ],
-                            value: value,
-                        });
-                        console.log("Main transaction initiated after approval.");
-                    } catch (error: any) {
-                        console.error("Error initiating main transaction after approval:", error);
-                        const errorMsg = error.message || "Failed to send main transaction after approval.";
+                        writeContract(simulateWriteData.request);
+                        console.log("Main transaction initiated after approval (ETH path).");
+                    } else if (simulateWriteError) {
+                        console.error("Simulation error for ETH main transaction after approval:", simulateWriteError);
+                        const errorMsg = simulateWriteError.message || "Simulation failed for ETH transaction.";
                         setTransactionError(errorMsg);
                         setTxStatus('error');
                         toast.error(errorMsg);
+                    } else {
+                        console.error("No simulation data for ETH main transaction after approval.");
+                        setTransactionError("Could not simulate ETH transaction. Please try again.");
+                        setTxStatus('error');
+                        toast.error("An internal error occurred. Please try again.");
                     }
-                } else {
-                    console.error("Selected crypto is undefined after approval, cannot initiate main transaction.");
-                    setTransactionError("Selected cryptocurrency is missing. Cannot proceed with payment.");
-                    setTxStatus('error');
-                    toast.error("An internal error occurred. Please try again.");
+                } else { // ERC20 token, proceed with main transaction after approval
+                    if (simulateWriteData?.request) {
+                        setTxStatus('waitingForSignature');
+                        writeContract(simulateWriteData.request);
+                        console.log("Main transaction initiated after approval (ERC20 path).");
+                    } else if (simulateWriteError) {
+                        console.error("Simulation error for ERC20 main transaction after approval:", simulateWriteError);
+                        const errorMsg = simulateWriteError.message || "Simulation failed for ERC20 transaction after approval.";
+                        setTransactionError(errorMsg);
+                        setTxStatus('error');
+                        toast.error(errorMsg);
+                    } else {
+                        console.error("No simulation data for ERC20 main transaction after approval.");
+                        setTransactionError("Could not simulate ERC20 transaction. Please try again.");
+                        setTxStatus('error');
+                        toast.error("An internal error occurred. Please try again.");
+                    }
                 }
             }, 500);
 
@@ -251,23 +276,23 @@ export default function AirtimePage() {
 
         } else if (isApproveError || isApprovalConfirmError) {
             setTxStatus('approvalError');
-            const errorMsg = (approveWriteError?.message || approveConfirmError?.message || "Token approval failed").split('\n')[0];
+            const errorMsg = (approveWriteError?.message || approveConfirmError?.message || simulateApproveError?.message || "Token approval failed").split('\n')[0];
             setApprovalError(errorMsg);
             setTransactionError(errorMsg);
             toast.error(`Approval failed: ${errorMsg}`, { id: 'approval-status' });
         }
-    }, [isApprovePending, approveHash, isApprovalTxConfirmed, isApprovalConfirming, isApproveError, isApprovalConfirmError, approveWriteError, approveConfirmError, writeContract, selectedCrypto, cryptoNeeded, requestId]);
+    }, [isApprovePending, approveHash, isApprovalTxConfirmed, isApprovalConfirming, isApproveError, isApprovalConfirmError, approveWriteError, approveConfirmError, writeContract, simulateWriteData, simulateWriteError, selectedCrypto, cryptoNeeded, requestId]);
 
 
     // Effect to monitor main transaction status
     useEffect(() => {
-        if (['waitingForApprovalSignature', 'approving', 'approvalSuccess'].includes(txStatus)) {
+        if (['waitingForApprovalSignature', 'approving', 'approvalSuccess', 'approvalError'].includes(txStatus)) {
             return;
         }
 
         if (isWriteError) {
             setTxStatus('error');
-            const errorMsg = writeError?.message?.split('\n')[0] || "Wallet transaction failed or was rejected.";
+            const errorMsg = writeError?.message?.split('\n')[0] || simulateWriteError?.message?.split('\n')[0] || "Wallet transaction failed or was rejected.";
             setTransactionError(errorMsg);
             toast.error(`Transaction failed: ${errorMsg}`, { id: 'tx-status' });
             return;
@@ -308,7 +333,7 @@ export default function AirtimePage() {
                 setTransactionHashForModal(undefined);
             }
         }
-    }, [isWritePending, hash, isConfirming, isConfirmed, isWriteError, isConfirmError, writeError, confirmError, txStatus, handlePostTransaction]);
+    }, [isWritePending, hash, isConfirming, isConfirmed, isWriteError, isConfirmError, writeError, confirmError, txStatus, handlePostTransaction, simulateWriteError]);
 
     const ensureWalletConnected = async () => {
         if (!authenticated) {
@@ -364,44 +389,37 @@ export default function AirtimePage() {
             return;
         }
 
-        // For the main contract call, use the exact amount needed.
-        const tokenAmountForOrder = parseUnits(cryptoNeeded.toFixed(18), selectedCrypto.decimals);
-        // For approval, use the maximum uint256 value for unlimited approval.
-        const unlimitedApprovalAmount = parseUnits('115792089237316195423570985008687907853269984665640564039457584007913129639935', 0);
-
-        const value = selectedCrypto.symbol === 'ETH' && cryptoNeeded > 0
-            ? parseEther(cryptoNeeded.toFixed(18))
-            : BigInt(0);
-
-        const bytes32RequestId: Hex = toHex(toBytes(requestId), { size: 32 });
-
         // Debugging logs for contract call parameters
         console.log("--- Initiating Contract Call ---");
         console.log("RequestId (bytes32):", bytes32RequestId);
         console.log("TokenType:", selectedCrypto.tokenType);
         console.log("TokenAmount for Order (parsed):", tokenAmountForOrder.toString()); // Log as string to see full BigInt
-        console.log("Value (for ETH, 0 for ERC20):", value.toString()); // Log as string to see full BigInt
+        console.log("Value (for ETH, 0 for ERC20):", valueForEth.toString()); // Log as string to see full BigInt
         console.log("Selected Crypto:", selectedCrypto.symbol);
         console.log("Crypto Needed (float):", cryptoNeeded);
         console.log("Selected Crypto Decimals:", selectedCrypto.decimals);
         console.log("--------------------------------");
 
         if (selectedCrypto.tokenType !== 0) { // If it's an ERC20 token (USDT or USDC)
+            if (simulateApproveError) {
+                const errorMsg = simulateApproveError.message?.split('\n')[0] || "Token approval simulation failed.";
+                setApprovalError(errorMsg);
+                setTransactionError(errorMsg);
+                setTxStatus('approvalError');
+                toast.error(`Approval simulation failed: ${errorMsg}`);
+                return;
+            }
+            if (!simulateApproveData?.request) {
+                setApprovalError("Approval simulation data not ready. Please try again.");
+                setTransactionError("Approval simulation data not ready. Please try again.");
+                setTxStatus('approvalError');
+                toast.error("Approval simulation data not ready. Please try again.");
+                return;
+            }
             toast.info("Approving token spend for this transaction...");
             setTxStatus('waitingForApprovalSignature');
             try {
-                if (selectedCrypto.contract) {
-                    writeApprove({
-                        abi: ERC20_ABI,
-                        address: selectedCrypto.contract as Hex,
-                        functionName: 'approve',
-                        args: [CONTRACT_ADDRESS, unlimitedApprovalAmount], // MODIFICATION: Use unlimitedApprovalAmount here
-                    });
-                } else {
-                    toast.error("Selected crypto has no contract address for approval.");
-                    setTxStatus('error');
-                    return;
-                }
+                writeApprove(simulateApproveData.request);
                 return;
             } catch (error: any) {
                 console.error("Error sending approval transaction:", error);
@@ -414,19 +432,22 @@ export default function AirtimePage() {
             }
         } else {
             // If ETH, no approval needed, proceed directly with main transaction
+            if (simulateWriteError) {
+                const errorMsg = simulateWriteError.message?.split('\n')[0] || "Transaction simulation failed.";
+                setTransactionError(errorMsg);
+                setTxStatus('error');
+                toast.error(`Payment simulation failed: ${errorMsg}`);
+                return;
+            }
+            if (!simulateWriteData?.request) {
+                setTransactionError("Payment simulation data not ready. Please try again.");
+                setTxStatus('error');
+                toast.error("Payment simulation data not ready. Please try again.");
+                return;
+            }
             try {
                 setTxStatus('waitingForSignature');
-                writeContract({
-                    address: CONTRACT_ADDRESS,
-                    abi: CONTRACT_ABI,
-                    functionName: 'createOrder',
-                    args: [
-                        bytes32RequestId,
-                        selectedCrypto.tokenType,
-                        tokenAmountForOrder, // Use the exact amount for the order
-                    ],
-                    value: value,
-                });
+                writeContract(simulateWriteData.request);
             } catch (error: any) {
                 console.error("Error sending main transaction:", error);
                 const errorMsg = error.message || "Failed to send transaction.";
@@ -449,7 +470,8 @@ export default function AirtimePage() {
     const isFormValid = Boolean(crypto && provider && amount && phone && requestId && cryptoNeeded > 0);
 
     const isButtonDisabled = loading || isWritePending || isConfirming || txStatus === 'backendProcessing' || !isFormValid ||
-                             isApprovePending || isApprovalConfirming ||
+                             isApprovePending || isApprovalConfirming || isSimulatingApprove || isSimulatingWrite || // Disable during simulation
+                             simulateApproveError || simulateWriteError || // Disable if simulation fails
                              !isOnBaseChain || isSwitchingChain;
 
     return (
@@ -559,6 +581,8 @@ export default function AirtimePage() {
                         >
                             {isSwitchingChain ? "Switching Network..." :
                             !isOnBaseChain ? "Switch to Base Network" :
+                            isSimulatingApprove || isSimulatingWrite ? "Simulating Transaction..." :
+                            simulateApproveError || simulateWriteError ? "Simulation Failed" :
                             isApprovePending ? "Awaiting Approval Signature..." :
                             isApprovalConfirming ? "Approving Token..." :
                             txStatus === 'waitingForSignature' ? "Awaiting Payment Signature..." :
@@ -580,7 +604,7 @@ export default function AirtimePage() {
                 onClose={handleCloseModal}
                 txStatus={txStatus}
                 transactionHash={transactionHashForModal}
-                errorMessage={transactionError || approvalError}
+                errorMessage={transactionError || approvalError || simulateApproveError?.message || simulateWriteError?.message}
                 backendMessage={backendMessage}
                 requestId={requestId}
             />
