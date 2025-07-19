@@ -1,4 +1,4 @@
-const BASE_URL = "https://api.wagmicharge.xyz"; // your deployed backend URL
+const BASE_URL = "https://wagmicharge-backend.onrender.com"; // your deployed backend URL
 
 export const buyAirtime = async (data: {
   requestId: string;
