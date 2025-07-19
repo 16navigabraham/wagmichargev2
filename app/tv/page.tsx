@@ -304,7 +304,8 @@ export default function TVPage() {
           phone: smartCardNumber, // Assuming smartCardNumber can be used as phone for TV
           cryptoUsed: cryptoNeeded,
           cryptoSymbol: selectedCrypto?.symbol, // Safely access symbol
-          transactionHash
+          transactionHash,
+          userAddress: address // Added userAddress
         }),
       });
 

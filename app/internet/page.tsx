@@ -260,7 +260,8 @@ export default function InternetPage() {
                     amount: amountNGN,
                     cryptoUsed: cryptoNeeded,
                     cryptoSymbol: selectedCrypto?.symbol, // Safely access symbol
-                    transactionHash
+                    transactionHash,
+                    userAddress: address // Added userAddress
                 }),
             });
 

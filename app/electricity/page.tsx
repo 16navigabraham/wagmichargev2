@@ -304,7 +304,8 @@ export default function ElectricityPage() {
           phone: phone,
           cryptoUsed: cryptoNeeded,
           cryptoSymbol: selectedCrypto?.symbol, // Safely access symbol
-          transactionHash
+          transactionHash,
+          userAddress: address // Added userAddress
         }),
       });
 
