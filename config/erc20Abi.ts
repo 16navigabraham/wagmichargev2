@@ -34,18 +34,18 @@ export const ERC20_ABI = [
     "stateMutability": "view",
     "type": "function"
   },
-  // Add transferFrom if you need to simulate it for checks, but not strictly needed for approval flow
-  // {
-  //   "constant": false,
-  //   "inputs": [
-  //     { "name": "_from", "type": "address" },
-  //     { "name": "_to", "type": "address" },
-  //     { "name": "_value", "type": "uint256" }
-  //   ],
-  //   "name": "transferFrom",
-  //   "outputs": [{ "name": "", "type": "bool" }],
-  //   "payable": false,
-  //   "stateMutability": "nonpayable",
-  //   "type": "function"
-  // }
+  //Add transferFrom if you need to simulate it for checks, but not strictly needed for approval flow
+  {
+    "constant": false,
+    "inputs": [
+      { "name": "_from", "type": "address" },
+      { "name": "_to", "type": "address" },
+      { "name": "_value", "type": "uint256" }
+    ],
+    "name": "transferFrom",
+    "outputs": [{ "name": "", "type": "bool" }],
+    "payable": false,
+    "stateMutability": "nonpayable",
+    "type": "function"
+  }
 ] as const; // 'as const' is important for wagmi's type inference

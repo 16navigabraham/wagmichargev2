@@ -335,11 +335,13 @@ export default function TVPage() {
       console.error("Backend API call failed:", backendError);
       toast.error(msg, { id: 'backend-status' });
     }
-  }, [requestId, smartCardNumber, provider, plan, amountNGN, cryptoNeeded, selectedCrypto?.symbol]);
+  }, [requestId, smartCardNumber, provider, plan, amountNGN, cryptoNeeded, selectedCrypto?.symbol, address]);
 
   // --- START OF MODIFICATIONS: Handle transaction status feedback and modal display ---
   // Effect to monitor approval transaction status
   useEffect(() => {
+    if (!showTransactionModal) return; // Only run if modal is open
+
     if (isApprovePending) {
         setTxStatus('waitingForApprovalSignature');
         setTransactionHashForModal(undefined);
@@ -360,78 +362,26 @@ export default function TVPage() {
         setApprovalError(null);
         toast.success("Token approved for unlimited spending! Proceeding with payment...", { id: 'approval-status' }); // Updated message
         console.log("Approval: Blockchain confirmed! Initiating main transaction...");
-
-        // FIX: Add a small delay to allow UI to update to 'approvalSuccess' before triggering next step
-        const initiateMainTransaction = setTimeout(() => {
-            if (selectedCrypto) { // Ensure selectedCrypto is defined
-                const tokenAmount = parseUnits(cryptoNeeded.toFixed(18), selectedCrypto.decimals); // Use 18 for toFixed for safety, parseUnits will handle actual decimals
-                const value = selectedCrypto.symbol === 'ETH' && cryptoNeeded > 0
-                    ? parseEther(cryptoNeeded.toFixed(18))
-                    : BigInt(0);
-                const bytes32RequestId: Hex = toHex(toBytes(requestId || ""), { size: 32 }); // Ensure requestId is not undefined
-
-                // Debugging logs for contract call parameters
-                console.log("--- Initiating Main Contract Call (after approval) ---");
-                console.log("RequestId (bytes32):", bytes32RequestId);
-                console.log("TokenType:", selectedCrypto.tokenType);
-                console.log("TokenAmount (parsed):", tokenAmount.toString()); // Log as string to see full BigInt
-                console.log("Value (for ETH, 0 for ERC20):", value.toString()); // Log as string to see full BigInt
-                console.log("Selected Crypto:", selectedCrypto.symbol);
-                console.log("Crypto Needed (float):", cryptoNeeded);
-                console.log("Selected Crypto Decimals:", selectedCrypto.decimals);
-                console.log("----------------------------------------------------");
-
-                try {
-                    setTxStatus('waitingForSignature'); // Update status for main transaction
-                    writeContract({
-                        address: CONTRACT_ADDRESS,
-                        abi: CONTRACT_ABI,
-                        functionName: 'createOrder', // Or your TV specific function
-                        args: [
-                            bytes32RequestId,
-                            selectedCrypto.tokenType,
-                            tokenAmount,
-                        ],
-                        value: value,
-                    });
-                    console.log("Main transaction initiated after approval.");
-                } catch (error: any) {
-                    console.error("Error initiating main transaction after approval:", error);
-                    const errorMsg = error.message || "Failed to send main transaction after approval.";
-                    setTransactionError(errorMsg);
-                    setTxStatus('error');
-                    toast.error(errorMsg);
-                }
-            } else {
-                console.error("Selected crypto is undefined after approval, cannot initiate main transaction.");
-                setTransactionError("Selected cryptocurrency is missing. Cannot proceed with payment.");
-                setTxStatus('error');
-                toast.error("An internal error occurred. Please try again.");
-            }
-        }, 500); // 500ms delay
-
-        return () => clearTimeout(initiateMainTransaction); // Cleanup timeout on unmount or re-render
-
+        
+        // After approval, the `simulateWriteData` hook should re-enable and fetch simulation data.
+        // Once `simulateWriteData` is ready, the `handlePurchase` will attempt to write the contract.
+        // No explicit `setTimeout` or `writeContract` call here, as the main transaction logic
+        // is handled in `handlePurchase` which is called after button click, and depends on
+        // simulation data which is reactive to `isApprovalTxConfirmed`.
     } else if (isApproveError || isApprovalConfirmError) {
         setTxStatus('approvalError');
         const errorMsg = (approveWriteError?.message || approveConfirmError?.message || simulateApproveError?.message || "Token approval failed").split('\n')[0];
         setApprovalError(errorMsg);
-        setTransactionError(errorMsg);
+        setTransactionError(errorMsg); // Propagate to general transaction error for modal
         toast.error(`Approval failed: ${errorMsg}`, { id: 'approval-status' });
     }
-  }, [isApprovePending, approveHash, isApprovalTxConfirmed, isApprovalConfirming, isApproveError, isApprovalConfirmError, approveWriteError, approveConfirmError, writeContract, simulateWriteData, simulateWriteError, selectedCrypto, cryptoNeeded, requestId]);
+  }, [isApprovePending, approveHash, isApprovalTxConfirmed, isApprovalConfirming, isApproveError, isApprovalConfirmError, approveWriteError, approveConfirmError, simulateApproveError, showTransactionModal]);
 
   // Effect to monitor main transaction status
   useEffect(() => {
+    if (!showTransactionModal) return; // Only run if modal is open
+    // Skip if we are in an approval flow
     if (['waitingForApprovalSignature', 'approving', 'approvalSuccess', 'approvalError'].includes(txStatus)) {
-        return;
-    }
-
-    if (isWriteError) {
-        setTxStatus('error');
-        const errorMsg = writeError?.message?.split('\n')[0] || simulateWriteError?.message?.split('\n')[0] || "Wallet transaction failed or was rejected.";
-        setTransactionError(errorMsg);
-        toast.error(`Transaction failed: ${errorMsg}`, { id: 'tx-status' });
         return;
     }
 
@@ -456,21 +406,23 @@ export default function TVPage() {
         if (hash) {
             handlePostTransaction(hash);
         }
-    } else if (isConfirmError) {
+    } else if (isWriteError || isConfirmError) {
         setTxStatus('error');
-        const errorMsg = confirmError?.message?.split('\n')[0] || "Blockchain transaction failed to confirm.";
+        const errorMsg = (writeError?.message?.split('\n')[0] || confirmError?.message?.split('\n')[0] || simulateWriteError?.message?.split('\n')[0] || "Wallet transaction failed or was rejected.").split('\n')[0];
         setTransactionError(errorMsg);
-        setTransactionHashForModal(hash);
+        setTransactionHashForModal(hash); // Keep hash if available for error context
         toast.error(`Transaction failed: ${errorMsg}`, { id: 'tx-status' });
     } else {
-        if (!['waitingForApprovalSignature', 'approving', 'approvalSuccess', 'approvalError'].includes(txStatus)) {
+        // Reset to idle if no active transaction state and modal is still open
+        // but avoid resetting if another part of the flow (like backend processing) is active
+        if (!['backendProcessing', 'backendSuccess', 'backendError'].includes(txStatus)) {
             setTxStatus('idle');
             setTransactionError(null);
             setBackendMessage(null);
             setTransactionHashForModal(undefined);
         }
     }
-  }, [isWritePending, hash, isConfirming, isConfirmed, isWriteError, isConfirmError, writeError, confirmError, txStatus, handlePostTransaction, simulateWriteError]);
+  }, [isWritePending, hash, isConfirming, isConfirmed, isWriteError, isConfirmError, writeError, confirmError, txStatus, handlePostTransaction, simulateWriteError, showTransactionModal]);
   // --- END OF MODIFICATIONS ---
 
   const ensureWalletConnected = async () => {
@@ -498,10 +450,10 @@ export default function TVPage() {
     setTransactionError(null);
     setBackendMessage(null);
     setApprovalError(null);
+    setTxStatus('idle'); // Reset status before starting new flow
 
     const walletConnectedAndOnBase = await ensureWalletConnected();
     if (!walletConnectedAndOnBase) {
-      setTxStatus('idle');
       setShowTransactionModal(false); // Hide modal if initial checks fail
       return;
     }
@@ -539,33 +491,12 @@ export default function TVPage() {
         return;
     }
 
-    // For the main contract call, use the exact amount needed.
-    const tokenAmountForOrder = parseUnits(cryptoNeeded.toFixed(18), selectedCrypto.decimals); // Use 18 for toFixed for safety, parseUnits will handle actual decimals
-    // For approval, use the maximum uint256 value for unlimited approval.
-    const unlimitedApprovalAmount = parseUnits('115792089237316195423570985008687907853269984665640564039457584007913129639935', 0);
-
-    const value = selectedCrypto.symbol === 'ETH' && cryptoNeeded > 0
-      ? parseEther(cryptoNeeded.toFixed(18))
-      : BigInt(0);
-
-    const bytes32RequestId: Hex = toHex(toBytes(requestId), { size: 32 });
-
-    // Debugging logs for contract call parameters
-    console.log("--- Initiating Contract Call ---");
-    console.log("RequestId (bytes32):", bytes32RequestId);
-    console.log("TokenType:", selectedCrypto.tokenType);
-    console.log("TokenAmount for Order (parsed):", tokenAmountForOrder.toString()); // Log as string to see full BigInt
-    console.log("Value (for ETH, 0 for ERC20):", value.toString()); // Log as string to see full BigInt
-    console.log("Selected Crypto:", selectedCrypto.symbol);
-    console.log("Crypto Needed (float):", cryptoNeeded);
-    console.log("Selected Crypto Decimals:", selectedCrypto.decimals);
-    console.log("--------------------------------");
-
+    // Determine if approval is needed
     if (selectedCrypto.tokenType !== 0) { // If it's an ERC20 token (USDT or USDC)
         if (simulateApproveError) {
             const errorMsg = simulateApproveError.message?.split('\n')[0] || "Token approval simulation failed.";
             setApprovalError(errorMsg);
-            setTransactionError(errorMsg);
+            setTransactionError(errorMsg); // Propagate to general transaction error
             setTxStatus('approvalError');
             toast.error(`Approval simulation failed: ${errorMsg}`);
             return;
@@ -587,7 +518,7 @@ export default function TVPage() {
                 setTxStatus('error');
                 return;
             }
-            return; // After initiating approval, stop here. The approval useEffect will handle next steps.
+            // After initiating approval, stop here. The approval useEffect will handle next steps.
         } catch (error: any) {
             console.error("Error sending approval transaction:", error);
             const errorMsg = error.message || "Failed to send approval transaction.";
@@ -595,7 +526,6 @@ export default function TVPage() {
             setTransactionError(errorMsg); // Propagate to main error state for modal
             setTxStatus('approvalError');
             toast.error(errorMsg);
-            return;
         }
     } else {
         // If ETH, no approval needed, proceed directly with main transaction
@@ -647,9 +577,10 @@ export default function TVPage() {
     requestId;
 
   // --- START OF MODIFICATIONS: Updated isButtonDisabled logic ---
-  const isButtonDisabled = loading || loadingProviders || loadingPlans || verifyingCard || isWritePending || isConfirming || txStatus === 'backendProcessing' || !canPay ||
+  const isButtonDisabled = loading || loadingProviders || loadingPlans || verifyingCard || !canPay ||
                            isApprovePending || isApprovalConfirming || isSimulatingApprove || isSimulatingWrite || // Disable during simulation
-                           simulateApproveError || simulateWriteError || // Disable if simulation fails
+                           isWritePending || isConfirming || txStatus === 'backendProcessing' ||
+                           simulateApproveError || simulateWriteError || // Disable if simulation fails (user needs to fix input or retry)
                            !isOnBaseChain || isSwitchingChain; // Disable if not on Base or switching
   // --- END OF MODIFICATIONS ---
 
@@ -834,7 +765,6 @@ export default function TVPage() {
                 {isSwitchingChain ? "Switching Network..." :
                 !isOnBaseChain ? "Switch to Base Network" :
                 isSimulatingApprove || isSimulatingWrite ? "Simulating Transaction..." :
-                simulateApproveError || simulateWriteError ? "Simulation Failed" :
                 isApprovePending ? "Awaiting Approval Signature..." :
                 isApprovalConfirming ? "Approving Token..." :
                 txStatus === 'waitingForSignature' ? "Awaiting Payment Signature..." :
@@ -844,7 +774,7 @@ export default function TVPage() {
                 txStatus === 'backendProcessing' ? "Processing Order..." :
                 txStatus === 'backendSuccess' ? "Payment Successful!" :
                 txStatus === 'backendError' ? "Payment Failed - Try Again" :
-                txStatus === 'error' ? "Blockchain Failed - Try Again" :
+                txStatus === 'error' || simulateApproveError || simulateWriteError ? "Payment Failed - Try Again" : // Consolidated error state
                 canPay ? "Pay TV Subscription" :
                 "Complete form and verify card"}
             </Button>

@@ -27,7 +27,7 @@ const USDC_CONTRACT_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"; // R
 const CRYPTOS = [
     { symbol: "ETH", name: "Ethereum", coingeckoId: "ethereum", tokenType: 0, decimals: 18, contract: undefined }, // ETH has no contract address
     { symbol: "USDT", name: "Tether", coingeckoId: "tether", tokenType: 1, decimals: 6, contract: USDT_CONTRACT_ADDRESS },
-    { symbol: "USDC", name: "USD Coin", coingeckoId: "usd-coin", tokenType: 2, decimals: 6, contract: USDC_CONTRACT_ADDRESS },
+    { symbol: "USDC", name: "USD Coin", tokenType: 2, decimals: 6, contract: USDC_CONTRACT_ADDRESS },
 ]
 
 interface InternetPlan {
@@ -134,9 +134,10 @@ export default function InternetPage() {
     const cryptoNeeded = priceNGN && amountNGN ? amountNGN / priceNGN : 0
 
     // For the main contract call, use the exact amount needed.
-    const tokenAmountForOrder = selectedCrypto ? parseUnits(cryptoNeeded.toFixed(18), selectedCrypto.decimals) : BigInt(0);
+    // FIX 1: Ensure full precision for parseUnits by using selectedCrypto.decimals directly in toFixed.
+    const tokenAmountForOrder = selectedCrypto ? parseUnits(cryptoNeeded.toFixed(selectedCrypto.decimals), selectedCrypto.decimals) : BigInt(0);
     const valueForEth = selectedCrypto?.symbol === 'ETH' && cryptoNeeded > 0
-        ? parseEther(cryptoNeeded.toFixed(18))
+        ? parseEther(cryptoNeeded.toFixed(18)) // ETH needs full 18 decimals for parseEther
         : BigInt(0);
     const bytes32RequestId: Hex = toHex(toBytes(requestId || ""), { size: 32 });
 
@@ -314,11 +315,13 @@ export default function InternetPage() {
             console.log("Approval: Blockchain confirmed! Initiating main transaction...");
 
             const initiateMainTransaction = setTimeout(() => {
+                // If ETH, proceed with main transaction (this path is technically not hit immediately after approval for ETH,
+                // as ETH doesn't need approval, but keeping consistent for future clarity if logic changes)
                 if (selectedCrypto?.tokenType === 0) {
-                    if (simulateWriteData?.request) {
+                     if (simulateWriteData?.request) {
                         setTxStatus('waitingForSignature');
                         writeContract(simulateWriteData.request);
-                        console.log("Main transaction initiated after approval (ETH path).");
+                        console.log("Main transaction initiated after approval (ETH path, though not typical).");
                     } else if (simulateWriteError) {
                         console.error("Simulation error for ETH main transaction after approval:", simulateWriteError);
                         const errorMsg = simulateWriteError.message || "Simulation failed for ETH transaction.";
@@ -360,7 +363,7 @@ export default function InternetPage() {
             setTransactionError(errorMsg);
             toast.error(`Approval failed: ${errorMsg}`, { id: 'approval-status' });
         }
-    }, [isApprovePending, approveHash, isApprovalTxConfirmed, isApprovalConfirming, isApproveError, isApprovalConfirmError, approveWriteError, approveConfirmError, writeContract, simulateWriteData, simulateWriteError, selectedCrypto, cryptoNeeded, requestId]);
+    }, [isApprovePending, approveHash, isApprovalTxConfirmed, isApprovalConfirming, isApproveError, isApprovalConfirmError, approveWriteError, approveConfirmError, writeContract, simulateWriteData, simulateWriteError, selectedCrypto, requestId]);
 
     // Effect to monitor main transaction status
     useEffect(() => {
@@ -391,11 +394,14 @@ export default function InternetPage() {
             setTransactionHashForModal(hash);
             toast.loading("Transaction confirming on blockchain...", { id: 'tx-status' });
         } else if (isConfirmed) {
-            setTxStatus('success');
-            setTransactionHashForModal(hash);
-            toast.success("Blockchain transaction confirmed! Processing order...", { id: 'tx-status' });
-            if (hash) {
-                handlePostTransaction(hash);
+            // FIX 2: Add a guard to ensure handlePostTransaction is called only once per confirmed hash
+            if (txStatus !== 'backendProcessing' && txStatus !== 'backendSuccess' && txStatus !== 'backendError') {
+                setTxStatus('success'); // Mark blockchain part as success
+                setTransactionHashForModal(hash);
+                toast.success("Blockchain transaction confirmed! Processing order...", { id: 'tx-status' });
+                if (hash) {
+                    handlePostTransaction(hash);
+                }
             }
         } else if (isConfirmError) {
             setTxStatus('error');
@@ -404,7 +410,8 @@ export default function InternetPage() {
             setTransactionHashForModal(hash);
             toast.error(`Transaction failed: ${errorMsg}`, { id: 'tx-status' });
         } else {
-            if (!['waitingForApprovalSignature', 'approving', 'approvalSuccess', 'approvalError'].includes(txStatus)) {
+            // Only reset to idle if not in any active transaction or approval state
+            if (!['waitingForApprovalSignature', 'approving', 'approvalSuccess', 'approvalError', 'sending', 'confirming', 'success', 'backendProcessing', 'backendSuccess'].includes(txStatus)) {
                 setTxStatus('idle');
                 setTransactionError(null);
                 setBackendMessage(null);
@@ -476,11 +483,7 @@ export default function InternetPage() {
 
 
         // Prepare transaction arguments
-        const tokenAmountForOrder = parseUnits(cryptoNeeded.toFixed(18), selectedCrypto.decimals); // Use 18 for toFixed for safety, parseUnits will handle actual decimals
-        // For approval, use the maximum uint256 value for unlimited approval.
-        const unlimitedApprovalAmount = parseUnits('115792089237316195423570985008687907853269984665640564039457584007913129639935', 0);
-
-
+        // This line is correct now due to FIX 1
         const value = selectedCrypto.symbol === 'ETH' && cryptoNeeded > 0
             ? parseEther(cryptoNeeded.toFixed(18))
             : BigInt(0);

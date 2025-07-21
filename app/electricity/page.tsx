@@ -213,9 +213,9 @@ export default function ElectricityPage() {
   const cryptoNeeded = priceNGN && amountNGN ? amountNGN / priceNGN : 0
 
   // For the main contract call, use the exact amount needed.
-  const tokenAmountForOrder = selectedCrypto ? parseUnits(cryptoNeeded.toFixed(18), selectedCrypto.decimals) : BigInt(0);
+  const tokenAmountForOrder = selectedCrypto ? parseUnits(cryptoNeeded.toFixed(selectedCrypto.decimals > 6 ? 6 : selectedCrypto.decimals), selectedCrypto.decimals) : BigInt(0); // Adjusted precision for tokenAmountForOrder
   const valueForEth = selectedCrypto?.symbol === 'ETH' && cryptoNeeded > 0
-      ? parseEther(cryptoNeeded.toFixed(18))
+      ? parseEther(cryptoNeeded.toFixed(18)) // ETH needs full 18 decimals for parseEther
       : BigInt(0);
   const bytes32RequestId: Hex = toHex(toBytes(requestId || ""), { size: 32 });
 
@@ -328,6 +328,7 @@ export default function ElectricityPage() {
       setCustomerAddress("");
       setVerificationSuccess(false);
       setRequestId(undefined);
+      setPhone(""); // Clear phone number too
     } catch (backendError: any) {
       setTxStatus('backendError');
       const msg = `Backend processing failed: ${backendError.message}. Please contact support with Request ID: ${requestId}`;
@@ -363,42 +364,22 @@ export default function ElectricityPage() {
 
         // Add a small delay to allow UI to update to 'approvalSuccess' before triggering next step
         const initiateMainTransaction = setTimeout(() => {
-            if (selectedCrypto?.tokenType === 0) {
-                // This path should ideally not be hit if approval logic is correct
-                // but as a fallback, ensure the main tx is initiated.
-                if (simulateWriteData?.request) {
-                    setTxStatus('waitingForSignature'); // Update status for main transaction
-                    writeContract(simulateWriteData.request);
-                    console.log("Main transaction initiated after approval (ETH path).");
-                } else if (simulateWriteError) {
-                    console.error("Simulation error for ETH main transaction after approval:", simulateWriteError);
-                    const errorMsg = simulateWriteError.message || "Simulation failed for ETH transaction.";
-                    setTransactionError(errorMsg);
-                    setTxStatus('error');
-                    toast.error(errorMsg);
-                } else {
-                    console.error("No simulation data for ETH main transaction after approval.");
-                    setTransactionError("Could not simulate ETH transaction. Please try again.");
-                    setTxStatus('error');
-                    toast.error("An internal error occurred. Please try again.");
-                }
-            } else { // ERC20 token, proceed with main transaction after approval
-                if (simulateWriteData?.request) {
-                    setTxStatus('waitingForSignature'); // Update status for main transaction
-                    writeContract(simulateWriteData.request);
-                    console.log("Main transaction initiated after approval (ERC20 path).");
-                } else if (simulateWriteError) {
-                    console.error("Simulation error for ERC20 main transaction after approval:", simulateWriteError);
-                    const errorMsg = simulateWriteError.message || "Simulation failed for ERC20 transaction after approval.";
-                    setTransactionError(errorMsg);
-                    setTxStatus('error');
-                    toast.error(errorMsg);
-                } else {
-                    console.error("No simulation data for ERC20 main transaction after approval.");
-                    setTransactionError("Could not simulate ERC20 transaction. Please try again.");
-                    setTxStatus('error');
-                    toast.error("An internal error occurred. Please try again.");
-                }
+            // After approval is confirmed, trigger the main contract call
+            if (simulateWriteData?.request) {
+                setTxStatus('waitingForSignature'); // Update status for main transaction
+                writeContract(simulateWriteData.request);
+                console.log("Main transaction initiated after approval (ERC20 path).");
+            } else if (simulateWriteError) {
+                console.error("Simulation error for ERC20 main transaction after approval:", simulateWriteError);
+                const errorMsg = simulateWriteError.message || "Simulation failed for ERC20 transaction after approval.";
+                setTransactionError(errorMsg);
+                setTxStatus('error');
+                toast.error(errorMsg);
+            } else {
+                console.error("No simulation data for ERC20 main transaction after approval.");
+                setTransactionError("Could not simulate ERC20 transaction. Please try again.");
+                setTxStatus('error');
+                toast.error("An internal error occurred. Please try again.");
             }
         }, 500); // 500ms delay
 
@@ -411,7 +392,7 @@ export default function ElectricityPage() {
         setTransactionError(errorMsg); // Use main error state for modal display
         toast.error(`Approval failed: ${errorMsg}`, { id: 'approval-status' });
     }
-  }, [isApprovePending, approveHash, isApprovalTxConfirmed, isApprovalConfirming, isApproveError, isApprovalConfirmError, approveWriteError, approveConfirmError, writeContract, simulateWriteData, simulateWriteError, selectedCrypto, cryptoNeeded, requestId]);
+  }, [isApprovePending, approveHash, isApprovalTxConfirmed, isApprovalConfirming, isApproveError, isApprovalConfirmError, approveWriteError, approveConfirmError, writeContract, simulateWriteData, simulateWriteError, selectedCrypto, requestId]);
 
   // Effect to monitor main transaction status
   useEffect(() => {
