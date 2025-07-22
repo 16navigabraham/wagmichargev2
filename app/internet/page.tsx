@@ -1,7 +1,7 @@
 // app/internet/page.tsx
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react" // Added useRef
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import BackToDashboard from '@/components/BackToDashboard'
 import AuthGuard from "@/components/AuthGuard"
+import { Loader2, AlertCircle, CheckCircle } from "lucide-react" // Added for verification UI
 
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from "@/config/contract";
 import { ERC20_ABI } from "@/config/erc20Abi"; // Import ERC20 ABI
@@ -27,7 +28,7 @@ const USDC_CONTRACT_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"; // R
 const CRYPTOS = [
     { symbol: "ETH", name: "Ethereum", coingeckoId: "ethereum", tokenType: 0, decimals: 18, contract: undefined }, // ETH has no contract address
     { symbol: "USDT", name: "Tether", coingeckoId: "tether", tokenType: 1, decimals: 6, contract: USDT_CONTRACT_ADDRESS },
-    { symbol: "USDC", name: "USD Coin", tokenType: 2, decimals: 6, contract: USDC_CONTRACT_ADDRESS },
+    { symbol: "USDC", name: "USD Coin", coingeckoId: "usd-coin", tokenType: 2, decimals: 6, contract: USDC_CONTRACT_ADDRESS },
 ]
 
 interface InternetPlan {
@@ -110,7 +111,6 @@ export default function InternetPage() {
     const [availableProviders, setAvailableProviders] = useState<any[]>([])
     const [requestId, setRequestId] = useState<string | undefined>(undefined);
 
-    // --- START OF MODIFICATIONS: Transaction and Approval States ---
     const [txStatus, setTxStatus] = useState<'idle' | 'waitingForSignature' | 'sending' | 'confirming' | 'success' | 'error' | 'backendProcessing' | 'backendSuccess' | 'backendError' | 'waitingForApprovalSignature' | 'approving' | 'approvalSuccess' | 'approvalError'>('idle');
     const [transactionError, setTransactionError] = useState<string | null>(null);
     const [backendMessage, setBackendMessage] = useState<string | null>(null);
@@ -118,14 +118,12 @@ export default function InternetPage() {
     const [transactionHashForModal, setTransactionHashForModal] = useState<Hex | undefined>(undefined);
 
     const [approvalError, setApprovalError] = useState<string | null>(null);
-    // --- END OF MODIFICATIONS ---
+    const backendRequestSentRef = useRef<Hex | null>(null); // Added to track if backend request has been sent
 
     const { connectWallet, authenticated, user } = usePrivy();
     const { isConnected, address } = useAccount();
 
-    // --- START OF MODIFICATIONS: Network Enforcer Hook ---
     const { isOnBaseChain, isSwitchingChain, promptSwitchToBase } = useBaseNetworkEnforcer();
-    // --- END OF MODIFICATIONS ---
 
     const selectedCrypto = CRYPTOS.find((c) => c.symbol === crypto)
     const selectedPlan = plans.find((p) => p.variation_code === plan)
@@ -134,11 +132,17 @@ export default function InternetPage() {
     const cryptoNeeded = priceNGN && amountNGN ? amountNGN / priceNGN : 0
 
     // For the main contract call, use the exact amount needed.
-    // FIX 1: Ensure full precision for parseUnits by using selectedCrypto.decimals directly in toFixed.
-    const tokenAmountForOrder = selectedCrypto ? parseUnits(cryptoNeeded.toFixed(selectedCrypto.decimals), selectedCrypto.decimals) : BigInt(0);
-    const valueForEth = selectedCrypto?.symbol === 'ETH' && cryptoNeeded > 0
-        ? parseEther(cryptoNeeded.toFixed(18)) // ETH needs full 18 decimals for parseEther
-        : BigInt(0);
+    let tokenAmountForOrder: bigint = BigInt(0);
+    let valueForEth: bigint = BigInt(0);
+
+    if (selectedCrypto && cryptoNeeded > 0) {
+        if (selectedCrypto.symbol === 'ETH') {
+            valueForEth = parseEther(cryptoNeeded.toFixed(18));
+        } else {
+            // FIX: Ensure full precision for parseUnits by using selectedCrypto.decimals directly in toFixed.
+            tokenAmountForOrder = parseUnits(cryptoNeeded.toFixed(selectedCrypto.decimals), selectedCrypto.decimals);
+        }
+    }
     const bytes32RequestId: Hex = toHex(toBytes(requestId || ""), { size: 32 });
 
     // For approval, use the maximum uint256 value for unlimited approval.
@@ -151,7 +155,10 @@ export default function InternetPage() {
         functionName: 'approve',
         args: [CONTRACT_ADDRESS, unlimitedApprovalAmount],
         query: {
-            enabled: Boolean(selectedCrypto?.tokenType !== 0 && selectedCrypto?.contract && address && isConnected && isOnBaseChain),
+            enabled: Boolean(selectedCrypto?.tokenType !== 0 && selectedCrypto?.contract && address && isConnected && isOnBaseChain && cryptoNeeded > 0), // Only enabled if ERC20 and form is ready
+            staleTime: 5000,
+            gcTime: 60000,
+            refetchOnWindowFocus: false,
         },
     });
 
@@ -179,6 +186,9 @@ export default function InternetPage() {
         value: valueForEth,
         query: {
             enabled: Boolean(selectedCrypto && requestId && cryptoNeeded > 0 && address && isConnected && isOnBaseChain && (selectedCrypto.tokenType === 0 || isApprovalTxConfirmed)), // Only simulate if ETH or after approval
+            staleTime: 5000,
+            gcTime: 60000,
+            refetchOnWindowFocus: false,
         },
     });
 
@@ -232,24 +242,19 @@ export default function InternetPage() {
 
     // --- START OF MODIFICATIONS: handlePostTransaction with useCallback ---
     const handlePostTransaction = useCallback(async (transactionHash: Hex) => {
+        // Use the ref to ensure the request is sent only once for a given transactionHash
+        if (backendRequestSentRef.current === transactionHash) {
+            console.log(`Backend request already sent for hash: ${transactionHash}. Skipping duplicate.`);
+            return;
+        }
+
+        backendRequestSentRef.current = transactionHash; // Mark this hash as processed
+
         setTxStatus('backendProcessing');
         setBackendMessage("Processing your order...");
         toast.loading("Processing order with VTpass...", { id: 'backend-status' });
 
         try {
-            const orderData = {
-                requestId,
-                crypto: selectedCrypto?.symbol, // Safely access symbol
-                provider,
-                plan,
-                customerID,
-                amount: amountNGN,
-                cryptoNeeded,
-                type: 'internet',
-                transactionHash,
-                userAddress: address,
-            };
-            console.log('Submitting order to backend:', orderData);
             const backendResponse = await fetch('/api/internet', {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -262,11 +267,20 @@ export default function InternetPage() {
                     cryptoUsed: cryptoNeeded,
                     cryptoSymbol: selectedCrypto?.symbol, // Safely access symbol
                     transactionHash,
-                    userAddress: address // Added userAddress
+                    userAddress: address,
                 }),
             });
 
-            const responseData = await backendResponse.json();
+            // FIX: More robust JSON parsing
+            let responseData;
+            try {
+                responseData = await backendResponse.json();
+            } catch (jsonError: any) {
+                const textResponse = await backendResponse.text();
+                console.error("JSON parsing error:", jsonError);
+                console.error("Raw backend response:", textResponse);
+                throw new Error(`Backend responded with non-JSON: ${textResponse.substring(0, 100)}...`);
+            }
 
             if (!backendResponse.ok) {
                 throw new Error(responseData.message || responseData.error || "Failed to deliver internet data via backend.");
@@ -280,12 +294,15 @@ export default function InternetPage() {
             setPlan("");
             setCustomerID("");
             setRequestId(undefined);
+            backendRequestSentRef.current = null; // Clear ref after successful backend processing
         } catch (backendError: any) {
             console.error("Backend API call failed:", backendError);
             setTxStatus('backendError');
             const msg = `Backend processing failed: ${backendError.message}. Please contact support with Request ID: ${requestId}`;
             setBackendMessage(msg);
             toast.error(msg, { id: 'backend-status' });
+            // Do NOT clear backendRequestSentRef here to prevent re-attempts if it failed.
+            // User needs to manually retry/reset.
         }
     }, [requestId, selectedCrypto?.symbol, provider, plan, customerID, amountNGN, cryptoNeeded, address]);
     // --- END OF MODIFICATIONS ---
@@ -293,6 +310,8 @@ export default function InternetPage() {
     // --- START OF MODIFICATIONS: Handle transaction status feedback and modal display ---
     // Effect to monitor approval transaction status
     useEffect(() => {
+        if (!showTransactionModal) return; // Only run if modal is open
+
         if (isApprovePending) {
             setTxStatus('waitingForApprovalSignature');
             setTransactionHashForModal(undefined);
@@ -300,6 +319,7 @@ export default function InternetPage() {
             setBackendMessage(null);
             setApprovalError(null);
             toast.info("Awaiting token approval signature...");
+            backendRequestSentRef.current = null; // Reset backend request flag on new blockchain tx initiation
         } else if (approveHash && !isApprovalTxConfirmed && !isApprovalConfirming) {
             setTxStatus('sending');
             setTransactionHashForModal(approveHash);
@@ -313,49 +333,8 @@ export default function InternetPage() {
             setApprovalError(null);
             toast.success("Token approved for unlimited spending! Proceeding with payment...", { id: 'approval-status' });
             console.log("Approval: Blockchain confirmed! Initiating main transaction...");
-
-            const initiateMainTransaction = setTimeout(() => {
-                // If ETH, proceed with main transaction (this path is technically not hit immediately after approval for ETH,
-                // as ETH doesn't need approval, but keeping consistent for future clarity if logic changes)
-                if (selectedCrypto?.tokenType === 0) {
-                     if (simulateWriteData?.request) {
-                        setTxStatus('waitingForSignature');
-                        writeContract(simulateWriteData.request);
-                        console.log("Main transaction initiated after approval (ETH path, though not typical).");
-                    } else if (simulateWriteError) {
-                        console.error("Simulation error for ETH main transaction after approval:", simulateWriteError);
-                        const errorMsg = simulateWriteError.message || "Simulation failed for ETH transaction.";
-                        setTransactionError(errorMsg);
-                        setTxStatus('error');
-                        toast.error(errorMsg);
-                    } else {
-                        console.error("No simulation data for ETH main transaction after approval.");
-                        setTransactionError("Could not simulate ETH transaction. Please try again.");
-                        setTxStatus('error');
-                        toast.error("An internal error occurred. Please try again.");
-                    }
-                } else { // ERC20 token, proceed with main transaction after approval
-                    if (simulateWriteData?.request) {
-                        setTxStatus('waitingForSignature');
-                        writeContract(simulateWriteData.request);
-                        console.log("Main transaction initiated after approval (ERC20 path).");
-                    } else if (simulateWriteError) {
-                        console.error("Simulation error for ERC20 main transaction after approval:", simulateWriteError);
-                        const errorMsg = simulateWriteError.message || "Simulation failed for ERC20 transaction after approval.";
-                        setTransactionError(errorMsg);
-                        setTxStatus('error');
-                        toast.error(errorMsg);
-                    } else {
-                        console.error("No simulation data for ERC20 main transaction after approval.");
-                        setTransactionError("Could not simulate ERC20 transaction. Please try again.");
-                        setTxStatus('error');
-                        toast.error("An internal error occurred. Please try again.");
-                    }
-                }
-            }, 500);
-
-            return () => clearTimeout(initiateMainTransaction);
-
+            // The main transaction will be initiated by the simulateWriteData hook re-enabling
+            // and handlePurchase being called after its data is ready.
         } else if (isApproveError || isApprovalConfirmError) {
             setTxStatus('approvalError');
             const errorMsg = (approveWriteError?.message || approveConfirmError?.message || simulateApproveError?.message || "Token approval failed").split('\n')[0];
@@ -363,19 +342,12 @@ export default function InternetPage() {
             setTransactionError(errorMsg);
             toast.error(`Approval failed: ${errorMsg}`, { id: 'approval-status' });
         }
-    }, [isApprovePending, approveHash, isApprovalTxConfirmed, isApprovalConfirming, isApproveError, isApprovalConfirmError, approveWriteError, approveConfirmError, writeContract, simulateWriteData, simulateWriteError, selectedCrypto, requestId]);
+    }, [isApprovePending, approveHash, isApprovalTxConfirmed, isApprovalConfirming, isApproveError, isApprovalConfirmError, approveWriteError, approveConfirmError, simulateApproveError, showTransactionModal]);
 
     // Effect to monitor main transaction status
     useEffect(() => {
+        if (!showTransactionModal) return; // Only run if modal is open
         if (['waitingForApprovalSignature', 'approving', 'approvalSuccess', 'approvalError'].includes(txStatus)) {
-            return;
-        }
-
-        if (isWriteError) {
-            setTxStatus('error');
-            const errorMsg = writeError?.message?.split('\n')[0] || simulateWriteError?.message?.split('\n')[0] || "Wallet transaction failed or was rejected.";
-            setTransactionError(errorMsg);
-            toast.error(`Transaction failed: ${errorMsg}`, { id: 'tx-status' });
             return;
         }
 
@@ -385,6 +357,7 @@ export default function InternetPage() {
             setTransactionError(null);
             setBackendMessage(null);
             toast.info("Awaiting wallet signature...");
+            backendRequestSentRef.current = null; // Reset backend request flag on new blockchain tx initiation
         } else if (hash && !isConfirmed && !isConfirming) {
             setTxStatus('sending');
             setTransactionHashForModal(hash);
@@ -403,22 +376,22 @@ export default function InternetPage() {
                     handlePostTransaction(hash);
                 }
             }
-        } else if (isConfirmError) {
+        } else if (isWriteError || isConfirmError) {
             setTxStatus('error');
-            const errorMsg = confirmError?.message?.split('\n')[0] || "Blockchain transaction failed to confirm.";
+            const errorMsg = (writeError?.message?.split('\n')[0] || confirmError?.message?.split('\n')[0] || simulateWriteError?.message?.split('\n')[0] || "Wallet transaction failed or was rejected.").split('\n')[0];
             setTransactionError(errorMsg);
             setTransactionHashForModal(hash);
             toast.error(`Transaction failed: ${errorMsg}`, { id: 'tx-status' });
         } else {
             // Only reset to idle if not in any active transaction or approval state
-            if (!['waitingForApprovalSignature', 'approving', 'approvalSuccess', 'approvalError', 'sending', 'confirming', 'success', 'backendProcessing', 'backendSuccess'].includes(txStatus)) {
+            if (!['backendProcessing', 'backendSuccess', 'backendError'].includes(txStatus)) {
                 setTxStatus('idle');
                 setTransactionError(null);
                 setBackendMessage(null);
                 setTransactionHashForModal(undefined);
             }
         }
-    }, [isWritePending, hash, isConfirming, isConfirmed, isWriteError, isConfirmError, writeError, confirmError, txStatus, handlePostTransaction, simulateWriteError]);
+    }, [isWritePending, hash, isConfirming, isConfirmed, isWriteError, isConfirmError, writeError, confirmError, txStatus, handlePostTransaction, simulateWriteData, simulateWriteError, showTransactionModal]); // Added simulateWriteData to dependencies
     // --- END OF MODIFICATIONS ---
 
     const ensureWalletConnected = async () => {
@@ -446,6 +419,8 @@ export default function InternetPage() {
         setTransactionError(null);
         setBackendMessage(null);
         setApprovalError(null);
+        setTxStatus('idle'); // Reset status before starting new flow
+        backendRequestSentRef.current = null; // Reset for a new transaction attempt
 
         const walletConnectedAndOnBase = await ensureWalletConnected();
         if (!walletConnectedAndOnBase) {
@@ -481,21 +456,12 @@ export default function InternetPage() {
             return;
         }
 
-
-        // Prepare transaction arguments
-        // This line is correct now due to FIX 1
-        const value = selectedCrypto.symbol === 'ETH' && cryptoNeeded > 0
-            ? parseEther(cryptoNeeded.toFixed(18))
-            : BigInt(0);
-
-        const bytes32RequestId: Hex = toHex(toBytes(requestId), { size: 32 });
-
         // Debugging logs for contract call parameters
         console.log("--- Initiating Contract Call ---");
         console.log("RequestId (bytes32):", bytes32RequestId);
         console.log("TokenType:", selectedCrypto.tokenType);
         console.log("TokenAmount for Order (parsed):", tokenAmountForOrder.toString()); // Log as string to see full BigInt
-        console.log("Value (for ETH, 0 for ERC20):", value.toString()); // Log as string to see full BigInt
+        console.log("Value (for ETH, 0 for ERC20):", valueForEth.toString()); // Log as string to see full BigInt
         console.log("Selected Crypto:", selectedCrypto.symbol);
         console.log("Crypto Needed (float):", cryptoNeeded);
         console.log("Selected Crypto Decimals:", selectedCrypto.decimals);
@@ -576,6 +542,7 @@ export default function InternetPage() {
         setBackendMessage(null); // Clear backend messages
         setTransactionHashForModal(undefined); // Clear hash
         setApprovalError(null); // Clear approval specific errors
+        backendRequestSentRef.current = null; // Clear ref on modal close to allow new transactions
     }, []); // Empty dependency array as it doesn't depend on any changing state
 
     const providersToShow = availableProviders.length > 0 ? availableProviders : [];
@@ -694,9 +661,9 @@ export default function InternetPage() {
                             <div className="flex justify-between text-sm">
                                 <span>You will pay:</span>
                                 <span>
-                                    {crypto && selectedPlan && priceNGN ? (
+                                    {cryptoNeeded > 0 && selectedCrypto ? (
                                         <Badge variant="outline">
-                                            {cryptoNeeded.toFixed(6)} {crypto}
+                                            {cryptoNeeded.toFixed(selectedCrypto.decimals)}{" "} {crypto} {/* Adjusted toFixed for display */}
                                         </Badge>
                                     ) : (
                                         "--"

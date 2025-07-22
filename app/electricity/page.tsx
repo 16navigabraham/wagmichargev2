@@ -1,6 +1,6 @@
 // app/electricity/page.tsx
 "use client"
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react" // Added useRef
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {Button} from "@/components/ui/button"
@@ -117,7 +117,6 @@ export default function ElectricityPage() {
   const [requestId, setRequestId] = useState<string | undefined>(undefined);
   const [phone, setPhone] = useState("");
 
-  // --- START OF MODIFICATIONS: Transaction and Approval States ---
   const [txStatus, setTxStatus] = useState<'idle' | 'waitingForSignature' | 'sending' | 'confirming' | 'success' | 'error' | 'backendProcessing' | 'backendSuccess' | 'backendError' | 'waitingForApprovalSignature' | 'approving' | 'approvalSuccess' | 'approvalError'>('idle');
   const [transactionError, setTransactionError] = useState<string | null>(null);
   const [backendMessage, setBackendMessage] = useState<string | null>(null);
@@ -125,14 +124,12 @@ export default function ElectricityPage() {
   const [transactionHashForModal, setTransactionHashForModal] = useState<Hex | undefined>(undefined);
 
   const [approvalError, setApprovalError] = useState<string | null>(null);
-  // --- END OF MODIFICATIONS ---
+  const backendRequestSentRef = useRef<Hex | null>(null); // Added to track if backend request has been sent
 
   const { connectWallet, authenticated, user } = usePrivy();
   const { isConnected, address } = useAccount();
 
-  // --- START OF MODIFICATIONS: Network Enforcer Hook ---
   const { isOnBaseChain, isSwitchingChain, promptSwitchToBase } = useBaseNetworkEnforcer();
-  // --- END OF MODIFICATIONS ---
 
   /* initial load */
   useEffect(() => {
@@ -213,7 +210,8 @@ export default function ElectricityPage() {
   const cryptoNeeded = priceNGN && amountNGN ? amountNGN / priceNGN : 0
 
   // For the main contract call, use the exact amount needed.
-  const tokenAmountForOrder = selectedCrypto ? parseUnits(cryptoNeeded.toFixed(selectedCrypto.decimals > 6 ? 6 : selectedCrypto.decimals), selectedCrypto.decimals) : BigInt(0); // Adjusted precision for tokenAmountForOrder
+  // FIX: Use selectedCrypto.decimals for toFixed to ensure correct precision
+  const tokenAmountForOrder = selectedCrypto ? parseUnits(cryptoNeeded.toFixed(selectedCrypto.decimals), selectedCrypto.decimals) : BigInt(0);
   const valueForEth = selectedCrypto?.symbol === 'ETH' && cryptoNeeded > 0
       ? parseEther(cryptoNeeded.toFixed(18)) // ETH needs full 18 decimals for parseEther
       : BigInt(0);
@@ -229,7 +227,10 @@ export default function ElectricityPage() {
       functionName: 'approve',
       args: [CONTRACT_ADDRESS, unlimitedApprovalAmount],
       query: {
-          enabled: Boolean(selectedCrypto?.tokenType !== 0 && selectedCrypto?.contract && address && isConnected && isOnBaseChain),
+          enabled: Boolean(selectedCrypto?.tokenType !== 0 && selectedCrypto?.contract && address && isConnected && isOnBaseChain && cryptoNeeded > 0), // Only enabled if ERC20 and form is ready
+          staleTime: 5000,
+          gcTime: 60000,
+          refetchOnWindowFocus: false,
       },
   });
 
@@ -257,6 +258,9 @@ export default function ElectricityPage() {
       value: valueForEth,
       query: {
           enabled: Boolean(selectedCrypto && requestId && cryptoNeeded > 0 && address && isConnected && isOnBaseChain && (selectedCrypto.tokenType === 0 || isApprovalTxConfirmed)), // Only simulate if ETH or after approval
+          staleTime: 5000,
+          gcTime: 60000,
+          refetchOnWindowFocus: false,
       },
   });
 
@@ -273,25 +277,18 @@ export default function ElectricityPage() {
 
   // Moved handlePostTransaction definition above its usage in useEffect
   const handlePostTransaction = useCallback(async (transactionHash: Hex) => {
+    // Use the ref to ensure the request is sent only once for a given transactionHash
+    if (backendRequestSentRef.current === transactionHash) {
+        console.log(`Backend request already sent for hash: ${transactionHash}. Skipping duplicate.`);
+        return;
+    }
+
+    backendRequestSentRef.current = transactionHash; // Mark this hash as processed
+
     setTxStatus('backendProcessing');
     setBackendMessage("Processing your order...");
     toast.loading("Processing order with VTpass...", { id: 'backend-status' });
     try {
-      const orderData = {
-        requestId,
-        crypto: selectedCrypto?.symbol, // Safely access symbol
-        provider,
-        meter_number: meterNumber,
-        serviceID: provider,
-        variation_code: plan,
-        amount: amountNGN,
-        cryptoNeeded,
-        type: 'electricity',
-        transactionHash,
-        userAddress: address,
-        phone: phone,
-      };
-      console.log('Submitting order to backend:', orderData);
       const backendResponse = await fetch('/api/electricity', {
         method: "POST",
         headers: { "Content-Type": "application/json" }, // Corrected Content-Type
@@ -309,7 +306,16 @@ export default function ElectricityPage() {
         }),
       });
 
-      const responseData = await backendResponse.json();
+      // FIX: More robust JSON parsing
+      let responseData;
+      try {
+          responseData = await backendResponse.json();
+      } catch (jsonError: any) {
+          const textResponse = await backendResponse.text();
+          console.error("JSON parsing error:", jsonError);
+          console.error("Raw backend response:", textResponse);
+          throw new Error(`Backend responded with non-JSON: ${textResponse.substring(0, 100)}...`);
+      }
 
       if (!backendResponse.ok) {
         throw new Error(responseData.message || responseData.error || "Failed to deliver electricity via backend.");
@@ -329,25 +335,31 @@ export default function ElectricityPage() {
       setVerificationSuccess(false);
       setRequestId(undefined);
       setPhone(""); // Clear phone number too
+      backendRequestSentRef.current = null; // Clear ref after successful backend processing
     } catch (backendError: any) {
       setTxStatus('backendError');
       const msg = `Backend processing failed: ${backendError.message}. Please contact support with Request ID: ${requestId}`;
       setBackendMessage(msg);
       console.error("Backend API call failed:", backendError);
       toast.error(msg, { id: 'backend-status' });
+      // Do NOT clear backendRequestSentRef here to prevent re-attempts if it failed.
+      // User needs to manually retry/reset.
     }
   }, [requestId, selectedCrypto?.symbol, amountNGN, phone, cryptoNeeded, address, provider, meterNumber, plan, customerName, verificationSuccess]);
 
 
   // Effect to monitor approval transaction status
   useEffect(() => {
+    if (!showTransactionModal) return; // Only run if modal is open
+
     if (isApprovePending) {
         setTxStatus('waitingForApprovalSignature');
-        setTransactionHashForModal(undefined); // Clear main tx hash
+        setTransactionHashForModal(undefined);
         setTransactionError(null);
         setBackendMessage(null);
         setApprovalError(null);
         toast.info("Awaiting token approval signature...");
+        backendRequestSentRef.current = null; // Reset backend request flag on new blockchain tx initiation
     } else if (approveHash && !isApprovalTxConfirmed && !isApprovalConfirming) {
         setTxStatus('sending'); // Use 'sending' for approval hash available but not yet confirming
         setTransactionHashForModal(approveHash); // Show approval hash in modal
@@ -362,29 +374,8 @@ export default function ElectricityPage() {
         toast.success("Token approved for unlimited spending! Proceeding with payment...", { id: 'approval-status' }); // Updated message
         console.log("Approval: Blockchain confirmed! Initiating main transaction...");
 
-        // Add a small delay to allow UI to update to 'approvalSuccess' before triggering next step
-        const initiateMainTransaction = setTimeout(() => {
-            // After approval is confirmed, trigger the main contract call
-            if (simulateWriteData?.request) {
-                setTxStatus('waitingForSignature'); // Update status for main transaction
-                writeContract(simulateWriteData.request);
-                console.log("Main transaction initiated after approval (ERC20 path).");
-            } else if (simulateWriteError) {
-                console.error("Simulation error for ERC20 main transaction after approval:", simulateWriteError);
-                const errorMsg = simulateWriteError.message || "Simulation failed for ERC20 transaction after approval.";
-                setTransactionError(errorMsg);
-                setTxStatus('error');
-                toast.error(errorMsg);
-            } else {
-                console.error("No simulation data for ERC20 main transaction after approval.");
-                setTransactionError("Could not simulate ERC20 transaction. Please try again.");
-                setTxStatus('error');
-                toast.error("An internal error occurred. Please try again.");
-            }
-        }, 500); // 500ms delay
-
-        return () => clearTimeout(initiateMainTransaction); // Cleanup timeout on unmount or re-render
-
+        // The main transaction will be initiated by the simulateWriteData hook re-enabling
+        // and handlePurchase being called after its data is ready.
     } else if (isApproveError || isApprovalConfirmError) {
         setTxStatus('approvalError');
         const errorMsg = (approveWriteError?.message || approveConfirmError?.message || simulateApproveError?.message || "Token approval failed").split('\n')[0];
@@ -392,10 +383,11 @@ export default function ElectricityPage() {
         setTransactionError(errorMsg); // Use main error state for modal display
         toast.error(`Approval failed: ${errorMsg}`, { id: 'approval-status' });
     }
-  }, [isApprovePending, approveHash, isApprovalTxConfirmed, isApprovalConfirming, isApproveError, isApprovalConfirmError, approveWriteError, approveConfirmError, writeContract, simulateWriteData, simulateWriteError, selectedCrypto, requestId]);
+  }, [isApprovePending, approveHash, isApprovalTxConfirmed, isApprovalConfirming, isApproveError, isApprovalConfirmError, approveWriteError, approveConfirmError, simulateApproveError, showTransactionModal]);
 
   // Effect to monitor main transaction status
   useEffect(() => {
+    if (!showTransactionModal) return; // Only run if modal is open
     // Only run if not currently in an approval flow (or just finished with approval error)
     if (['waitingForApprovalSignature', 'approving', 'approvalSuccess', 'approvalError'].includes(txStatus)) {
         return;
@@ -416,6 +408,7 @@ export default function ElectricityPage() {
         setTransactionError(null);
         setBackendMessage(null);
         toast.info("Awaiting wallet signature...");
+        backendRequestSentRef.current = null; // Reset backend request flag on new blockchain tx initiation
     } else if (hash && !isConfirmed && !isConfirming) {
         setTxStatus('sending');
         setTransactionHashForModal(hash);
@@ -425,11 +418,14 @@ export default function ElectricityPage() {
         setTransactionHashForModal(hash); // Ensure hash is shown during confirming
         toast.loading("Transaction confirming on blockchain...", { id: 'tx-status' });
     } else if (isConfirmed) {
-        setTxStatus('success');
-        setTransactionHashForModal(hash); // Ensure hash is shown during success
-        toast.success("Blockchain transaction confirmed! Processing order...", { id: 'tx-status' });
-        if (hash) {
-            handlePostTransaction(hash);
+        // FIX: Add a guard to ensure handlePostTransaction is called only once per confirmed hash
+        if (txStatus !== 'backendProcessing' && txStatus !== 'backendSuccess' && txStatus !== 'backendError') {
+            setTxStatus('success');
+            setTransactionHashForModal(hash); // Ensure hash is shown during success
+            toast.success("Blockchain transaction confirmed! Processing order...", { id: 'tx-status' });
+            if (hash) {
+                handlePostTransaction(hash);
+            }
         }
     } else if (isConfirmError) { // Handle errors during transaction receipt
         setTxStatus('error');
@@ -439,14 +435,14 @@ export default function ElectricityPage() {
         toast.error(`Transaction failed: ${errorMsg}`, { id: 'tx-status' });
     } else {
         // If no active transaction state, and not in an approval flow, reset to idle
-        if (!['waitingForApprovalSignature', 'approving', 'approvalSuccess', 'approvalError'].includes(txStatus)) {
+        if (!['backendProcessing', 'backendSuccess', 'backendError'].includes(txStatus)) {
             setTxStatus('idle');
             setTransactionError(null);
             setBackendMessage(null);
             setTransactionHashForModal(undefined);
         }
     }
-  }, [isWritePending, hash, isConfirming, isConfirmed, isWriteError, isConfirmError, writeError, confirmError, txStatus, handlePostTransaction, simulateWriteError]);
+  }, [isWritePending, hash, isConfirming, isConfirmed, isWriteError, isConfirmError, writeError, confirmError, txStatus, handlePostTransaction, simulateWriteError, showTransactionModal]);
 
   const ensureWalletConnected = async () => {
     if (!authenticated) {
@@ -473,6 +469,8 @@ export default function ElectricityPage() {
     setTransactionError(null);
     setBackendMessage(null);
     setApprovalError(null);
+    setTxStatus('idle'); // Reset status before starting new flow
+    backendRequestSentRef.current = null; // Reset for a new transaction attempt
 
     const walletConnectedAndOnBase = await ensureWalletConnected();
     if (!walletConnectedAndOnBase) {
@@ -539,7 +537,13 @@ export default function ElectricityPage() {
         toast.info("Approving token spend for this transaction...");
         setTxStatus('waitingForApprovalSignature'); // Set initial status for approval
         try {
-            writeApprove(simulateApproveData.request);
+            if (selectedCrypto.contract) { // Ensure contract address exists for ERC20
+                writeApprove(simulateApproveData.request);
+            } else {
+                toast.error("Selected crypto has no contract address for approval.");
+                setTxStatus('error');
+                return;
+            }
             return; // After initiating approval, stop here. The approval useEffect will handle next steps.
         } catch (error: any) {
             console.error("Error sending approval transaction:", error);
@@ -586,6 +590,7 @@ export default function ElectricityPage() {
     setBackendMessage(null); // Clear backend messages
     setTransactionHashForModal(undefined); // Clear hash
     setApprovalError(null); // Clear approval specific errors
+    backendRequestSentRef.current = null; // Clear ref on modal close to allow new transactions
   }, []); // Empty dependency array as it doesn't depend on any changing state
 
   const canPay =
@@ -694,7 +699,7 @@ export default function ElectricityPage() {
                   setCustomerName("")
                   setCustomerAddress("")
                 }}
-                maxLength={13}
+                maxLength={plan ? Math.max(...getMeterLength(plan)) : undefined} 
                 disabled={!plan}
               />
               {verifyingMeter && (
@@ -741,7 +746,14 @@ export default function ElectricityPage() {
                 max={50000}
                 placeholder="Enter amount in Naira, minimum ₦100"
                 value={amount}
-                onChange={(e) => setAmount(e.target.value)}
+                onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === "" || val === "0") {
+                        setAmount("");
+                    } else {
+                        setAmount(String(Math.max(0, parseInt(val))));
+                    }
+                }}
               />
             </div>
             {/* Phone Number for Electricity - it's in your code, keeping it */}
@@ -775,7 +787,7 @@ export default function ElectricityPage() {
                 <span>
                   {cryptoNeeded > 0 && selectedCrypto ? (
                     <Badge variant="outline">
-                      {cryptoNeeded.toFixed(6)} {selectedCrypto.symbol}
+                      {cryptoNeeded.toFixed(selectedCrypto?.decimals || 6)} {selectedCrypto.symbol} {/* Adjusted toFixed for display */}
                     </Badge>
                   ) : (
                     "--"
