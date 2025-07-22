@@ -90,8 +90,22 @@ export default function AirtimePage() {
   const cryptoNeeded = priceNGN && amountNGN ? amountNGN / priceNGN : 0
 
   // Calculate token amounts with proper precision
-  const tokenAmountForOrder = selectedCrypto && cryptoNeeded > 0 ? 
-    parseUnits(cryptoNeeded.toFixed(selectedCrypto.decimals), selectedCrypto.decimals) : BigInt(0);
+const tokenAmountForOrder = selectedCrypto && cryptoNeeded > 0 ? 
+  parseUnits(cryptoNeeded.toString(), selectedCrypto.decimals) : BigInt(0);
+
+// Alternative approach with more precision handling:
+const getTokenAmountForOrder = () => {
+  if (!selectedCrypto || cryptoNeeded <= 0) return BigInt(0);
+  
+  try {
+    // Convert to string with full precision before parsing
+    const amountStr = cryptoNeeded.toFixed(selectedCrypto.decimals);
+    return parseUnits(amountStr, selectedCrypto.decimals);
+  } catch (error) {
+    console.error('Error calculating token amount:', error);
+    return BigInt(0);
+  }
+};
   
   const valueForEth = selectedCrypto?.symbol === 'ETH' && cryptoNeeded > 0
     ? parseEther(cryptoNeeded.toFixed(18))
@@ -170,71 +184,99 @@ export default function AirtimePage() {
 
   // Handle backend API call after successful transaction
   const handlePostTransaction = useCallback(async (transactionHash: Hex) => {
-    if (backendRequestSentRef.current === transactionHash) {
-      console.log(`Backend request already sent for hash: ${transactionHash}. Skipping duplicate.`);
-      return;
-    }
+  if (backendRequestSentRef.current === transactionHash) {
+    console.log(`Backend request already sent for hash: ${transactionHash}. Skipping duplicate.`);
+    return;
+  }
 
-    backendRequestSentRef.current = transactionHash;
-    setTxStatus('backendProcessing');
-    setBackendMessage("Processing your order...");
-    toast.loading("Processing order with VTpass...", { id: 'backend-status' });
+  backendRequestSentRef.current = transactionHash;
+  setTxStatus('backendProcessing');
+  setBackendMessage("Processing your order...");
+  toast.loading("Processing order with VTpass...", { id: 'backend-status' });
 
+  try {
+    const requestPayload = {
+      requestId,
+      phone,
+      serviceID: network,
+      amount: amountNGN,
+      cryptoUsed: cryptoNeeded,
+      cryptoSymbol: selectedCrypto?.symbol,
+      transactionHash,
+      userAddress: address
+    };
+
+    console.log('Sending backend request:', JSON.stringify(requestPayload, null, 2));
+
+    const backendResponse = await fetch('/api/airtime', {
+      method: "POST",
+      headers: { 
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      body: JSON.stringify(requestPayload),
+    });
+
+    console.log('Backend response status:', backendResponse.status);
+    console.log('Backend response headers:', Object.fromEntries(backendResponse.headers.entries()));
+
+    const responseText = await backendResponse.text();
+    console.log('Backend response text:', responseText);
+
+    let responseData;
     try {
-      const backendResponse = await fetch('/api/airtime', {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          "Accept": "application/json"
-        },
-        body: JSON.stringify({
-          requestId,
-          phone,
-          serviceID: network,
-          amount: amountNGN,
-          cryptoUsed: cryptoNeeded,
-          cryptoSymbol: selectedCrypto?.symbol,
-          transactionHash,
-          userAddress: address
-        }),
-      });
-
-      let responseData;
-      const responseText = await backendResponse.text();
+      responseData = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error('Failed to parse backend response:', responseText);
       
-      try {
-        responseData = JSON.parse(responseText);
-      } catch (parseError) {
-        console.error('Failed to parse backend response:', responseText);
-        throw new Error(`Invalid response format from server: ${responseText.substring(0, 100)}...`);
-      }
-
-      if (!backendResponse.ok) {
-        const errorMessage = responseData.message || responseData.error || 
-          `HTTP ${backendResponse.status}: ${backendResponse.statusText}`;
-        throw new Error(errorMessage);
+      // Check if the response looks like HTML (common when there's an unhandled error)
+      if (responseText.includes('<html>') || responseText.includes('<!DOCTYPE')) {
+        throw new Error('Server returned HTML instead of JSON. This usually indicates an unhandled server error.');
       }
       
-      setTxStatus('backendSuccess');
-      setBackendMessage("Airtime delivered successfully!");
-      toast.success("Airtime delivered successfully!", { id: 'backend-status' });
-      
-      // Reset form for next transaction
-      setCrypto("");
-      setNetwork("");
-      setAmount("");
-      setPhone("");
-      setRequestId(undefined);
-      backendRequestSentRef.current = null;
-      
-    } catch (backendError: any) {
-      setTxStatus('backendError');
-      const msg = `Backend processing failed: ${backendError.message}. Please contact support with Request ID: ${requestId}`;
-      setBackendMessage(msg);
-      console.error("Backend API call failed:", backendError);
-      toast.error(msg, { id: 'backend-status' });
+      throw new Error(`Invalid JSON response from server: ${responseText.substring(0, 200)}...`);
     }
-  }, [requestId, phone, network, amountNGN, cryptoNeeded, selectedCrypto?.symbol, address]);
+
+    if (!backendResponse.ok) {
+      console.error('Backend error response:', responseData);
+      
+      const errorMessage = responseData.error || responseData.message || 
+        `HTTP ${backendResponse.status}: ${backendResponse.statusText}`;
+      
+      throw new Error(errorMessage);
+    }
+    
+    console.log('Backend success response:', responseData);
+    setTxStatus('backendSuccess');
+    setBackendMessage("Airtime delivered successfully!");
+    toast.success("Airtime delivered successfully!", { id: 'backend-status' });
+    
+    // Reset form for next transaction
+    setCrypto("");
+    setNetwork("");
+    setAmount("");
+    setPhone("");
+    setRequestId(undefined);
+    backendRequestSentRef.current = null;
+    
+  } catch (backendError: any) {
+    console.error("Backend API call failed:", backendError);
+    setTxStatus('backendError');
+    
+    let errorMessage = backendError.message;
+    
+    // Provide more user-friendly error messages
+    if (errorMessage.includes('HTML instead of JSON')) {
+      errorMessage = 'Server error occurred. Please try again or contact support.';
+    } else if (errorMessage.includes('Invalid JSON')) {
+      errorMessage = 'Communication error with server. Please try again.';
+    }
+    
+    const fullMessage = `${errorMessage}. Request ID: ${requestId}`;
+    setBackendMessage(fullMessage);
+    toast.error(fullMessage, { id: 'backend-status' });
+  }
+}, [requestId, phone, network, amountNGN, cryptoNeeded, selectedCrypto?.symbol, address]);
 
   // Effect to monitor approval transaction status
   useEffect(() => {
@@ -403,6 +445,12 @@ export default function AirtimePage() {
       setTxStatus('error');
       return;
     }
+
+      // Validate crypto calculation
+     if (!priceNGN || cryptoNeeded <= 0) {
+    toast.error("Unable to calculate crypto amount. Please try again.");
+    return false;
+  }
 
     console.log("--- Initiating Contract Call ---");
     console.log("RequestId (bytes32):", bytes32RequestId);
