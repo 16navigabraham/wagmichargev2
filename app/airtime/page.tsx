@@ -24,6 +24,9 @@ import { useBaseNetworkEnforcer } from '@/hooks/useBaseNetworkEnforcer';
 const USDT_CONTRACT_ADDRESS = "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2";
 const USDC_CONTRACT_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 
+// Backend API URL - Update this to your actual backend URL
+const BACKEND_API_URL = "https://wagmicharge-backend.onrender.com";
+
 const CRYPTOS = [
   { symbol: "ETH", name: "Ethereum", coingeckoId: "ethereum", tokenType: 0, decimals: 18, contract: undefined },
   { symbol: "USDT", name: "Tether", coingeckoId: "tether", tokenType: 1, decimals: 6, contract: USDT_CONTRACT_ADDRESS },
@@ -38,13 +41,18 @@ const NETWORKS = [
 ]
 
 function generateRequestId() {
-  return `${Date.now()}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`
+  return `${Date.now().toString()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`
 }
 
 async function fetchPrices() {
-  const ids = CRYPTOS.map(c => c.coingeckoId).join(",")
-  const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=ngn`)
-  return res.ok ? await res.json() : {}
+  try {
+    const ids = CRYPTOS.map(c => c.coingeckoId).join(",")
+    const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=ngn`)
+    return res.ok ? await res.json() : {}
+  } catch (error) {
+    console.error("Error fetching prices:", error);
+    return {};
+  }
 }
 
 export default function AirtimePage() {
@@ -89,29 +97,47 @@ export default function AirtimePage() {
   const amountNGN = Number(amount) || 0
   const cryptoNeeded = priceNGN && amountNGN ? amountNGN / priceNGN : 0
 
-  // Calculate token amounts with proper precision
-const tokenAmountForOrder = selectedCrypto && cryptoNeeded > 0 ? 
-  parseUnits(cryptoNeeded.toString(), selectedCrypto.decimals) : BigInt(0);
+  // Enhanced token amount calculation with better precision
+  const getTokenAmountForOrder = useCallback((): bigint => {
+    if (!selectedCrypto || cryptoNeeded <= 0) return BigInt(0);
+    
+    try {
+      // For very small amounts, use more precision
+      const precision = selectedCrypto.decimals;
+      
+      // Convert to string with sufficient decimal places
+      let amountStr: string;
+      
+      if (selectedCrypto.symbol === 'ETH') {
+        // ETH needs 18 decimals precision
+        amountStr = cryptoNeeded.toFixed(18);
+      } else {
+        // USDT/USDC typically need 6 decimals but add buffer for precision
+        const extraPrecision = Math.max(precision, 8);
+        amountStr = cryptoNeeded.toFixed(extraPrecision);
+      }
+      
+      // Remove trailing zeros and parse
+      amountStr = parseFloat(amountStr).toString();
+      
+      return parseUnits(amountStr, precision);
+    } catch (error) {
+      console.error('Error calculating token amount:', error, {
+        cryptoNeeded,
+        selectedCrypto: selectedCrypto.symbol,
+        decimals: selectedCrypto.decimals
+      });
+      return BigInt(0);
+    }
+  }, [selectedCrypto, cryptoNeeded]);
 
-// Alternative approach with more precision handling:
-const getTokenAmountForOrder = () => {
-  if (!selectedCrypto || cryptoNeeded <= 0) return BigInt(0);
-  
-  try {
-    // Convert to string with full precision before parsing
-    const amountStr = cryptoNeeded.toFixed(selectedCrypto.decimals);
-    return parseUnits(amountStr, selectedCrypto.decimals);
-  } catch (error) {
-    console.error('Error calculating token amount:', error);
-    return BigInt(0);
-  }
-};
+  const tokenAmountForOrder = getTokenAmountForOrder();
   
   const valueForEth = selectedCrypto?.symbol === 'ETH' && cryptoNeeded > 0
     ? parseEther(cryptoNeeded.toFixed(18))
     : BigInt(0);
   
-  const bytes32RequestId: Hex = toHex(toBytes(requestId || ""), { size: 32 });
+  const bytes32RequestId: Hex = requestId ? toHex(toBytes(requestId), { size: 32 }) : toHex(toBytes(""), { size: 32 });
 
   // Check current allowance for ERC20 tokens
   const { data: currentAllowance, refetch: refetchAllowance } = useReadContract({
@@ -134,6 +160,12 @@ const getTokenAmountForOrder = () => {
     const allowanceBigInt = currentAllowance as bigint;
     const needsApprovalCheck = allowanceBigInt < tokenAmountForOrder;
     setNeedsApproval(needsApprovalCheck);
+    
+    console.log("Approval check:", {
+      currentAllowance: allowanceBigInt.toString(),
+      tokenAmountNeeded: tokenAmountForOrder.toString(),
+      needsApproval: needsApprovalCheck
+    });
   }, [currentAllowance, tokenAmountForOrder, selectedCrypto]);
 
   // Wagmi Hooks for TOKEN APPROVAL Transaction
@@ -200,7 +232,7 @@ const getTokenAmountForOrder = () => {
       phone,
       serviceID: network,
       amount: amountNGN,
-      cryptoUsed: cryptoNeeded,
+      cryptoUsed: parseFloat(cryptoNeeded.toFixed(selectedCrypto?.decimals || 6)),
       cryptoSymbol: selectedCrypto?.symbol,
       transactionHash,
       userAddress: address
@@ -208,7 +240,7 @@ const getTokenAmountForOrder = () => {
 
     console.log('Sending backend request:', JSON.stringify(requestPayload, null, 2));
 
-    const backendResponse = await fetch('/api/airtime', {
+    const backendResponse = await fetch(`${BACKEND_API_URL}/api/airtime`, {
       method: "POST",
       headers: { 
         "Content-Type": "application/json",
@@ -270,13 +302,15 @@ const getTokenAmountForOrder = () => {
       errorMessage = 'Server error occurred. Please try again or contact support.';
     } else if (errorMessage.includes('Invalid JSON')) {
       errorMessage = 'Communication error with server. Please try again.';
+    } else if (errorMessage.includes('Failed to fetch')) {
+      errorMessage = 'Network error. Please check your connection and try again.';
     }
     
     const fullMessage = `${errorMessage}. Request ID: ${requestId}`;
     setBackendMessage(fullMessage);
     toast.error(fullMessage, { id: 'backend-status' });
   }
-}, [requestId, phone, network, amountNGN, cryptoNeeded, selectedCrypto?.symbol, address]);
+}, [requestId, phone, network, amountNGN, cryptoNeeded, selectedCrypto?.symbol, selectedCrypto?.decimals, address]);
 
   // Effect to monitor approval transaction status
   useEffect(() => {
@@ -322,6 +356,11 @@ const getTokenAmountForOrder = () => {
       // Small delay to ensure allowance is updated
       setTimeout(() => {
         console.log("Approval confirmed! Initiating main transaction...");
+        console.log("Contract call params:", {
+          requestId: bytes32RequestId,
+          tokenType: selectedCrypto.tokenType,
+          tokenAmount: tokenAmountForOrder.toString()
+        });
         
         try {
           setTxStatus('waitingForSignature');
@@ -446,20 +485,32 @@ const getTokenAmountForOrder = () => {
       return;
     }
 
-      // Validate crypto calculation
-     if (!priceNGN || cryptoNeeded <= 0) {
-    toast.error("Unable to calculate crypto amount. Please try again.");
-    return false;
-  }
+    // Validate crypto calculation
+    if (!priceNGN || cryptoNeeded <= 0) {
+      toast.error("Unable to calculate crypto amount. Please try again.");
+      setTxStatus('error');
+      return;
+    }
+
+    // Validate token amount calculation
+    if (tokenAmountForOrder <= 0) {
+      toast.error("Invalid token amount calculated. Please try again.");
+      setTxStatus('error');
+      return;
+    }
 
     console.log("--- Initiating Contract Call ---");
     console.log("RequestId (bytes32):", bytes32RequestId);
     console.log("TokenType:", selectedCrypto.tokenType);
     console.log("TokenAmount for Order:", tokenAmountForOrder.toString());
+    console.log("Formatted amount:", formatUnits(tokenAmountForOrder, selectedCrypto.decimals));
     console.log("Value (for ETH):", valueForEth.toString());
     console.log("Selected Crypto:", selectedCrypto.symbol);
     console.log("Needs Approval:", needsApproval);
     console.log("Current Allowance:", currentAllowance?.toString());
+    console.log("Crypto needed (float):", cryptoNeeded);
+    console.log("Price NGN:", priceNGN);
+    console.log("Amount NGN:", amountNGN);
     console.log("--------------------------------");
 
     // Reset previous transaction states
@@ -479,13 +530,19 @@ const getTokenAmountForOrder = () => {
         setTxStatus('waitingForApprovalSignature');
         
         try {
-          // Approve a large amount to avoid frequent approvals
-          const maxApproval = parseUnits('1000000', selectedCrypto.decimals); // 1M tokens
+          // Approve a reasonable amount to avoid frequent approvals
+          // Use a large enough amount but not too excessive
+          const approvalAmount = tokenAmountForOrder * BigInt(10); // 10x the needed amount
+          const maxReasonableApproval = parseUnits('100000', selectedCrypto.decimals); // 100k tokens max
+          const finalApprovalAmount = approvalAmount > maxReasonableApproval ? maxReasonableApproval : approvalAmount;
+          
+          console.log("Approving amount:", finalApprovalAmount.toString(), "formatted:", formatUnits(finalApprovalAmount, selectedCrypto.decimals));
+          
           writeApprove({
             address: selectedCrypto.contract as Hex,
             abi: ERC20_ABI,
             functionName: 'approve',
-            args: [CONTRACT_ADDRESS, maxApproval],
+            args: [CONTRACT_ADDRESS, finalApprovalAmount],
           });
         } catch (error: any) {
           console.error("Error sending approval transaction:", error);
@@ -499,6 +556,14 @@ const getTokenAmountForOrder = () => {
         // Sufficient allowance, proceed directly with main transaction
         try {
           setTxStatus('waitingForSignature');
+          console.log("Sending ERC20 transaction with params:", {
+            contractAddress: CONTRACT_ADDRESS,
+            requestId: bytes32RequestId,
+            tokenType: selectedCrypto.tokenType,
+            tokenAmount: tokenAmountForOrder.toString(),
+            formattedAmount: formatUnits(tokenAmountForOrder, selectedCrypto.decimals)
+          });
+          
           writeContract({
             address: CONTRACT_ADDRESS,
             abi: CONTRACT_ABI,
@@ -522,6 +587,15 @@ const getTokenAmountForOrder = () => {
       // Handle ETH - Direct payment without approval
       try {
         setTxStatus('waitingForSignature');
+        console.log("Sending ETH transaction with params:", {
+          contractAddress: CONTRACT_ADDRESS,
+          requestId: bytes32RequestId,
+          tokenType: selectedCrypto.tokenType,
+          tokenAmount: tokenAmountForOrder.toString(),
+          ethValue: valueForEth.toString(),
+          formattedEthValue: formatUnits(valueForEth, 18)
+        });
+        
         writeContract({
           address: CONTRACT_ADDRESS,
           abi: CONTRACT_ABI,
@@ -553,7 +627,7 @@ const getTokenAmountForOrder = () => {
     backendRequestSentRef.current = null;
   }, []);
 
-  const canPay = crypto && network && amount && amountNGN >= 100 && amountNGN <= 50000 && phone && phone.length >= 10 && priceNGN && requestId;
+  const canPay = crypto && network && amount && amountNGN >= 100 && amountNGN <= 50000 && phone && phone.length >= 10 && priceNGN && requestId && tokenAmountForOrder > 0;
 
   const isButtonDisabled = loading || !canPay ||
                            isApprovePending || isApprovalConfirming ||
