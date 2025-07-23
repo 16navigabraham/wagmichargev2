@@ -5,12 +5,14 @@ import { Button } from "@/components/ui/button"
 import { ArrowUpDown, Smartphone, Tv, Zap, Wifi, Plus } from "lucide-react"
 
 const actions = [
-	{ name: "Convert Crypto", icon: ArrowUpDown, href: "/convert", color: "from-blue-500 to-purple-600" },
 	{ name: "Buy Airtime", icon: Smartphone, href: "/airtime", color: "from-green-500 to-emerald-600" },
+	{ name: "Pay Internet Bills", icon: Wifi, href: "/internet", color: "from-purple-500 to-pink-600" },
 	{ name: "Pay TV Bills", icon: Tv, href: "/tv", color: "from-orange-500 to-red-600" },
-	{ name: "Electricity", icon: Zap, href: "/electricity", color: "from-yellow-500 to-orange-600" },
-	{ name: "Internet Bills", icon: Wifi, href: "/internet", color: "from-purple-500 to-pink-600" },
+	{ name: "Pay Electricity Bills", icon: Zap, href: "/electricity", color: "from-yellow-500 to-orange-600" },
+	{ name: "Convert Crypto", icon: ArrowUpDown, href: "/convert", color: "from-blue-500 to-purple-600" },
 	{ name: "More Services", icon: Plus, href: "/services", color: "from-gray-500 to-gray-600" },
+
+	
 ]
 
 export function QuickActions({ wallet }: { wallet: any }) {

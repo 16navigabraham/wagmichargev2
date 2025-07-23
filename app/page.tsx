@@ -1,24 +1,21 @@
-"use client"
+"use client";
 
-import { useEffect } from "react"
-import { useRouter } from "next/navigation"
-import { LandingPage } from "@/components/landing/landing-page"
-import { usePrivy } from "@privy-io/react-auth"
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { usePrivy } from "@privy-io/react-auth";
+import { LandingPage } from "@/components/landing/landing-page";
 
-export default function Landing() {
-  const { ready, authenticated, login, signup } = usePrivy()
-  const router = useRouter()
+export default function HomePage() {
+  const { ready, authenticated, login } = usePrivy();
+  const router = useRouter();
 
   useEffect(() => {
     if (ready && authenticated) {
-      router.replace("/dashboard")
+      router.replace("/dashboard");
     }
-  }, [ready, authenticated, router])
+  }, [ready, authenticated, router]);
 
-  return (
-    <LandingPage
-      onSignIn={login}
-      onSignUp={signup}
-    />
-  )
+  if (!ready) return null;
+
+  return <LandingPage onGetStarted={login} />;
 }

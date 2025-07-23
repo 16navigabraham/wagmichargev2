@@ -3,14 +3,13 @@
 import { MainLayout } from "@/components/layout/main-layout"
 import { PortfolioOverview } from "./portfolio-overview"
 import { QuickActions } from "./quick-actions"
-import { RecentTransactions } from "./recent-transactions"
+import RecentTransactions from "./recent-transactions"
 import { MarketData } from "./market-data"
-import { WalletConnection } from "./wallet-connection"
 import { usePrivy, useWallets } from "@privy-io/react-auth"
 
 export function Dashboard() {
   const { ready, authenticated, user } = usePrivy()
-  const { wallets, linkWallet, unlinkWallet } = useWallets()
+  const { wallets } = useWallets()
   const connectedWallet = wallets?.[0] // Assume first wallet is primary
 
   return (
@@ -28,14 +27,6 @@ export function Dashboard() {
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
           <div className="lg:col-span-3">
             <PortfolioOverview wallet={connectedWallet} />
-          </div>
-          <div>
-            <WalletConnection
-              wallets={wallets}
-              linkWallet={linkWallet}
-              unlinkWallet={unlinkWallet}
-              connectedWallet={connectedWallet}
-            />
           </div>
         </div>
 
