@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import * as htmlToImage from "html-to-image"
 import download from "downloadjs"
 import AuthGuard from "@/components/AuthGuard"
+import BackToDashboard from '@/components/BackToDashboard'
 
 interface Transaction {
   requestId: string
@@ -67,6 +68,7 @@ export default function HistoryPage() {
   return (
     <AuthGuard>
     <div className="container py-10">
+      <BackToDashboard />
       <h1 className="text-3xl font-bold mb-4">Transaction History</h1>
       <p className="text-muted-foreground mb-6">
         Here are your past transactions. Click on any to view the full receipt.
