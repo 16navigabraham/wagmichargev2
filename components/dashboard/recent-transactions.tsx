@@ -1,131 +1,135 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
+import { usePrivy, useWallets } from "@privy-io/react-auth"
+import { getUserHistory } from "@/lib/api"
+import Link from "next/link"
+import { TransactionReceiptModal } from "@/components/TransactionReceiptModal"
 import { Button } from "@/components/ui/button"
-import { ArrowUpRight, ArrowDownLeft, Clock, CheckCircle, XCircle, ExternalLink } from "lucide-react"
-import { getExplorerConfig } from "@/lib/explorer"
+import * as htmlToImage from 'html-to-image'
+import download from 'downloadjs'
 
-const statusConfig = {
-	completed: { icon: CheckCircle, color: "text-green-500", bg: "bg-green-500/10", label: "Completed" },
-	pending: { icon: Clock, color: "text-yellow-500", bg: "bg-yellow-500/10", label: "Pending" },
-	failed: { icon: XCircle, color: "text-red-500", bg: "bg-red-500/10", label: "Failed" },
+interface Transaction {
+  requestId: string
+  userAddress: string
+  transactionHash: string
+  serviceType: string
+  serviceID: string
+  variationCode?: string
+  customerIdentifier: string
+  amountNaira: number
+  cryptoUsed: number
+  cryptoSymbol: string
+  onChainStatus: string
+  vtpassStatus: string
+  vtpassResponse?: any
+  createdAt: string
 }
 
-async function fetchTransactions(address: string, chain: string) {
-	const apiKey = process.env.NEXT_PUBLIC_ETHERSCAN_API_KEY
-	const chainid = chain === "base" ? 8453 : 1 // default to Ethereum mainnet if not base
-	const apiUrl = "https://api.etherscan.io/v2/api"
-	const res = await fetch(
-		`${apiUrl}?chainid=${chainid}&module=account&action=txlist&address=${address}&sort=desc&apikey=${apiKey}`
-	)
-	const data = await res.json()
-	if (data.status === "1") {
-		return data.result.slice(0, 5)
-	}
-	return []
+interface Props {
+  wallet: { address: string } | null
 }
 
-export function RecentTransactions({ wallet }: { wallet: any }) {
-	const [transactions, setTransactions] = useState<any[]>([])
-	const [loading, setLoading] = useState(false)
+export default function RecentTransactions({ wallet }: Props) {
+  const { authenticated } = usePrivy()
+  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [loading, setLoading] = useState(false)
+  const [selectedOrder, setSelectedOrder] = useState<Transaction | null>(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
 
-	useEffect(() => {
-		if (!wallet?.address) return
-		setLoading(true)
-		fetchTransactions(wallet.address, wallet.chain).then((txs) => {
-			setTransactions(txs)
-			setLoading(false)
-		})
-	}, [wallet])
+  useEffect(() => {
+    const fetchHistory = async () => {
+      if (authenticated && wallet?.address) {
+        try {
+          setLoading(true)
+          const data = await getUserHistory(wallet.address)
+          setTransactions(data.orders.slice(0, 5))
+        } catch (err) {
+          console.error("Failed to fetch recent transactions:", err)
+        } finally {
+          setLoading(false)
+        }
+      }
+    }
 
-	const explorer = wallet?.chain ? getExplorerConfig(wallet.chain).explorer : "https://etherscan.io"
+    fetchHistory()
+  }, [wallet, authenticated])
 
-	return (
-		<Card>
-			<CardHeader>
-				<div className="flex items-center justify-between">
-					<div>
-						<CardTitle>Recent Transactions</CardTitle>
-						<CardDescription>Your latest wallet activity</CardDescription>
-					</div>
-					<Button variant="outline" size="sm" asChild>
-						<a
-							href={`${explorer}/address/${wallet?.address || ""}`}
-							target="_blank"
-							rel="noopener noreferrer"
-						>
-							View on Explorer
-							<ArrowUpRight className="ml-2 h-4 w-4" />
-						</a>
-					</Button>
-				</div>
-			</CardHeader>
-			<CardContent>
-				<div className="space-y-4">
-					{loading && <div>Loading...</div>}
-					{!loading && transactions.length === 0 && <div>No transactions found.</div>}
-					{transactions.map((tx) => {
-						const isOutgoing = tx.from?.toLowerCase() === wallet?.address?.toLowerCase()
-						const status =
-							tx.isError === "0"
-								? statusConfig.completed
-								: statusConfig.failed
-						const StatusIcon = status.icon
-						return (
-							<div
-								key={tx.hash}
-								className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors"
-							>
-								<div className="flex items-center space-x-3">
-									<div className="flex items-center space-x-1">
-										<div className="h-8 w-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center">
-											{isOutgoing ? (
-												<ArrowUpRight className="h-4 w-4 text-white" />
-											) : (
-												<ArrowDownLeft className="h-4 w-4 text-white" />
-											)}
-										</div>
-									</div>
-									<div>
-										<div className="font-medium">
-											{isOutgoing ? "Sent" : "Received"} {Number(tx.value) / 1e18} ETH
-										</div>
-										<div className="text-sm text-muted-foreground">
-											<a
-												href={`${explorer}/tx/${tx.hash}`}
-												target="_blank"
-												rel="noopener noreferrer"
-											>
-												{tx.hash.slice(0, 10)}...{" "}
-												<ExternalLink className="inline h-3 w-3" />
-											</a>
-										</div>
-									</div>
-								</div>
+  const openModal = (txn: Transaction) => {
+    setSelectedOrder(txn)
+    setIsModalOpen(true)
+  }
 
-								<div className="text-right space-y-1">
-									<div className="flex items-center space-x-2">
-										<Badge
-											variant="outline"
-											className={`${status.bg} ${status.color} border-0`}
-										>
-											<StatusIcon className="h-3 w-3 mr-1" />
-											{status.label}
-										</Badge>
-									</div>
-									<div className="text-sm text-muted-foreground flex items-center space-x-1">
-										<span>
-											{new Date(Number(tx.timeStamp) * 1000).toLocaleString()}
-										</span>
-									</div>
-								</div>
-							</div>
-						)
-					})}
-				</div>
-			</CardContent>
-		</Card>
-	)
+  const closeModal = () => {
+    setIsModalOpen(false)
+    setSelectedOrder(null)
+  }
+
+  const downloadAsImage = async () => {
+    const node = document.getElementById("printable-receipt")
+    if (!node) return
+
+    try {
+      const dataUrl = await htmlToImage.toPng(node)
+      if (selectedOrder)
+        download(dataUrl, `receipt-${selectedOrder.requestId}.png`)
+    } catch (error) {
+      console.error("Failed to generate image:", error)
+    }
+  }
+
+  return (
+    <div className="bg-white dark:bg-black border p-4 rounded-lg shadow-sm">
+      <h2 className="text-xl font-semibold mb-4">Recent Transactions</h2>
+      {loading && <p className="text-muted-foreground">Loading...</p>}
+      {!loading && transactions.length === 0 && (
+        <p className="text-muted-foreground">No recent transactions found.</p>
+      )}
+      <ul className="space-y-2">
+        {transactions.map((txn) => (
+          <li key={txn.requestId} className="text-sm">
+            <div className="flex justify-between items-center">
+              <div>
+                <span>
+                  {txn.serviceType.toUpperCase()} • ₦{txn.amountNaira} • {txn.cryptoUsed.toFixed(4)} {txn.cryptoSymbol}
+                </span>
+                <div className="text-muted-foreground text-xs">
+                  {new Date(txn.createdAt).toLocaleString()}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span
+                  className={`text-xs ${
+                    txn.vtpassStatus === "successful"
+                      ? "text-green-600"
+                      : txn.vtpassStatus === "pending"
+                      ? "text-yellow-600"
+                      : "text-red-600"
+                  }`}
+                >
+                  {txn.vtpassStatus}
+                </span>
+                <Button size="sm" variant="outline" onClick={() => openModal(txn)}>
+                  Print Receipt
+                </Button>
+              </div>
+            </div>
+          </li>
+        ))}
+      </ul>
+      <div className="text-right mt-4">
+        <Link href="/history" className="text-blue-500 hover:underline text-sm">
+          View All →
+        </Link>
+      </div>
+
+      {selectedOrder && (
+        <TransactionReceiptModal
+          isOpen={isModalOpen}
+          onClose={closeModal}
+          order={selectedOrder}
+        />
+      )}
+    </div>
+  )
 }

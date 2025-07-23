@@ -1,20 +1,18 @@
-// components/TransactionStatusModal.tsx
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Loader2, CheckCircle, XCircle, Clock, KeyRound } from "lucide-react"; // Added KeyRound icon for approval
+import { Loader2, CheckCircle, XCircle, Clock, KeyRound, Printer } from "lucide-react";
 import Link from "next/link";
 import { Hex } from 'viem';
 
-// Extend the txStatus types to include backend processing states AND approval states
 interface TransactionStatusModalProps {
   isOpen: boolean;
   onClose: () => void;
   txStatus: 'idle' | 'waitingForSignature' | 'sending' | 'confirming' | 'success' | 'error' |
-            'waitingForApprovalSignature' | 'approving' | 'approvalSuccess' | 'approvalError' | // New approval states
+            'waitingForApprovalSignature' | 'approving' | 'approvalSuccess' | 'approvalError' |
             'backendProcessing' | 'backendSuccess' | 'backendError';
-  transactionHash?: Hex; // This will be used for both main transaction and approval transaction hash
+  transactionHash?: Hex;
   errorMessage?: string | null;
-  explorerUrl?: string; // Base explorer URL (e.g., "https://basescan.org")
+  explorerUrl?: string;
   backendMessage?: string | null;
   requestId?: string;
 }
@@ -25,19 +23,16 @@ export function TransactionStatusModal({
   txStatus,
   transactionHash,
   errorMessage,
-  explorerUrl = "https://basescan.org", // Default to BaseScan
+  explorerUrl = "https://basescan.org",
   backendMessage,
   requestId
 }: TransactionStatusModalProps) {
   const isPendingBlockchain = txStatus === 'waitingForSignature' || txStatus === 'sending' || txStatus === 'confirming';
   const isSuccessBlockchainConfirmed = txStatus === 'success';
   const isErrorBlockchain = txStatus === 'error';
-
   const isBackendProcessing = txStatus === 'backendProcessing';
   const isBackendSuccess = txStatus === 'backendSuccess';
   const isBackendError = txStatus === 'backendError';
-
-  // New flags for approval status
   const isWaitingForApprovalSignature = txStatus === 'waitingForApprovalSignature';
   const isApproving = txStatus === 'approving';
   const isApprovalSuccess = txStatus === 'approvalSuccess';
@@ -68,9 +63,7 @@ export function TransactionStatusModal({
     description = errorMessage || "The token approval transaction could not be completed.";
     icon = <XCircle className="w-12 h-12 text-red-500" />;
     iconColor = "text-red-500";
-  }
-  // Existing states for main transaction and backend processing
-  else if (txStatus === 'waitingForSignature') {
+  } else if (txStatus === 'waitingForSignature') {
     title = "Awaiting Wallet Signature";
     description = "Please confirm the transaction in your wallet.";
     icon = <Loader2 className="w-12 h-12 animate-spin text-blue-500" />;
@@ -114,28 +107,32 @@ export function TransactionStatusModal({
 
   const explorerLink = transactionHash ? `${explorerUrl}/tx/${transactionHash}` : '#';
 
+  const printReceipt = () => {
+    const content = document.getElementById("printable-receipt");
+    if (!content) return;
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+    printWindow.document.write(`
+      <html><head><title>Transaction Receipt</title></head><body>${content.innerHTML}</body></html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[425px] p-6 text-center">
         <DialogHeader className="flex flex-col items-center">
-          <div className={`mb-4 ${iconColor}`}>
-            {icon}
-          </div>
+          <div className={`mb-4 ${iconColor}`}>{icon}</div>
           <DialogTitle className="text-2xl font-bold">{title}</DialogTitle>
-          <DialogDescription className="text-center text-muted-foreground mt-2">
-            {description}
-          </DialogDescription>
+          <DialogDescription className="text-center text-muted-foreground mt-2">{description}</DialogDescription>
         </DialogHeader>
 
         {transactionHash && (
           <div className="mt-4 text-sm break-words">
             <p className="font-medium">Transaction Hash:</p>
-            <Link
-              href={explorerLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-600 hover:underline"
-            >
+            <Link href={explorerLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
               {transactionHash.substring(0, 6)}...{transactionHash.substring(transactionHash.length - 4)}
             </Link>
           </div>
@@ -147,7 +144,21 @@ export function TransactionStatusModal({
           </div>
         )}
 
-        <DialogFooter className="mt-6 flex justify-center">
+        <div id="printable-receipt" style={{ display: 'none' }}>
+          <h2 style={{ fontWeight: 'bold', fontSize: '1.2rem' }}>Transaction Receipt</h2>
+          <p><strong>Status:</strong> {txStatus}</p>
+          <p><strong>Request ID:</strong> {requestId}</p>
+          <p><strong>Transaction Hash:</strong> {transactionHash}</p>
+          <p><strong>Explorer:</strong> {explorerLink}</p>
+          <p><strong>Message:</strong> {backendMessage || errorMessage || "N/A"}</p>
+        </div>
+
+        <DialogFooter className="mt-6 flex justify-center gap-4">
+          {isBackendSuccess && (
+            <Button variant="secondary" onClick={printReceipt}>
+              <Printer className="w-4 h-4 mr-2" /> Print Receipt
+            </Button>
+          )}
           <Button onClick={onClose}>
             {isBackendSuccess || isBackendError || isErrorBlockchain || isApprovalError ? "Done" : "Close"}
           </Button>

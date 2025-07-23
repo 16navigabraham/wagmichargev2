@@ -14,7 +14,7 @@ import { Loader2, AlertCircle, CheckCircle } from "lucide-react" // Added for ve
 
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from "@/config/contract";
 import { ERC20_ABI } from "@/config/erc20Abi"; // Import ERC20 ABI
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, useSimulateContract } from 'wagmi'; // Added useSimulateContract
+import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'; // Removed useSimulateContract
 import { usePrivy } from '@privy-io/react-auth';
 import { parseEther, parseUnits, toBytes, toHex, Hex } from 'viem';
 import { toast } from 'sonner';
@@ -150,21 +150,7 @@ export default function InternetPage() {
     // For approval, use the maximum uint256 value for unlimited approval.
     const unlimitedApprovalAmount = parseUnits('115792089237316195423570985008687907853269984665640564039457584007913129639935', 0);
 
-    // Wagmi Hooks for TOKEN APPROVAL Simulation
-    const { data: simulateApproveData, error: simulateApproveError, isLoading: isSimulatingApprove } = useSimulateContract({
-        address: selectedCrypto?.contract as Hex,
-        abi: ERC20_ABI,
-        functionName: 'approve',
-        args: [CONTRACT_ADDRESS, unlimitedApprovalAmount],
-        query: {
-            enabled: Boolean(selectedCrypto?.tokenType !== 0 && selectedCrypto?.contract && address && isConnected && isOnBaseChain && cryptoNeeded > 0), // Only enabled if ERC20 and form is ready
-            staleTime: 5000,
-            gcTime: 60000,
-            refetchOnWindowFocus: false,
-        },
-    });
-
-    // Wagmi Hooks for TOKEN APPROVAL Transaction
+    // Wagmi Hooks for TOKEN APPROVAL Transaction (removed simulation)
     const { writeContract: writeApprove, data: approveHash, isPending: isApprovePending, isError: isApproveError, error: approveWriteError } = useWriteContract();
 
     const { isLoading: isApprovalConfirming, isSuccess: isApprovalTxConfirmed, isError: isApprovalConfirmError, error: approveConfirmError } = useWaitForTransactionReceipt({
@@ -175,26 +161,7 @@ export default function InternetPage() {
         },
     });
 
-    // Wagmi Hooks for MAIN PAYMENT Simulation
-    const { data: simulateWriteData, error: simulateWriteError, isLoading: isSimulatingWrite } = useSimulateContract({
-        address: CONTRACT_ADDRESS,
-        abi: CONTRACT_ABI,
-        functionName: 'createOrder',
-        args: [
-            bytes32RequestId,
-            selectedCrypto?.tokenType as any, // Cast as any for now, ensure selectedCrypto is defined
-            tokenAmountForOrder,
-        ],
-        value: valueForEth,
-        query: {
-            enabled: Boolean(selectedCrypto && requestId && cryptoNeeded > 0 && address && isConnected && isOnBaseChain && (selectedCrypto.tokenType === 0 || isApprovalTxConfirmed)), // Only simulate if ETH or after approval
-            staleTime: 5000,
-            gcTime: 60000,
-            refetchOnWindowFocus: false,
-        },
-    });
-
-    // Wagmi Hooks for MAIN PAYMENT Transaction
+    // Wagmi Hooks for MAIN PAYMENT Transaction (removed simulation)
     const { writeContract, data: hash, isPending: isWritePending, isError: isWriteError, error: writeError } = useWriteContract();
 
     const { isLoading: isConfirming, isSuccess: isConfirmed, isError: isConfirmError, error: confirmError } = useWaitForTransactionReceipt({
@@ -242,7 +209,7 @@ export default function InternetPage() {
         }
     }, [crypto, provider, plan, customerID, requestId])
 
-    // --- START OF MODIFICATIONS: handlePostTransaction with useCallback ---
+    // handlePostTransaction with useCallback
    const handlePostTransaction = useCallback(async (transactionHash: Hex) => {
   if (backendRequestSentRef.current === transactionHash) {
     console.log(`Backend request already sent for hash: ${transactionHash}. Skipping duplicate.`);
@@ -297,9 +264,7 @@ export default function InternetPage() {
     toast.error(fullMessage, { id: 'backend-status' });
   }
 }, [requestId, customerID, provider, plan, amountNGN, cryptoNeeded, selectedCrypto?.symbol, selectedCrypto?.decimals, address]);
-    // --- END OF MODIFICATIONS ---
 
-    // --- START OF MODIFICATIONS: Handle transaction status feedback and modal display ---
     // Effect to monitor approval transaction status
     useEffect(() => {
         if (!showTransactionModal) return; // Only run if modal is open
@@ -325,16 +290,15 @@ export default function InternetPage() {
             setApprovalError(null);
             toast.success("Token approved for unlimited spending! Proceeding with payment...", { id: 'approval-status' });
             console.log("Approval: Blockchain confirmed! Initiating main transaction...");
-            // The main transaction will be initiated by the simulateWriteData hook re-enabling
-            // and handlePurchase being called after its data is ready.
+            // The main transaction will be initiated automatically after approval
         } else if (isApproveError || isApprovalConfirmError) {
             setTxStatus('approvalError');
-            const errorMsg = (approveWriteError?.message || approveConfirmError?.message || simulateApproveError?.message || "Token approval failed").split('\n')[0];
+            const errorMsg = (approveWriteError?.message || approveConfirmError?.message || "Token approval failed").split('\n')[0];
             setApprovalError(errorMsg);
             setTransactionError(errorMsg);
             toast.error(`Approval failed: ${errorMsg}`, { id: 'approval-status' });
         }
-    }, [isApprovePending, approveHash, isApprovalTxConfirmed, isApprovalConfirming, isApproveError, isApprovalConfirmError, approveWriteError, approveConfirmError, simulateApproveError, showTransactionModal]);
+    }, [isApprovePending, approveHash, isApprovalTxConfirmed, isApprovalConfirming, isApproveError, isApprovalConfirmError, approveWriteError, approveConfirmError, showTransactionModal]);
 
     // Effect to monitor main transaction status
     useEffect(() => {
@@ -359,7 +323,7 @@ export default function InternetPage() {
             setTransactionHashForModal(hash);
             toast.loading("Transaction confirming on blockchain...", { id: 'tx-status' });
         } else if (isConfirmed) {
-            // FIX 2: Add a guard to ensure handlePostTransaction is called only once per confirmed hash
+            // Add a guard to ensure handlePostTransaction is called only once per confirmed hash
             if (txStatus !== 'backendProcessing' && txStatus !== 'backendSuccess' && txStatus !== 'backendError') {
                 setTxStatus('success'); // Mark blockchain part as success
                 setTransactionHashForModal(hash);
@@ -370,7 +334,7 @@ export default function InternetPage() {
             }
         } else if (isWriteError || isConfirmError) {
             setTxStatus('error');
-            const errorMsg = (writeError?.message?.split('\n')[0] || confirmError?.message?.split('\n')[0] || simulateWriteError?.message?.split('\n')[0] || "Wallet transaction failed or was rejected.").split('\n')[0];
+            const errorMsg = (writeError?.message?.split('\n')[0] || confirmError?.message?.split('\n')[0] || "Wallet transaction failed or was rejected.").split('\n')[0];
             setTransactionError(errorMsg);
             setTransactionHashForModal(hash);
             toast.error(`Transaction failed: ${errorMsg}`, { id: 'tx-status' });
@@ -383,8 +347,7 @@ export default function InternetPage() {
                 setTransactionHashForModal(undefined);
             }
         }
-    }, [isWritePending, hash, isConfirming, isConfirmed, isWriteError, isConfirmError, writeError, confirmError, txStatus, handlePostTransaction, simulateWriteData, simulateWriteError, showTransactionModal]); // Added simulateWriteData to dependencies
-    // --- END OF MODIFICATIONS ---
+    }, [isWritePending, hash, isConfirming, isConfirmed, isWriteError, isConfirmError, writeError, confirmError, txStatus, handlePostTransaction, showTransactionModal]);
 
     const ensureWalletConnected = async () => {
         if (!authenticated) {
@@ -406,7 +369,7 @@ export default function InternetPage() {
     };
 
     const handlePurchase = async () => {
-        // FIX: Show modal immediately on purchase attempt (ONLY place to set true)
+        // Show modal immediately on purchase attempt
         setShowTransactionModal(true);
         setTransactionError(null);
         setBackendMessage(null);
@@ -459,34 +422,26 @@ export default function InternetPage() {
         console.log("Selected Crypto Decimals:", selectedCrypto.decimals);
         console.log("--------------------------------");
 
-
-        // --- START OF MODIFICATIONS: Token Approval Logic (Per-Transaction) ---
+        // Token Approval Logic (Per-Transaction) - No Simulation
         if (selectedCrypto.tokenType !== 0) { // If it's an ERC20 token (USDT or USDC)
-            if (simulateApproveError) {
-                const errorMsg = simulateApproveError.message?.split('\n')[0] || "Token approval simulation failed.";
-                setApprovalError(errorMsg);
-                setTransactionError(errorMsg);
+            if (!selectedCrypto.contract) {
+                setApprovalError("Selected crypto has no contract address for approval.");
+                setTransactionError("Selected crypto has no contract address for approval.");
                 setTxStatus('approvalError');
-                toast.error(`Approval simulation failed: ${errorMsg}`);
+                toast.error("Selected crypto has no contract address for approval.");
                 return;
             }
-            if (!simulateApproveData?.request) {
-                setApprovalError("Approval simulation data not ready. Please try again.");
-                setTransactionError("Approval simulation data not ready. Please try again.");
-                setTxStatus('approvalError');
-                toast.error("Approval simulation data not ready. Please try again.");
-                return;
-            }
+            
             toast.info("Approving token spend for this transaction...");
             setTxStatus('waitingForApprovalSignature'); // Set initial status for approval
+            
             try {
-                if (selectedCrypto.contract) { // Ensure contract address exists for ERC20
-                    writeApprove(simulateApproveData.request);
-                } else {
-                    toast.error("Selected crypto has no contract address for approval.");
-                    setTxStatus('error');
-                    return;
-                }
+                writeApprove({
+                    address: selectedCrypto.contract as Hex,
+                    abi: ERC20_ABI,
+                    functionName: 'approve',
+                    args: [CONTRACT_ADDRESS, unlimitedApprovalAmount],
+                });
                 return; // After initiating approval, stop here. The approval useEffect will handle next steps.
             } catch (error: any) {
                 console.error("Error sending approval transaction:", error);
@@ -499,22 +454,19 @@ export default function InternetPage() {
             }
         } else {
             // If ETH, no approval needed, proceed directly with main transaction
-            if (simulateWriteError) {
-                const errorMsg = simulateWriteError.message?.split('\n')[0] || "Transaction simulation failed.";
-                setTransactionError(errorMsg);
-                setTxStatus('error');
-                toast.error(`Payment simulation failed: ${errorMsg}`);
-                return;
-            }
-            if (!simulateWriteData?.request) {
-                setTransactionError("Payment simulation data not ready. Please try again.");
-                setTxStatus('error');
-                toast.error("Payment simulation data not ready. Please try again.");
-                return;
-            }
             try {
                 setTxStatus('waitingForSignature'); // Set status for main transaction signature
-                writeContract(simulateWriteData.request);
+                writeContract({
+                    address: CONTRACT_ADDRESS,
+                    abi: CONTRACT_ABI,
+                    functionName: 'createOrder',
+                    args: [
+                        bytes32RequestId,
+                        selectedCrypto.tokenType as any,
+                        tokenAmountForOrder,
+                    ],
+                    value: valueForEth,
+                });
             } catch (error: any) {
                 console.error("Error sending main transaction:", error);
                 const errorMsg = error.message || "Failed to send transaction.";
@@ -523,10 +475,41 @@ export default function InternetPage() {
                 toast.error(errorMsg);
             }
         }
-        // --- END OF MODIFICATIONS ---
     };
 
-    // FIX: Wrapped handleCloseModal in useCallback
+    // Auto-initiate main transaction after approval is confirmed
+    useEffect(() => {
+        if (isApprovalTxConfirmed && selectedCrypto && selectedCrypto.tokenType !== 0 && showTransactionModal) {
+            // Slight delay to allow UI to update
+            const timer = setTimeout(() => {
+                try {
+                    setTxStatus('waitingForSignature');
+                    toast.info("Starting payment transaction...");
+                    writeContract({
+                        address: CONTRACT_ADDRESS,
+                        abi: CONTRACT_ABI,
+                        functionName: 'createOrder',
+                        args: [
+                            bytes32RequestId,
+                            selectedCrypto.tokenType as any,
+                            tokenAmountForOrder,
+                        ],
+                        value: valueForEth,
+                    });
+                } catch (error: any) {
+                    console.error("Error sending main transaction after approval:", error);
+                    const errorMsg = error.message || "Failed to send payment transaction.";
+                    setTransactionError(errorMsg);
+                    setTxStatus('error');
+                    toast.error(errorMsg);
+                }
+            }, 1000);
+
+            return () => clearTimeout(timer);
+        }
+    }, [isApprovalTxConfirmed, selectedCrypto, showTransactionModal, writeContract, bytes32RequestId, tokenAmountForOrder, valueForEth]);
+
+    // Wrapped handleCloseModal in useCallback
     const handleCloseModal = useCallback(() => {
         setShowTransactionModal(false);
         setTxStatus('idle'); // Reset status to idle when modal closes
@@ -540,12 +523,10 @@ export default function InternetPage() {
     const providersToShow = availableProviders.length > 0 ? availableProviders : [];
 
     const isFormValid = Boolean(crypto && provider && plan && customerID && requestId && cryptoNeeded > 0);
-    // --- START OF MODIFICATIONS: Updated isButtonDisabled logic ---
+    // Updated isButtonDisabled logic - removed simulation checks
     const isButtonDisabled = loading || loadingPlans || isWritePending || isConfirming || txStatus === 'backendProcessing' || !isFormValid ||
-                             isApprovePending || isApprovalConfirming || isSimulatingApprove || isSimulatingWrite || // Disable during simulation
-                             simulateApproveError || simulateWriteError || // Disable if simulation fails
+                             isApprovePending || isApprovalConfirming || // Removed simulation states
                              !isOnBaseChain || isSwitchingChain; // Disable if not on Base or switching
-    // --- END OF MODIFICATIONS ---
 
     return (
         <AuthGuard>
@@ -670,8 +651,6 @@ export default function InternetPage() {
                         >
                             {isSwitchingChain ? "Switching Network..." :
                             !isOnBaseChain ? "Switch to Base Network" :
-                            isSimulatingApprove || isSimulatingWrite ? "Simulating Transaction..." :
-                            simulateApproveError || simulateWriteError ? "Simulation Failed" :
                             isApprovePending ? "Awaiting Approval Signature..." :
                             isApprovalConfirming ? "Approving Token..." :
                             txStatus === 'waitingForSignature' ? "Awaiting Payment Signature..." :
@@ -693,7 +672,7 @@ export default function InternetPage() {
                 onClose={handleCloseModal}
                 txStatus={txStatus}
                 transactionHash={transactionHashForModal}
-                errorMessage={transactionError || approvalError || simulateApproveError?.message || simulateWriteError?.message}
+                errorMessage={transactionError || approvalError || backendMessage}
                 backendMessage={backendMessage}
                 requestId={requestId}
             />

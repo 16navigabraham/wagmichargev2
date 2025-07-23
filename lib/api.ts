@@ -115,3 +115,10 @@ export const submitOrder = async (data: {
 
   return await res.json();
 };
+
+export async function getUserHistory(userAddress: string) {
+  const res = await fetch(`/api/history?userAddress=${userAddress}`);
+  if (!res.ok) throw new Error("Failed to fetch history");
+  return await res.json();
+}
+

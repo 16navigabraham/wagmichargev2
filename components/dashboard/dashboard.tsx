@@ -3,7 +3,7 @@
 import { MainLayout } from "@/components/layout/main-layout"
 import { PortfolioOverview } from "./portfolio-overview"
 import { QuickActions } from "./quick-actions"
-import { RecentTransactions } from "./recent-transactions"
+import RecentTransactions from "./recent-transactions"
 import { MarketData } from "./market-data"
 import { usePrivy, useWallets } from "@privy-io/react-auth"
 

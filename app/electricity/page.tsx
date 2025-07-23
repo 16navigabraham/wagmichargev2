@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input"
 
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from "@/config/contract";
 import { ERC20_ABI } from "@/config/erc20Abi"; // Import ERC20 ABI
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, useSimulateContract } from 'wagmi'; // Added useSimulateContract
+import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'; // Removed useSimulateContract
 import { usePrivy } from '@privy-io/react-auth';
 import { parseEther, parseUnits, toBytes, toHex, Hex } from 'viem';
 import { toast } from 'sonner';
@@ -222,21 +222,7 @@ export default function ElectricityPage() {
   // For approval, use the maximum uint256 value for unlimited approval.
   const unlimitedApprovalAmount = parseUnits('115792089237316195423570985008687907853269984665640564039457584007913129639935', 0);
 
-  // Wagmi Hooks for TOKEN APPROVAL Simulation
-  const { data: simulateApproveData, error: simulateApproveError, isLoading: isSimulatingApprove } = useSimulateContract({
-      address: selectedCrypto?.contract as Hex,
-      abi: ERC20_ABI,
-      functionName: 'approve',
-      args: [CONTRACT_ADDRESS, unlimitedApprovalAmount],
-      query: {
-          enabled: Boolean(selectedCrypto?.tokenType !== 0 && selectedCrypto?.contract && address && isConnected && isOnBaseChain && cryptoNeeded > 0), // Only enabled if ERC20 and form is ready
-          staleTime: 5000,
-          gcTime: 60000,
-          refetchOnWindowFocus: false,
-      },
-  });
-
-  // Wagmi Hooks for TOKEN APPROVAL Transaction
+  // Wagmi Hooks for TOKEN APPROVAL Transaction (no simulation)
   const { writeContract: writeApprove, data: approveHash, isPending: isApprovePending, isError: isApproveError, error: approveWriteError } = useWriteContract();
 
   const { isLoading: isApprovalConfirming, isSuccess: isApprovalTxConfirmed, isError: isApprovalConfirmError, error: approveConfirmError } = useWaitForTransactionReceipt({
@@ -247,26 +233,7 @@ export default function ElectricityPage() {
       },
   });
 
-  // Wagmi Hooks for MAIN PAYMENT Simulation
-  const { data: simulateWriteData, error: simulateWriteError, isLoading: isSimulatingWrite } = useSimulateContract({
-      address: CONTRACT_ADDRESS,
-      abi: CONTRACT_ABI,
-      functionName: 'createOrder',
-      args: [
-          bytes32RequestId,
-          selectedCrypto?.tokenType as any, // Cast as any for now, ensure selectedCrypto is defined
-          tokenAmountForOrder,
-      ],
-      value: valueForEth,
-      query: {
-          enabled: Boolean(selectedCrypto && requestId && cryptoNeeded > 0 && address && isConnected && isOnBaseChain && (selectedCrypto.tokenType === 0 || isApprovalTxConfirmed)), // Only simulate if ETH or after approval
-          staleTime: 5000,
-          gcTime: 60000,
-          refetchOnWindowFocus: false,
-      },
-  });
-
-  // Wagmi Hooks for MAIN PAYMENT Transaction
+  // Wagmi Hooks for MAIN PAYMENT Transaction (no simulation)
   const { writeContract, data: hash, isPending: isWritePending, isError: isWriteError, error: writeError } = useWriteContract();
 
   const { isLoading: isConfirming, isSuccess: isConfirmed, isError: isConfirmError, error: confirmError } = useWaitForTransactionReceipt({
@@ -368,12 +335,12 @@ export default function ElectricityPage() {
         // and handlePurchase being called after its data is ready.
     } else if (isApproveError || isApprovalConfirmError) {
         setTxStatus('approvalError');
-        const errorMsg = (approveWriteError?.message || approveConfirmError?.message || simulateApproveError?.message || "Token approval failed").split('\n')[0];
+        const errorMsg = (approveWriteError?.message || approveConfirmError?.message || "Token approval failed").split('\n')[0];
         setApprovalError(errorMsg);
         setTransactionError(errorMsg); // Use main error state for modal display
         toast.error(`Approval failed: ${errorMsg}`, { id: 'approval-status' });
     }
-  }, [isApprovePending, approveHash, isApprovalTxConfirmed, isApprovalConfirming, isApproveError, isApprovalConfirmError, approveWriteError, approveConfirmError, simulateApproveError, showTransactionModal]);
+  }, [isApprovePending, approveHash, isApprovalTxConfirmed, isApprovalConfirming, isApproveError, isApprovalConfirmError, approveWriteError, approveConfirmError, showTransactionModal]);
 
   // Effect to monitor main transaction status
   useEffect(() => {
@@ -386,7 +353,7 @@ export default function ElectricityPage() {
     // Handle immediate writeContract errors (e.g., user rejected, simulation failed)
     if (isWriteError) {
         setTxStatus('error');
-        const errorMsg = writeError?.message?.split('\n')[0] || simulateWriteError?.message?.split('\n')[0] || "Wallet transaction failed or was rejected.";
+        const errorMsg = writeError?.message?.split('\n')[0] || "Wallet transaction failed or was rejected.";
         setTransactionError(errorMsg);
         toast.error(`Transaction failed: ${errorMsg}`, { id: 'tx-status' });
         return; // Exit early if there's a write error
@@ -432,7 +399,7 @@ export default function ElectricityPage() {
             setTransactionHashForModal(undefined);
         }
     }
-  }, [isWritePending, hash, isConfirming, isConfirmed, isWriteError, isConfirmError, writeError, confirmError, txStatus, handlePostTransaction, simulateWriteError, showTransactionModal]);
+  }, [isWritePending, hash, isConfirming, isConfirmed, isWriteError, isConfirmError, writeError, confirmError, txStatus, handlePostTransaction, showTransactionModal]);
 
   const ensureWalletConnected = async () => {
     if (!authenticated) {
@@ -509,31 +476,21 @@ export default function ElectricityPage() {
     console.log("--------------------------------");
 
     if (selectedCrypto.tokenType !== 0) { // If it's an ERC20 token (USDT or USDC)
-        if (simulateApproveError) {
-            const errorMsg = simulateApproveError.message?.split('\n')[0] || "Token approval simulation failed.";
-            setApprovalError(errorMsg);
-            setTransactionError(errorMsg);
-            setTxStatus('approvalError');
-            toast.error(`Approval simulation failed: ${errorMsg}`);
+        if (!selectedCrypto.contract) {
+            toast.error("Selected crypto has no contract address for approval.");
+            setTxStatus('error');
             return;
         }
-        if (!simulateApproveData?.request) {
-            setApprovalError("Approval simulation data not ready. Please try again.");
-            setTransactionError("Approval simulation data not ready. Please try again.");
-            setTxStatus('approvalError');
-            toast.error("Approval simulation data not ready. Please try again.");
-            return;
-        }
+        
         toast.info("Approving token spend for this transaction...");
         setTxStatus('waitingForApprovalSignature'); // Set initial status for approval
         try {
-            if (selectedCrypto.contract) { // Ensure contract address exists for ERC20
-                writeApprove(simulateApproveData.request);
-            } else {
-                toast.error("Selected crypto has no contract address for approval.");
-                setTxStatus('error');
-                return;
-            }
+            writeApprove({
+                address: selectedCrypto.contract as Hex,
+                abi: ERC20_ABI,
+                functionName: 'approve',
+                args: [CONTRACT_ADDRESS, unlimitedApprovalAmount],
+            });
             return; // After initiating approval, stop here. The approval useEffect will handle next steps.
         } catch (error: any) {
             console.error("Error sending approval transaction:", error);
@@ -546,22 +503,19 @@ export default function ElectricityPage() {
         }
     } else {
         // If ETH, no approval needed, proceed directly with main transaction
-        if (simulateWriteError) {
-            const errorMsg = simulateWriteError.message?.split('\n')[0] || "Transaction simulation failed.";
-            setTransactionError(errorMsg);
-            setTxStatus('error');
-            toast.error(`Payment simulation failed: ${errorMsg}`);
-            return;
-        }
-        if (!simulateWriteData?.request) {
-            setTransactionError("Payment simulation data not ready. Please try again.");
-            setTxStatus('error');
-            toast.error("Payment simulation data not ready. Please try again.");
-            return;
-        }
         try {
           setTxStatus('waitingForSignature'); // Set status for main transaction signature
-          writeContract(simulateWriteData.request);
+          writeContract({
+              address: CONTRACT_ADDRESS,
+              abi: CONTRACT_ABI,
+              functionName: 'createOrder',
+              args: [
+                  bytes32RequestId,
+                  selectedCrypto.tokenType as any,
+                  tokenAmountForOrder,
+              ],
+              value: valueForEth,
+          });
         } catch (error: any) {
           console.error("Error sending main transaction:", error);
           const errorMsg = error.message || "Failed to send transaction.";
@@ -596,13 +550,11 @@ export default function ElectricityPage() {
     customerName &&
     verificationSuccess;
 
-  // --- START OF MODIFICATIONS: Updated isButtonDisabled logic ---
+  // Updated isButtonDisabled logic - removed simulation checks
   const isButtonDisabled = loading || loadingPlans || verifyingMeter ||
                            isWritePending || isConfirming || txStatus === 'backendProcessing' || !canPay ||
-                           isApprovePending || isApprovalConfirming || isSimulatingApprove || isSimulatingWrite || // Disable during simulation
-                           simulateApproveError || simulateWriteError || // Disable if simulation fails
+                           isApprovePending || isApprovalConfirming ||
                            !isOnBaseChain || isSwitchingChain; // Disable if not on Base or switching
-  // --- END OF MODIFICATIONS ---
 
   if (loading) return <div className="p-10 text-center">Loading…</div>
 
@@ -792,8 +744,6 @@ export default function ElectricityPage() {
             >
                 {isSwitchingChain ? "Switching Network..." :
                 !isOnBaseChain ? "Switch to Base Network" :
-                isSimulatingApprove || isSimulatingWrite ? "Simulating Transaction..." :
-                simulateApproveError || simulateWriteError ? "Simulation Failed" :
                 isApprovePending ? "Awaiting Approval Signature..." :
                 isApprovalConfirming ? "Approving Token..." :
                 txStatus === 'waitingForSignature' ? "Awaiting Payment Signature..." :
@@ -815,7 +765,7 @@ export default function ElectricityPage() {
         onClose={handleCloseModal}
         txStatus={txStatus}
         transactionHash={transactionHashForModal}
-        errorMessage={transactionError || approvalError || simulateApproveError?.message || simulateWriteError?.message}
+        errorMessage={transactionError || approvalError }
         backendMessage={backendMessage}
         requestId={requestId}
       />
