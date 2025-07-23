@@ -20,12 +20,14 @@ import { toast } from 'sonner';
 import { TransactionStatusModal } from "@/components/TransactionStatusModal";
 import { useBaseNetworkEnforcer } from '@/hooks/useBaseNetworkEnforcer';
 
+import { buyAirtime } from "@/lib/api";
+
 // Base chain contract addresses (ensure these are correct for Base Mainnet)
 const USDT_CONTRACT_ADDRESS = "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2";
 const USDC_CONTRACT_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 
 // Backend API URL - Update this to your actual backend URL
-const BACKEND_API_URL = "https://wagmicharge-backend.onrender.com";
+// const BACKEND_API_URL = "https://wagmicharge-backend.onrender.com";
 
 const CRYPTOS = [
   { symbol: "ETH", name: "Ethereum", coingeckoId: "ethereum", tokenType: 0, decimals: 18, contract: undefined },
@@ -224,80 +226,38 @@ export default function AirtimePage() {
   backendRequestSentRef.current = transactionHash;
   setTxStatus('backendProcessing');
   setBackendMessage("Processing your order...");
-  toast.loading("Processing order with VTpass...", { id: 'backend-status' });
+  toast.loading("Processing order with our service provider...", { id: 'backend-status' });
 
   try {
-    const requestPayload = {
-      requestId,
+    const response = await buyAirtime({
+      requestId: requestId!,
       phone,
       serviceID: network,
       amount: amountNGN,
       cryptoUsed: parseFloat(cryptoNeeded.toFixed(selectedCrypto?.decimals || 6)),
-      cryptoSymbol: selectedCrypto?.symbol,
+      cryptoSymbol: selectedCrypto?.symbol!,
       transactionHash,
-      userAddress: address
-    };
-
-    console.log('Sending backend request:', JSON.stringify(requestPayload, null, 2));
-
-    const backendResponse = await fetch(`${BACKEND_API_URL}/api/airtime`, {
-      method: "POST",
-      headers: { 
-        "Content-Type": "application/json",
-        "Accept": "application/json"
-      },
-      body: JSON.stringify(requestPayload),
+      userAddress: address!
     });
 
-    console.log('Backend response status:', backendResponse.status);
-    console.log('Backend response headers:', Object.fromEntries(backendResponse.headers.entries()));
-
-    const responseText = await backendResponse.text();
-    console.log('Backend response text:', responseText);
-
-    let responseData;
-    try {
-      responseData = JSON.parse(responseText);
-    } catch (parseError) {
-      console.error('Failed to parse backend response:', responseText);
-      
-      // Check if the response looks like HTML (common when there's an unhandled error)
-      if (responseText.includes('<html>') || responseText.includes('<!DOCTYPE')) {
-        throw new Error('Server returned HTML instead of JSON. This usually indicates an unhandled server error.');
-      }
-      
-      throw new Error(`Invalid JSON response from server: ${responseText.substring(0, 200)}...`);
-    }
-
-    if (!backendResponse.ok) {
-      console.error('Backend error response:', responseData);
-      
-      const errorMessage = responseData.error || responseData.message || 
-        `HTTP ${backendResponse.status}: ${backendResponse.statusText}`;
-      
-      throw new Error(errorMessage);
-    }
-    
-    console.log('Backend success response:', responseData);
+    console.log('Backend success response:', response);
     setTxStatus('backendSuccess');
     setBackendMessage("Airtime delivered successfully!");
     toast.success("Airtime delivered successfully!", { id: 'backend-status' });
-    
-    // Reset form for next transaction
+
+    // Reset form
     setCrypto("");
     setNetwork("");
     setAmount("");
     setPhone("");
     setRequestId(undefined);
     backendRequestSentRef.current = null;
-    
-  } catch (backendError: any) {
-    console.error("Backend API call failed:", backendError);
+
+  } catch (error: any) {
+    console.error("Backend API call failed:", error);
     setTxStatus('backendError');
-    
-    let errorMessage = backendError.message;
-    
-    // Provide more user-friendly error messages
+
+    let errorMessage = error.message;
     if (errorMessage.includes('HTML instead of JSON')) {
       errorMessage = 'Server error occurred. Please try again or contact support.';
     } else if (errorMessage.includes('Invalid JSON')) {
@@ -305,7 +265,7 @@ export default function AirtimePage() {
     } else if (errorMessage.includes('Failed to fetch')) {
       errorMessage = 'Network error. Please check your connection and try again.';
     }
-    
+
     const fullMessage = `${errorMessage}. Request ID: ${requestId}`;
     setBackendMessage(fullMessage);
     toast.error(fullMessage, { id: 'backend-status' });

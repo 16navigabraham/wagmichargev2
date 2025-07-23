@@ -4,8 +4,11 @@ export const buyAirtime = async (data: {
   requestId: string;
   phone: string;
   serviceID: string;
-  amount?: number;
-  variation_code?: string;
+  amount: number;
+  cryptoUsed: number;
+  cryptoSymbol: string;
+  transactionHash: string;
+  userAddress: string;
 }) => {
   const res = await fetch(`${BASE_URL}/api/airtime`, {
     method: "POST",
@@ -18,14 +21,18 @@ export const buyAirtime = async (data: {
   return await res.json();
 };
 
-export const buyDataSubscription = async (data: {
+export const buyinternet = async (data: {
   requestId: string;
   phone: string;
   serviceID: string;
   variation_code: string;
-  amount?: number;
+  amount: number;
+  cryptoUsed: number;
+  cryptoSymbol: string;
+  transactionHash: string;
+  userAddress: string;
 }) => {
-  const res = await fetch(`${BASE_URL}/api/data`, {
+  const res = await fetch(`${BASE_URL}/api/internet`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
@@ -43,6 +50,10 @@ export const payElectricityBill = async (data: {
   variation_code: string;
   amount: number;
   phone: string;
+  cryptoUsed: number;
+  cryptoSymbol: string;
+  transactionHash: string;
+  userAddress: string;
 }) => {
   const res = await fetch(`${BASE_URL}/api/electricity`, {
     method: "POST",
@@ -60,8 +71,12 @@ export const payTVSubscription = async (data: {
   smartcard_number: string;
   serviceID: string;
   variation_code: string;
-  amount?: number;
-  phone?: string;
+  amount: number;
+  phone: string;
+  cryptoUsed: number;
+  cryptoSymbol: string;
+  transactionHash: string;
+  userAddress: string;
 }) => {
   const res = await fetch(`${BASE_URL}/api/tv`, {
     method: "POST",
@@ -74,7 +89,6 @@ export const payTVSubscription = async (data: {
   return await res.json();
 };
 
-// Optional: Generic order function that can handle all service types
 export const submitOrder = async (data: {
   requestId: string;
   crypto: string;
@@ -83,9 +97,8 @@ export const submitOrder = async (data: {
   amount: number;
   cryptoNeeded: number;
   type: 'airtime' | 'data' | 'electricity' | 'tv';
-  transactionHash?: string;
-  userAddress?: string;
-  // Service-specific fields
+  transactionHash: string;
+  userAddress: string;
   phone?: string;
   meter_number?: string;
   smartcard_number?: string;

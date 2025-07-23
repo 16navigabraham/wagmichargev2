@@ -21,6 +21,8 @@ import { toast } from 'sonner';
 import { TransactionStatusModal } from "@/components/TransactionStatusModal";
 import { useBaseNetworkEnforcer } from '@/hooks/useBaseNetworkEnforcer'; // Import the network enforcer hook
 
+import { buyinternet } from "@/lib/api";
+
 // Base chain contract addresses (ensure these are correct for Base Mainnet)
 const USDT_CONTRACT_ADDRESS = "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2"; // Replace with actual USDT contract on Base
 const USDC_CONTRACT_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"; // Replace with actual USDC contract on Base
@@ -241,70 +243,60 @@ export default function InternetPage() {
     }, [crypto, provider, plan, customerID, requestId])
 
     // --- START OF MODIFICATIONS: handlePostTransaction with useCallback ---
-    const handlePostTransaction = useCallback(async (transactionHash: Hex) => {
-        // Use the ref to ensure the request is sent only once for a given transactionHash
-        if (backendRequestSentRef.current === transactionHash) {
-            console.log(`Backend request already sent for hash: ${transactionHash}. Skipping duplicate.`);
-            return;
-        }
+   const handlePostTransaction = useCallback(async (transactionHash: Hex) => {
+  if (backendRequestSentRef.current === transactionHash) {
+    console.log(`Backend request already sent for hash: ${transactionHash}. Skipping duplicate.`);
+    return;
+  }
 
-        backendRequestSentRef.current = transactionHash; // Mark this hash as processed
+  backendRequestSentRef.current = transactionHash;
+  setTxStatus('backendProcessing');
+  setBackendMessage("Processing your order...");
+  toast.loading("Processing order with our service provider...", { id: 'backend-status' });
 
-        setTxStatus('backendProcessing');
-        setBackendMessage("Processing your order...");
-        toast.loading("Processing order with VTpass...", { id: 'backend-status' });
+  try {
+    const response = await buyinternet({
+      requestId: requestId!,
+      phone: customerID,
+      serviceID: provider,
+      variation_code: plan,
+      amount: amountNGN,
+      cryptoUsed: parseFloat(cryptoNeeded.toFixed(selectedCrypto?.decimals || 6)),
+      cryptoSymbol: selectedCrypto?.symbol!,
+      transactionHash,
+      userAddress: address!
+    });
 
-        try {
-            const backendResponse = await fetch('/api/internet', {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    requestId,
-                    phone: customerID, // Assuming customerID is the phone number for internet
-                    serviceID: provider,
-                    variation_code: plan,
-                    amount: amountNGN,
-                    cryptoUsed: cryptoNeeded,
-                    cryptoSymbol: selectedCrypto?.symbol, // Safely access symbol
-                    transactionHash,
-                    userAddress: address,
-                }),
-            });
+    console.log('Backend success response:', response);
+    setTxStatus('backendSuccess');
+    setBackendMessage("Internet data delivered successfully!");
+    toast.success("Internet data delivered successfully!", { id: 'backend-status' });
 
-            // FIX: More robust JSON parsing
-            let responseData;
-            try {
-                responseData = await backendResponse.json();
-            } catch (jsonError: any) {
-                const textResponse = await backendResponse.text();
-                console.error("JSON parsing error:", jsonError);
-                console.error("Raw backend response:", textResponse);
-                throw new Error(`Backend responded with non-JSON: ${textResponse.substring(0, 100)}...`);
-            }
+    setCrypto("");
+    setProvider("");
+    setPlan("");
+    setCustomerID("");
+    setRequestId(undefined);
+    backendRequestSentRef.current = null;
 
-            if (!backendResponse.ok) {
-                throw new Error(responseData.message || responseData.error || "Failed to deliver internet data via backend.");
-            }
+  } catch (error: any) {
+    console.error("Backend API call failed:", error);
+    setTxStatus('backendError');
 
-            setTxStatus('backendSuccess');
-            setBackendMessage(responseData.message || "Internet data delivered successfully!");
-            toast.success("Internet data delivered successfully!", { id: 'backend-status' });
-            setCrypto("");
-            setProvider("");
-            setPlan("");
-            setCustomerID("");
-            setRequestId(undefined);
-            backendRequestSentRef.current = null; // Clear ref after successful backend processing
-        } catch (backendError: any) {
-            console.error("Backend API call failed:", backendError);
-            setTxStatus('backendError');
-            const msg = `Backend processing failed: ${backendError.message}. Please contact support with Request ID: ${requestId}`;
-            setBackendMessage(msg);
-            toast.error(msg, { id: 'backend-status' });
-            // Do NOT clear backendRequestSentRef here to prevent re-attempts if it failed.
-            // User needs to manually retry/reset.
-        }
-    }, [requestId, selectedCrypto?.symbol, provider, plan, customerID, amountNGN, cryptoNeeded, address]);
+    let errorMessage = error.message;
+    if (errorMessage.includes('HTML instead of JSON')) {
+      errorMessage = 'Server error occurred. Please try again or contact support.';
+    } else if (errorMessage.includes('Invalid JSON')) {
+      errorMessage = 'Communication error with server. Please try again.';
+    } else if (errorMessage.includes('Failed to fetch')) {
+      errorMessage = 'Network error. Please check your connection and try again.';
+    }
+
+    const fullMessage = `${errorMessage}. Request ID: ${requestId}`;
+    setBackendMessage(fullMessage);
+    toast.error(fullMessage, { id: 'backend-status' });
+  }
+}, [requestId, customerID, provider, plan, amountNGN, cryptoNeeded, selectedCrypto?.symbol, selectedCrypto?.decimals, address]);
     // --- END OF MODIFICATIONS ---
 
     // --- START OF MODIFICATIONS: Handle transaction status feedback and modal display ---
