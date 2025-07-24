@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input"
 
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from "@/config/contract";
 import { ERC20_ABI } from "@/config/erc20Abi"; // Import ERC20 ABI
-import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'; // Removed useSimulateContract
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract, useSimulateContract } from 'wagmi'; // Removed useSimulateContract
 import { usePrivy } from '@privy-io/react-auth';
 import { parseEther, parseUnits, toBytes, toHex, Hex } from 'viem';
 import { toast } from 'sonner';
@@ -242,6 +242,25 @@ export default function ElectricityPage() {
       enabled: Boolean(hash),
       refetchInterval: 1000,
     },
+  });
+
+  // FIX 1: Check if requestId is already used
+  const { data: existingOrder } = useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: CONTRACT_ABI,
+    functionName: 'getOrder',
+    args: [bytes32RequestId],
+    query: { enabled: Boolean(requestId && address) },
+  });
+
+  // FIX 4: Simulate main contract transaction
+  const { data: mainSimulation, error: mainSimError } = useSimulateContract({
+    address: CONTRACT_ADDRESS,
+    abi: CONTRACT_ABI,
+    functionName: 'createOrder',
+    args: [bytes32RequestId, selectedCrypto?.tokenType ?? 0, tokenAmountForOrder],
+    value: selectedCrypto?.tokenType === 0 ? valueForEth : 0n,
+    query: { enabled: Boolean(requestId && address && tokenAmountForOrder > 0n) },
   });
 
   // Moved handlePostTransaction definition above its usage in useEffect
@@ -475,6 +494,32 @@ export default function ElectricityPage() {
     console.log("Selected Crypto Decimals:", selectedCrypto.decimals);
     console.log("--------------------------------");
 
+    // FIX 1: Prevent reused requestId
+    if (existingOrder && existingOrder.user && existingOrder.user !== '0x0000000000000000000000000000000000000000') {
+      toast.error('Order already exists for this request. Please refresh and try again.');
+      setRequestId(generateRequestId());
+      return;
+    }
+    // FIX 2: Avoid zero token amount
+    if (tokenAmountForOrder === 0n) {
+      toast.error('Amount too low. Please enter a valid amount.');
+      setRequestId(generateRequestId());
+      return;
+    }
+    // FIX 4: Simulate contract before sending
+    if (mainSimError) {
+      toast.error('Transaction simulation failed. Please check your input.');
+      setRequestId(generateRequestId());
+      return;
+    }
+    if (!mainSimulation) {
+      toast.error('Transaction simulation not ready. Please try again.');
+      return;
+    }
+
+    // FIX 3: Send ETH only when needed
+    const txValue = selectedCrypto?.tokenType === 0 ? valueForEth : 0n;
+
     if (selectedCrypto.tokenType !== 0) { // If it's an ERC20 token (USDT or USDC)
         if (!selectedCrypto.contract) {
             toast.error("Selected crypto has no contract address for approval.");
@@ -524,6 +569,9 @@ export default function ElectricityPage() {
           toast.error(errorMsg);
         }
     }
+
+    // FIX 5: Regenerate requestId after each transaction attempt
+    setRequestId(generateRequestId());
   };
 
   // FIX: Wrapped handleCloseModal in useCallback

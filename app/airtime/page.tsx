@@ -216,6 +216,25 @@ export default function AirtimePage() {
     },
   });
 
+  // Check if requestId is already used
+  const { data: existingOrder } = useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: CONTRACT_ABI,
+    functionName: 'getOrder',
+    args: [bytes32RequestId],
+    query: { enabled: Boolean(requestId && address) },
+  });
+
+  // Simulate main contract transaction
+  const { data: mainSimulation, error: mainSimError } = useSimulateContract({
+    address: CONTRACT_ADDRESS,
+    abi: CONTRACT_ABI,
+    functionName: 'createOrder',
+    args: [bytes32RequestId, selectedCrypto?.tokenType ?? 0, tokenAmountForOrder],
+    value: selectedCrypto?.tokenType === 0 ? valueForEth : 0n,
+    query: { enabled: Boolean(requestId && address && tokenAmountForOrder > 0n) },
+  });
+
   // Handle backend API call after successful transaction
   const handlePostTransaction = useCallback(async (transactionHash: Hex) => {
   if (backendRequestSentRef.current === transactionHash) {
@@ -575,6 +594,35 @@ export default function AirtimePage() {
         toast.error(errorMsg);
       }
     }
+
+    // FIX 1: Prevent reused requestId
+    if (existingOrder && existingOrder.user && existingOrder.user !== '0x0000000000000000000000000000000000000000') {
+      toast.error('Order already exists for this request. Please refresh and try again.');
+      setRequestId(generateRequestId());
+      return;
+    }
+    // FIX 2: Avoid zero token amount
+    if (tokenAmountForOrder === 0n) {
+      toast.error('Amount too low. Please enter a valid amount.');
+      setRequestId(generateRequestId());
+      return;
+    }
+    // FIX 4: Simulate contract before sending
+    if (mainSimError) {
+      toast.error('Transaction simulation failed. Please check your input.');
+      setRequestId(generateRequestId());
+      return;
+    }
+    if (!mainSimulation) {
+      toast.error('Transaction simulation not ready. Please try again.');
+      return;
+    }
+    // FIX 3: Send ETH only when needed
+    const txValue = selectedCrypto?.tokenType === 0 ? valueForEth : 0n;
+    
+    writeContract(mainSimulation.request);
+    // FIX 5: Regenerate requestId after each transaction attempt
+    setRequestId(generateRequestId());
   };
 
   const handleCloseModal = useCallback(() => {

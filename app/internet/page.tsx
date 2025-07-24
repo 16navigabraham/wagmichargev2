@@ -181,19 +181,12 @@ export default function InternetPage() {
         functionName: 'createOrder',
         args: [
             bytes32RequestId,
-            selectedCrypto?.tokenType as any,
+            selectedCrypto?.tokenType ?? 0,
             tokenAmountForOrder,
         ],
-        value: selectedCrypto?.tokenType === 0 ? valueForEth : BigInt(0), // FIX 3: Send ETH only when needed
+        value: selectedCrypto?.tokenType === 0 ? valueForEth : 0n,
         query: {
-            enabled: Boolean(
-                requestId && 
-                selectedCrypto && 
-                tokenAmountForOrder > BigInt(0) && // FIX 2: Avoid zero token amount
-                address &&
-                !existingOrder?.user || // Only simulate if order doesn't exist or user is 0x0
-                (existingOrder?.user === '0x0000000000000000000000000000000000000000')
-            ),
+            enabled: Boolean(requestId && address && tokenAmountForOrder > 0n),
         },
     });
 
@@ -468,20 +461,30 @@ export default function InternetPage() {
             return;
         }
 
-        // FIX 2: Avoid zero token amount
-        if (tokenAmountForOrder === BigInt(0)) {
-            toast.error("Token/ETH amount cannot be zero. Please check the conversion rate.");
-            setTxStatus('error');
-            return;
-        }
-
-        // FIX 1: Check if requestId is already used
+        // FIX 1: Prevent reused requestId
         if (existingOrder && existingOrder.user && existingOrder.user !== '0x0000000000000000000000000000000000000000') {
-            toast.error("This request ID is already used. Generating a new one...");
+            toast.error('Order already exists for this request. Please refresh and try again.');
             setRequestId(generateRequestId());
-            setTxStatus('error');
             return;
         }
+        // FIX 2: Avoid zero token amount
+        if (tokenAmountForOrder === 0n) {
+            toast.error('Amount too low. Please enter a valid amount.');
+            setRequestId(generateRequestId());
+            return;
+        }
+        // FIX 4: Simulate contract before sending
+        if (mainSimError) {
+            toast.error('Transaction simulation failed. Please check your input.');
+            setRequestId(generateRequestId());
+            return;
+        }
+        if (!mainSimulation) {
+            toast.error('Transaction simulation not ready. Please try again.');
+            return;
+        }
+        // FIX 3: Send ETH only when needed
+        const txValue = selectedCrypto?.tokenType === 0 ? valueForEth : 0n;
 
         // Debugging logs for contract call parameters
         console.log("--- Initiating Contract Call ---");

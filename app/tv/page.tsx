@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input"
 
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from "@/config/contract";
 import { ERC20_ABI } from "@/config/erc20Abi"; // Import ERC20 ABI
-import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'; // Removed useSimulateContract
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract, useSimulateContract } from 'wagmi'; // Removed useSimulateContract
 import { usePrivy } from '@privy-io/react-auth';
 import { parseEther, parseUnits, toBytes, toHex, Hex } from 'viem';
 import { toast } from 'sonner';
@@ -405,6 +405,25 @@ export default function TVPage() {
     }
   }, [isWritePending, hash, isConfirming, isConfirmed, isWriteError, isConfirmError, writeError, confirmError, txStatus, handlePostTransaction, showTransactionModal]);
 
+  // FIX 1: Check if requestId is already used
+  const { data: existingOrder } = useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: CONTRACT_ABI,
+    functionName: 'getOrder',
+    args: [bytes32RequestId],
+    query: { enabled: Boolean(requestId && address) },
+  });
+
+  // FIX 4: Simulate main contract transaction
+  const { data: mainSimulation, error: mainSimError } = useSimulateContract({
+    address: CONTRACT_ADDRESS,
+    abi: CONTRACT_ABI,
+    functionName: 'createOrder',
+    args: [bytes32RequestId, selectedCrypto?.tokenType ?? 0, tokenAmountForOrder],
+    value: selectedCrypto?.tokenType === 0 ? valueForEth : 0n,
+    query: { enabled: Boolean(requestId && address && tokenAmountForOrder > 0n) },
+  });
+
   const ensureWalletConnected = async () => {
     if (!authenticated) {
       toast.error("Please log in to proceed.");
@@ -483,6 +502,31 @@ export default function TVPage() {
     console.log("Selected Crypto Decimals:", selectedCrypto.decimals);
     console.log("--------------------------------");
 
+    // FIX 1: Prevent reused requestId
+    if (existingOrder && existingOrder.user && existingOrder.user !== '0x0000000000000000000000000000000000000000') {
+      toast.error('Order already exists for this request. Please refresh and try again.');
+      setRequestId(generateRequestId());
+      return;
+    }
+    // FIX 2: Avoid zero token amount
+    if (tokenAmountForOrder === 0n) {
+      toast.error('Amount too low. Please enter a valid amount.');
+      setRequestId(generateRequestId());
+      return;
+    }
+    // FIX 4: Simulate contract before sending
+    if (mainSimError) {
+      toast.error('Transaction simulation failed. Please check your input.');
+      setRequestId(generateRequestId());
+      return;
+    }
+    if (!mainSimulation) {
+      toast.error('Transaction simulation not ready. Please try again.');
+      return;
+    }
+    // FIX 3: Send ETH only when needed
+    const txValue = selectedCrypto?.tokenType === 0 ? valueForEth : 0n;
+
     // Determine if approval is needed
     if (selectedCrypto.tokenType !== 0) { // If it's an ERC20 token (USDT or USDC)
         // Check if we need approval first
@@ -557,6 +601,9 @@ export default function TVPage() {
           toast.error(errorMsg);
         }
     }
+
+    // FIX 5: Regenerate requestId after each transaction attempt
+    setRequestId(generateRequestId());
   };
 
   // FIX: Wrapped handleCloseModal in useCallback
