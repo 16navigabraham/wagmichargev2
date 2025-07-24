@@ -91,7 +91,7 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
                 <span className="text-white font-bold text-sm">W</span>
               </div>
               <span className="font-bold text-xl bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                wagmi charge v2
+                Paycrypt
               </span>
             </div>
             <div className="flex items-center space-x-2">
@@ -322,7 +322,7 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
             <span className="text-white font-bold text-sm">W</span>
           </div>
           <span className="font-bold text-xl bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-            wagmi charge v2
+            Paycrypt
           </span>
         </div>
         <p className="text-muted-foreground leading-relaxed mb-4">
@@ -400,7 +400,7 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
     </div>
 
     <div className="border-t mt-8 pt-6 text-center text-muted-foreground">
- <p className="text-sm">© {new Date().getFullYear()} wagmi charge v2. All rights reserved.</p>
+ <p className="text-sm">© {new Date().getFullYear()} Paycrypt. All rights reserved.</p>
  </div>
   </div>
       </footer>

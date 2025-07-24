@@ -4,7 +4,7 @@ export function Footer() {
       <div className="container mx-auto px-4 py-6">
         <div className="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
           <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-            <span> © {new Date().getFullYear()} wagmi charge v2</span>
+            <span> © {new Date().getFullYear()} Paycrypt</span>
             <span>•</span>
             <a href="/privacy" className="hover:text-foreground">
               Privacy

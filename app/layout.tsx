@@ -7,7 +7,7 @@ import { ClientProviders } from "@/components/ClientProviders"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "wagmi charge v2 - Crypto to Utilities",
+  title: "wa - Crypto to Utilities",
   description: "Convert cryptocurrency to pay for airtime, TV subscriptions, electricity bills, and more",
   generator: 'TEAM MEMEVIBE'
 }

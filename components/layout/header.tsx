@@ -43,9 +43,9 @@ export function Header({ onMenuClick }: HeaderProps) {
         <div className="flex items-center space-x-2 lg:space-x-4">
           <div className="flex items-center space-x-2">
             <div className="h-8 w-8 rounded-lg bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center">
-              <span className="text-white font-bold text-sm">W</span>
+              <span className="text-white font-bold text-sm"></span>
             </div>
-            <span className="font-bold text-lg hidden sm:block">wagmi charge v2</span>
+            <span className="font-bold text-lg hidden sm:block">aycrypt</span>
           </div>
         </div>
 
