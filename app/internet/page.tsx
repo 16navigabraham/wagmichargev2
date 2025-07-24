@@ -14,7 +14,7 @@ import { Loader2, AlertCircle, CheckCircle } from "lucide-react" // Added for ve
 
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from "@/config/contract";
 import { ERC20_ABI } from "@/config/erc20Abi"; // Import ERC20 ABI
-import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'; // Removed useSimulateContract
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract, useSimulateContract } from 'wagmi'; // Added useReadContract and useSimulateContract
 import { usePrivy } from '@privy-io/react-auth';
 import { parseEther, parseUnits, toBytes, toHex, Hex } from 'viem';
 import { toast } from 'sonner';
@@ -150,7 +150,52 @@ export default function InternetPage() {
     // For approval, use the maximum uint256 value for unlimited approval.
     const unlimitedApprovalAmount = parseUnits('115792089237316195423570985008687907853269984665640564039457584007913129639935', 0);
 
-    // Wagmi Hooks for TOKEN APPROVAL Transaction (removed simulation)
+    // FIX 1: Check if requestId is already used
+    const { data: existingOrder } = useReadContract({
+        address: CONTRACT_ADDRESS,
+        abi: CONTRACT_ABI,
+        functionName: 'getOrder',
+        args: [bytes32RequestId],
+        query: {
+            enabled: Boolean(requestId && address), // Only query when requestId and address exist
+        },
+    });
+
+    // FIX 4: Simulate approval transaction
+    const { data: approvalSimulation, error: approvalSimError } = useSimulateContract({
+        address: selectedCrypto?.contract as Hex,
+        abi: ERC20_ABI,
+        functionName: 'approve',
+        args: [CONTRACT_ADDRESS, unlimitedApprovalAmount],
+        query: {
+            enabled: Boolean(selectedCrypto?.contract && selectedCrypto.tokenType !== 0 && address),
+        },
+    });
+
+    // FIX 4: Simulate main contract transaction
+    const { data: mainSimulation, error: mainSimError } = useSimulateContract({
+        address: CONTRACT_ADDRESS,
+        abi: CONTRACT_ABI,
+        functionName: 'createOrder',
+        args: [
+            bytes32RequestId,
+            selectedCrypto?.tokenType as any,
+            tokenAmountForOrder,
+        ],
+        value: selectedCrypto?.tokenType === 0 ? valueForEth : 0n, // FIX 3: Send ETH only when needed
+        query: {
+            enabled: Boolean(
+                requestId && 
+                selectedCrypto && 
+                tokenAmountForOrder > 0n && // FIX 2: Avoid zero token amount
+                address &&
+                !existingOrder?.user || // Only simulate if order doesn't exist or user is 0x0
+                (existingOrder?.user === '0x0000000000000000000000000000000000000000')
+            ),
+        },
+    });
+
+    // Wagmi Hooks for TOKEN APPROVAL Transaction
     const { writeContract: writeApprove, data: approveHash, isPending: isApprovePending, isError: isApproveError, error: approveWriteError } = useWriteContract();
 
     const { isLoading: isApprovalConfirming, isSuccess: isApprovalTxConfirmed, isError: isApprovalConfirmError, error: approveConfirmError } = useWaitForTransactionReceipt({
@@ -161,7 +206,7 @@ export default function InternetPage() {
         },
     });
 
-    // Wagmi Hooks for MAIN PAYMENT Transaction (removed simulation)
+    // Wagmi Hooks for MAIN PAYMENT Transaction
     const { writeContract, data: hash, isPending: isWritePending, isError: isWriteError, error: writeError } = useWriteContract();
 
     const { isLoading: isConfirming, isSuccess: isConfirmed, isError: isConfirmError, error: confirmError } = useWaitForTransactionReceipt({
@@ -210,60 +255,64 @@ export default function InternetPage() {
     }, [crypto, provider, plan, customerID, requestId])
 
     // handlePostTransaction with useCallback
-   const handlePostTransaction = useCallback(async (transactionHash: Hex) => {
-  if (backendRequestSentRef.current === transactionHash) {
-    console.log(`Backend request already sent for hash: ${transactionHash}. Skipping duplicate.`);
-    return;
-  }
+    const handlePostTransaction = useCallback(async (transactionHash: Hex) => {
+        if (backendRequestSentRef.current === transactionHash) {
+            console.log(`Backend request already sent for hash: ${transactionHash}. Skipping duplicate.`);
+            return;
+        }
 
-  backendRequestSentRef.current = transactionHash;
-  setTxStatus('backendProcessing');
-  setBackendMessage("Processing your order...");
-  toast.loading("Processing order with our service provider...", { id: 'backend-status' });
+        backendRequestSentRef.current = transactionHash;
+        setTxStatus('backendProcessing');
+        setBackendMessage("Processing your order...");
+        toast.loading("Processing order with our service provider...", { id: 'backend-status' });
 
-  try {
-    const response = await buyinternet({
-      requestId: requestId!,
-      phone: customerID,
-      serviceID: provider,
-      variation_code: plan,
-      amount: amountNGN,
-      cryptoUsed: parseFloat(cryptoNeeded.toFixed(selectedCrypto?.decimals || 6)),
-      cryptoSymbol: selectedCrypto?.symbol!,
-      transactionHash,
-      userAddress: address!
-    });
+        try {
+            const response = await buyinternet({
+                requestId: requestId!,
+                phone: customerID,
+                serviceID: provider,
+                variation_code: plan,
+                amount: amountNGN,
+                cryptoUsed: parseFloat(cryptoNeeded.toFixed(selectedCrypto?.decimals || 6)),
+                cryptoSymbol: selectedCrypto?.symbol!,
+                transactionHash,
+                userAddress: address!
+            });
 
-    console.log('Backend success response:', response);
-    setTxStatus('backendSuccess');
-    setBackendMessage("Internet data delivered successfully!");
-    toast.success("Internet data delivered successfully!", { id: 'backend-status' });
+            console.log('Backend success response:', response);
+            setTxStatus('backendSuccess');
+            setBackendMessage("Internet data delivered successfully!");
+            toast.success("Internet data delivered successfully!", { id: 'backend-status' });
 
-    setCrypto("");
-    setProvider("");
-    setPlan("");
-    setCustomerID("");
-    setRequestId(undefined);
-    backendRequestSentRef.current = null;
+            // FIX 5: Regenerate requestId after successful transaction
+            setCrypto("");
+            setProvider("");
+            setPlan("");
+            setCustomerID("");
+            setRequestId(generateRequestId()); // Generate new requestId for next transaction
+            backendRequestSentRef.current = null;
 
-  } catch (error: any) {
-    console.error("Backend API call failed:", error);
-    setTxStatus('backendError');
+        } catch (error: any) {
+            console.error("Backend API call failed:", error);
+            setTxStatus('backendError');
 
-    let errorMessage = error.message;
-    if (errorMessage.includes('HTML instead of JSON')) {
-      errorMessage = 'Server error occurred. Please try again or contact support.';
-    } else if (errorMessage.includes('Invalid JSON')) {
-      errorMessage = 'Communication error with server. Please try again.';
-    } else if (errorMessage.includes('Failed to fetch')) {
-      errorMessage = 'Network error. Please check your connection and try again.';
-    }
+            let errorMessage = error.message;
+            if (errorMessage.includes('HTML instead of JSON')) {
+                errorMessage = 'Server error occurred. Please try again or contact support.';
+            } else if (errorMessage.includes('Invalid JSON')) {
+                errorMessage = 'Communication error with server. Please try again.';
+            } else if (errorMessage.includes('Failed to fetch')) {
+                errorMessage = 'Network error. Please check your connection and try again.';
+            }
 
-    const fullMessage = `${errorMessage}. Request ID: ${requestId}`;
-    setBackendMessage(fullMessage);
-    toast.error(fullMessage, { id: 'backend-status' });
-  }
-}, [requestId, customerID, provider, plan, amountNGN, cryptoNeeded, selectedCrypto?.symbol, selectedCrypto?.decimals, address]);
+            const fullMessage = `${errorMessage}. Request ID: ${requestId}`;
+            setBackendMessage(fullMessage);
+            toast.error(fullMessage, { id: 'backend-status' });
+            
+            // FIX 5: Regenerate requestId after failed transaction
+            setRequestId(generateRequestId());
+        }
+    }, [requestId, customerID, provider, plan, amountNGN, cryptoNeeded, selectedCrypto?.symbol, selectedCrypto?.decimals, address]);
 
     // Effect to monitor approval transaction status
     useEffect(() => {
@@ -297,6 +346,9 @@ export default function InternetPage() {
             setApprovalError(errorMsg);
             setTransactionError(errorMsg);
             toast.error(`Approval failed: ${errorMsg}`, { id: 'approval-status' });
+            
+            // FIX 5: Regenerate requestId after approval failure
+            setRequestId(generateRequestId());
         }
     }, [isApprovePending, approveHash, isApprovalTxConfirmed, isApprovalConfirming, isApproveError, isApprovalConfirmError, approveWriteError, approveConfirmError, showTransactionModal]);
 
@@ -338,6 +390,9 @@ export default function InternetPage() {
             setTransactionError(errorMsg);
             setTransactionHashForModal(hash);
             toast.error(`Transaction failed: ${errorMsg}`, { id: 'tx-status' });
+            
+            // FIX 5: Regenerate requestId after main transaction failure
+            setRequestId(generateRequestId());
         } else {
             // Only reset to idle if not in any active transaction or approval state
             if (!['backendProcessing', 'backendSuccess', 'backendError'].includes(txStatus)) {
@@ -411,6 +466,27 @@ export default function InternetPage() {
             return;
         }
 
+        // FIX 2: Avoid zero token amount
+        if (tokenAmountForOrder === 0n && selectedCrypto.tokenType !== 0) {
+            toast.error("Token amount cannot be zero. Please check the conversion rate.");
+            setTxStatus('error');
+            return;
+        }
+
+        if (valueForEth === 0n && selectedCrypto.tokenType === 0) {
+            toast.error("ETH amount cannot be zero. Please check the conversion rate.");
+            setTxStatus('error');
+            return;
+        }
+
+        // FIX 1: Check if requestId is already used
+        if (existingOrder && existingOrder.user && existingOrder.user !== '0x0000000000000000000000000000000000000000') {
+            toast.error("This request ID is already used. Generating a new one...");
+            setRequestId(generateRequestId());
+            setTxStatus('error');
+            return;
+        }
+
         // Debugging logs for contract call parameters
         console.log("--- Initiating Contract Call ---");
         console.log("RequestId (bytes32):", bytes32RequestId);
@@ -420,9 +496,10 @@ export default function InternetPage() {
         console.log("Selected Crypto:", selectedCrypto.symbol);
         console.log("Crypto Needed (float):", cryptoNeeded);
         console.log("Selected Crypto Decimals:", selectedCrypto.decimals);
+        console.log("Existing order check:", existingOrder);
         console.log("--------------------------------");
 
-        // Token Approval Logic (Per-Transaction) - No Simulation
+        // Token Approval Logic (Per-Transaction) - With Simulation
         if (selectedCrypto.tokenType !== 0) { // If it's an ERC20 token (USDT or USDC)
             if (!selectedCrypto.contract) {
                 setApprovalError("Selected crypto has no contract address for approval.");
@@ -431,17 +508,29 @@ export default function InternetPage() {
                 toast.error("Selected crypto has no contract address for approval.");
                 return;
             }
+
+            // Check approval simulation
+            if (approvalSimError) {
+                const errorMsg = approvalSimError.message || "Approval simulation failed";
+                setApprovalError(errorMsg);
+                setTransactionError(errorMsg);
+                setTxStatus('approvalError');
+                toast.error(`Approval simulation failed: ${errorMsg}`);
+                return;
+            }
+
+            if (!approvalSimulation) {
+                toast.error("Approval simulation not ready. Please try again.");
+                setTxStatus('error');
+                return;
+            }
             
             toast.info("Approving token spend for this transaction...");
             setTxStatus('waitingForApprovalSignature'); // Set initial status for approval
             
             try {
-                writeApprove({
-                    address: selectedCrypto.contract as Hex,
-                    abi: ERC20_ABI,
-                    functionName: 'approve',
-                    args: [CONTRACT_ADDRESS, unlimitedApprovalAmount],
-                });
+                // FIX 4: Use simulation result for approval
+                writeApprove(approvalSimulation.request);
                 return; // After initiating approval, stop here. The approval useEffect will handle next steps.
             } catch (error: any) {
                 console.error("Error sending approval transaction:", error);
@@ -450,64 +539,70 @@ export default function InternetPage() {
                 setTransactionError(errorMsg); // Propagate to main error state for modal
                 setTxStatus('approvalError');
                 toast.error(errorMsg);
+                // FIX 5: Regenerate requestId after approval error
+                setRequestId(generateRequestId());
                 return;
             }
         } else {
             // If ETH, no approval needed, proceed directly with main transaction
+            
+            // Check main transaction simulation
+            if (mainSimError) {
+                const errorMsg = mainSimError.message || "Transaction simulation failed";
+                setTransactionError(errorMsg);
+                setTxStatus('error');
+                toast.error(`Transaction simulation failed: ${errorMsg}`);
+                // FIX 5: Regenerate requestId after simulation error
+                setRequestId(generateRequestId());
+                return;
+            }
+
+            if (!mainSimulation) {
+                toast.error("Transaction simulation not ready. Please try again.");
+                setTxStatus('error');
+                return;
+            }
+
             try {
                 setTxStatus('waitingForSignature'); // Set status for main transaction signature
-                writeContract({
-                    address: CONTRACT_ADDRESS,
-                    abi: CONTRACT_ABI,
-                    functionName: 'createOrder',
-                    args: [
-                        bytes32RequestId,
-                        selectedCrypto.tokenType as any,
-                        tokenAmountForOrder,
-                    ],
-                    value: valueForEth,
-                });
+                // FIX 4: Use simulation result for main transaction
+                writeContract(mainSimulation.request);
             } catch (error: any) {
                 console.error("Error sending main transaction:", error);
                 const errorMsg = error.message || "Failed to send transaction.";
                 setTransactionError(errorMsg);
                 setTxStatus('error');
                 toast.error(errorMsg);
+                // FIX 5: Regenerate requestId after transaction error
+                setRequestId(generateRequestId());
             }
         }
     };
 
     // Auto-initiate main transaction after approval is confirmed
     useEffect(() => {
-        if (isApprovalTxConfirmed && selectedCrypto && selectedCrypto.tokenType !== 0 && showTransactionModal) {
+        if (isApprovalTxConfirmed && selectedCrypto && selectedCrypto.tokenType !== 0 && showTransactionModal && mainSimulation) {
             // Slight delay to allow UI to update
             const timer = setTimeout(() => {
                 try {
                     setTxStatus('waitingForSignature');
                     toast.info("Starting payment transaction...");
-                    writeContract({
-                        address: CONTRACT_ADDRESS,
-                        abi: CONTRACT_ABI,
-                        functionName: 'createOrder',
-                        args: [
-                            bytes32RequestId,
-                            selectedCrypto.tokenType as any,
-                            tokenAmountForOrder,
-                        ],
-                        value: valueForEth,
-                    });
+                    // FIX 4: Use simulation result for main transaction after approval
+                    writeContract(mainSimulation.request);
                 } catch (error: any) {
                     console.error("Error sending main transaction after approval:", error);
                     const errorMsg = error.message || "Failed to send payment transaction.";
                     setTransactionError(errorMsg);
                     setTxStatus('error');
                     toast.error(errorMsg);
+                    // FIX 5: Regenerate requestId after post-approval transaction error
+                    setRequestId(generateRequestId());
                 }
             }, 1000);
 
             return () => clearTimeout(timer);
         }
-    }, [isApprovalTxConfirmed, selectedCrypto, showTransactionModal, writeContract, bytes32RequestId, tokenAmountForOrder, valueForEth]);
+    }, [isApprovalTxConfirmed, selectedCrypto, showTransactionModal, mainSimulation, writeContract]);
 
     // Wrapped handleCloseModal in useCallback
     const handleCloseModal = useCallback(() => {
@@ -523,10 +618,24 @@ export default function InternetPage() {
     const providersToShow = availableProviders.length > 0 ? availableProviders : [];
 
     const isFormValid = Boolean(crypto && provider && plan && customerID && requestId && cryptoNeeded > 0);
-    // Updated isButtonDisabled logic - removed simulation checks
-    const isButtonDisabled = loading || loadingPlans || isWritePending || isConfirming || txStatus === 'backendProcessing' || !isFormValid ||
-                             isApprovePending || isApprovalConfirming || // Removed simulation states
-                             !isOnBaseChain || isSwitchingChain; // Disable if not on Base or switching
+    
+    // Check if requestId is already used
+    const isRequestIdUsed = existingOrder && existingOrder.user && existingOrder.user !== '0x0000000000000000000000000000000000000000';
+    
+    // Updated isButtonDisabled logic with simulation checks
+    const isButtonDisabled = loading || 
+                             loadingPlans || 
+                             isWritePending || 
+                             isConfirming || 
+                             txStatus === 'backendProcessing' || 
+                             !isFormValid ||
+                             isApprovePending || 
+                             isApprovalConfirming || 
+                             !isOnBaseChain || 
+                             isSwitchingChain ||
+                             isRequestIdUsed ||
+                             (selectedCrypto?.tokenType !== 0 && (approvalSimError || !approvalSimulation)) ||
+                             (mainSimError || !mainSimulation);
 
     return (
         <AuthGuard>
@@ -610,6 +719,54 @@ export default function InternetPage() {
                                 />
                             </div>
                         </div>
+                        
+                        {/* Request ID status indicator */}
+                        {isRequestIdUsed && (
+                            <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-md">
+                                <AlertCircle className="w-4 h-4 text-red-500" />
+                                <span className="text-sm text-red-700">
+                                    Request ID already used. A new one will be generated.
+                                </span>
+                            </div>
+                        )}
+                        
+                        {/* Simulation status indicators */}
+                        {selectedCrypto?.tokenType !== 0 && approvalSimError && (
+                            <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-md">
+                                <AlertCircle className="w-4 h-4 text-red-500" />
+                                <span className="text-sm text-red-700">
+                                    Approval simulation failed: {approvalSimError.message}
+                                </span>
+                            </div>
+                        )}
+                        
+                        {mainSimError && (
+                            <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-md">
+                                <AlertCircle className="w-4 h-4 text-red-500" />
+                                <span className="text-sm text-red-700">
+                                    Transaction simulation failed: {mainSimError.message}
+                                </span>
+                            </div>
+                        )}
+                        
+                        {selectedCrypto?.tokenType !== 0 && approvalSimulation && !approvalSimError && (
+                            <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-md">
+                                <CheckCircle className="w-4 h-4 text-green-500" />
+                                <span className="text-sm text-green-700">
+                                    Token approval ready
+                                </span>
+                            </div>
+                        )}
+                        
+                        {mainSimulation && !mainSimError && (
+                            <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-md">
+                                <CheckCircle className="w-4 h-4 text-green-500" />
+                                <span className="text-sm text-green-700">
+                                    Transaction simulation successful
+                                </span>
+                            </div>
+                        )}
+
                         <div className="border-t pt-4 space-y-2">
                             {requestId && (
                                 <div className="flex justify-between text-sm">
@@ -636,7 +793,7 @@ export default function InternetPage() {
                                 <span>
                                     {cryptoNeeded > 0 && selectedCrypto ? (
                                         <Badge variant="outline">
-                                            {cryptoNeeded.toFixed(selectedCrypto.decimals)}{" "} {crypto} {/* Adjusted toFixed for display */}
+                                            {cryptoNeeded.toFixed(selectedCrypto.decimals)}{" "} {crypto}
                                         </Badge>
                                     ) : (
                                         "--"
@@ -651,6 +808,9 @@ export default function InternetPage() {
                         >
                             {isSwitchingChain ? "Switching Network..." :
                             !isOnBaseChain ? "Switch to Base Network" :
+                            isRequestIdUsed ? "Generating New Request ID..." :
+                            selectedCrypto?.tokenType !== 0 && (approvalSimError || !approvalSimulation) ? "Approval Check Failed" :
+                            mainSimError || !mainSimulation ? "Transaction Check Failed" :
                             isApprovePending ? "Awaiting Approval Signature..." :
                             isApprovalConfirming ? "Approving Token..." :
                             txStatus === 'waitingForSignature' ? "Awaiting Payment Signature..." :
