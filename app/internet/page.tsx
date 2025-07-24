@@ -182,12 +182,12 @@ export default function InternetPage() {
             selectedCrypto?.tokenType as any,
             tokenAmountForOrder,
         ],
-        value: selectedCrypto?.tokenType === 0 ? valueForEth : 0n, // FIX 3: Send ETH only when needed
+        value: selectedCrypto?.tokenType === 0 ? valueForEth : BigInt(0), // FIX 3: Send ETH only when needed
         query: {
             enabled: Boolean(
                 requestId && 
                 selectedCrypto && 
-                tokenAmountForOrder > 0n && // FIX 2: Avoid zero token amount
+                tokenAmountForOrder > BigInt(0) && // FIX 2: Avoid zero token amount
                 address &&
                 !existingOrder?.user || // Only simulate if order doesn't exist or user is 0x0
                 (existingOrder?.user === '0x0000000000000000000000000000000000000000')
@@ -467,13 +467,13 @@ export default function InternetPage() {
         }
 
         // FIX 2: Avoid zero token amount
-        if (tokenAmountForOrder === 0n && selectedCrypto.tokenType !== 0) {
+        if (tokenAmountForOrder === BigInt(0) && selectedCrypto.tokenType !== 0) {
             toast.error("Token amount cannot be zero. Please check the conversion rate.");
             setTxStatus('error');
             return;
         }
 
-        if (valueForEth === 0n && selectedCrypto.tokenType === 0) {
+        if (valueForEth === BigInt(0) && selectedCrypto.tokenType === 0) {
             toast.error("ETH amount cannot be zero. Please check the conversion rate.");
             setTxStatus('error');
             return;
