@@ -140,6 +140,8 @@ export default function InternetPage() {
     if (selectedCrypto && cryptoNeeded > 0) {
         if (selectedCrypto.symbol === 'ETH') {
             valueForEth = parseEther(cryptoNeeded.toFixed(18));
+            // For ETH, the amount parameter should be the same as the value being sent
+            tokenAmountForOrder = valueForEth;
         } else {
             // FIX: Ensure full precision for parseUnits by using selectedCrypto.decimals directly in toFixed.
             tokenAmountForOrder = parseUnits(cryptoNeeded.toFixed(selectedCrypto.decimals), selectedCrypto.decimals);
@@ -467,14 +469,8 @@ export default function InternetPage() {
         }
 
         // FIX 2: Avoid zero token amount
-        if (tokenAmountForOrder === BigInt(0) && selectedCrypto.tokenType !== 0) {
-            toast.error("Token amount cannot be zero. Please check the conversion rate.");
-            setTxStatus('error');
-            return;
-        }
-
-        if (valueForEth === BigInt(0) && selectedCrypto.tokenType === 0) {
-            toast.error("ETH amount cannot be zero. Please check the conversion rate.");
+        if (tokenAmountForOrder === BigInt(0)) {
+            toast.error("Token/ETH amount cannot be zero. Please check the conversion rate.");
             setTxStatus('error');
             return;
         }
