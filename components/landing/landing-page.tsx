@@ -313,18 +313,18 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
        {/* Footer Section */}
       <footer className="bg-white/90 dark:bg-gray-900/90 border-t mt-12 w-full">
   <div className="container mx-auto px-4 py-8 md:py-12">
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-      <div className="md:col-span-1">
+    <div className="grid grid-cols-1 md:grid-cols-4 gap-8 w-full">
+      <div className="md:col-span-1 flex flex-col justify-between h-full">
         <div className="flex items-center space-x-2 mb-4">
           <img src="/paycrypt.png" alt="Paycrypt Logo" className="h-8 w-8 rounded-lg object-contain bg-white shadow-lg" />
           <span className="font-bold text-xl bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-            Paycrypt
+            aycrypt
           </span>
         </div>
         <p className="text-muted-foreground leading-relaxed mb-4">
           The easiest way to pay for everyday utilities with cryptocurrency.
         </p>
-        <div className="flex space-x-4">
+        <div className="flex space-x-4 mt-2">
           <a 
             href="https://x.com/yourproject" 
             target="_blank" 
@@ -360,44 +360,13 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
           </a>
         </div>
       </div>
-
-      {/* Uncomment and adjust these sections if you want to add more footer links */}
-      {/* 
-      <div>
-        <h3 className="font-semibold mb-4 text-foreground">Services</h3>
-        <ul className="space-y-2 text-muted-foreground">
-          <li className="hover:text-foreground transition-colors cursor-pointer">Airtime Top-up</li>
-          <li className="hover:text-foreground transition-colors cursor-pointer">TV Subscriptions</li>
-          <li className="hover:text-foreground transition-colors cursor-pointer">Electricity Bills</li>
-          <li className="hover:text-foreground transition-colors cursor-pointer">Internet Services</li>
-        </ul>
-      </div>
-
-      <div>
-        <h3 className="font-semibold mb-4 text-foreground">Support</h3>
-        <ul className="space-y-2 text-muted-foreground">
-          <li className="hover:text-foreground transition-colors cursor-pointer">Help Center</li>
-          <li className="hover:text-foreground transition-colors cursor-pointer">Contact Us</li>
-          <li className="hover:text-foreground transition-colors cursor-pointer">API Documentation</li>
-          <li className="hover:text-foreground transition-colors cursor-pointer">Status Page</li>
-        </ul>
-      </div>
-
-      <div>
-        <h3 className="font-semibold mb-4 text-foreground">Legal</h3>
-        <ul className="space-y-2 text-muted-foreground">
-          <li className="hover:text-foreground transition-colors cursor-pointer">Privacy Policy</li>
-          <li className="hover:text-foreground transition-colors cursor-pointer">Terms of Service</li>
-          <li className="hover:text-foreground transition-colors cursor-pointer">Cookie Policy</li>
-          <li className="hover:text-foreground transition-colors cursor-pointer">Compliance</li>
-        </ul>
-      </div>
-      */}
+      <div className="hidden md:block" />
+      <div className="hidden md:block" />
+      <div className="hidden md:block" />
     </div>
-
-    <div className="border-t mt-8 pt-6 text-center text-muted-foreground">
- <p className="text-sm">© {new Date().getFullYear()} Paycrypt. All rights reserved.</p>
- </div>
+    <div className="border-t mt-8 pt-6 text-center text-muted-foreground w-full">
+      <p className="text-sm">© {new Date().getFullYear()} Paycrypt. All rights reserved.</p>
+    </div>
   </div>
       </footer>
     </div>
