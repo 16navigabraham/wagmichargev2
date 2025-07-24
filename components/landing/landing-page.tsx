@@ -87,11 +87,9 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
-              <div className="h-8 w-8 rounded-lg bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center shadow-lg">
-                <span className="text-white font-bold text-sm">W</span>
-              </div>
+              <img src="/paycrypt.png" alt="Paycrypt Logo" className="h-8 w-8 rounded-lg object-contain bg-white shadow-lg" />
               <span className="font-bold text-xl bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                Paycrypt
+                aycrypt
               </span>
             </div>
             <div className="flex items-center space-x-2">
@@ -318,9 +316,7 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
     <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
       <div className="md:col-span-1">
         <div className="flex items-center space-x-2 mb-4">
-          <div className="h-8 w-8 rounded-lg bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center shadow-lg">
-            <span className="text-white font-bold text-sm">W</span>
-          </div>
+          <img src="/paycrypt.png" alt="Paycrypt Logo" className="h-8 w-8 rounded-lg object-contain bg-white shadow-lg" />
           <span className="font-bold text-xl bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
             Paycrypt
           </span>

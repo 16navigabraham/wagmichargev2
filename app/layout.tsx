@@ -19,6 +19,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={inter.className}>
+      <head>
+        <link rel="icon" href="/paycrypt.png" type="image/png" sizes="32x32" />
+        <link rel="shortcut icon" href="/paycrypt.png" type="image/png" />
+      </head>
       <body>
         <ClientProviders>
           {children}
