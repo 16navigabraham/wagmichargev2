@@ -134,7 +134,7 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
             electricity, and internet bills instantly.
           </p>
 
-          <p className="text-sm text-muted-foreground">Join 10,000+ users already using wagmi charge</p>
+          <p className="text-sm text-muted-foreground">Join amazing users already using paycrypt</p>
         </div>
       </section>
 
@@ -250,7 +250,7 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
 <section className="py-20 px-4 bg-gradient-to-r from-blue-500 to-purple-600 text-white">
   <div className="container mx-auto">
     <h2 className="text-3xl md:text-4xl font-bold text-center mb-12">
-      Why WagmiCharge Exists
+      Why Paycrypt Exists
     </h2>
     <div className="grid md:grid-cols-4 gap-8 text-center">
       <div className="group">
@@ -313,8 +313,8 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
        {/* Footer Section */}
       <footer className="bg-white/90 dark:bg-gray-900/90 border-t mt-12 w-full">
   <div className="container mx-auto px-4 py-8 md:py-12">
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-8 w-full">
-      <div className="md:col-span-1 flex flex-col justify-between h-full">
+    <div className="grid w-full">
+      <div className="md:col-span-1 flex justify-between h-full">
         <div className="flex items-center space-x-2 mb-4">
           <img src="/paycrypt.png" alt="Paycrypt Logo" className="h-8 w-8 rounded-lg object-contain bg-white shadow-lg" />
           <span className="font-bold text-xl bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
