@@ -313,8 +313,8 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
        {/* Footer Section */}
       <footer className="bg-white/90 dark:bg-gray-900/90 border-t mt-12 w-full">
   <div className="container mx-auto px-4 py-8 md:py-12">
-    <div className="px-3 grid grid-cols w-full">
-      <div className="md:col-span-1 flex justify-between h-full">
+    <div className="px-3 w-full">
+      <div className="md:col-span-1 grid grid-cols justify-between h-full">
         <div className="flex items-center space-x-2 mb-4">
           <img src="/paycrypt.png" alt="Paycrypt Logo" className="h-8 w-8 rounded-lg object-contain bg-white shadow-lg" />
           <span className="font-bold text-xl bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
