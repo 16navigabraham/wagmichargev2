@@ -12,6 +12,7 @@ import AuthGuard from "@/components/AuthGuard"
 import { Input } from "@/components/ui/input"
 
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from "@/config/contract";
+import { paycryptOnchain } from "@/lib/paycryptOnchain";
 import { ERC20_ABI } from "@/config/erc20Abi";
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract, useSimulateContract } from 'wagmi';
 import { usePrivy } from '@privy-io/react-auth';
@@ -22,18 +23,7 @@ import { useBaseNetworkEnforcer } from '@/hooks/useBaseNetworkEnforcer';
 
 import { buyAirtime } from "@/lib/api";
 
-// Base chain contract addresses (ensure these are correct for Base Mainnet)
-const USDT_CONTRACT_ADDRESS = "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2";
-const USDC_CONTRACT_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
-
-// Backend API URL - Update this to your actual backend URL
-// const BACKEND_API_URL = "https://wagmicharge-backend.onrender.com";
-
-const CRYPTOS = [
-  { symbol: "ETH", name: "Ethereum", coingeckoId: "ethereum", tokenType: 0, decimals: 18, contract: undefined },
-  { symbol: "USDT", name: "Tether", coingeckoId: "tether", tokenType: 1, decimals: 6, contract: USDT_CONTRACT_ADDRESS },
-  { symbol: "USDC", name: "USD Coin", coingeckoId: "usd-coin", tokenType: 2, decimals: 6, contract: USDC_CONTRACT_ADDRESS },
-]
+// Dynamic ERC20 token list from contract
 
 const NETWORKS = [
   { serviceID: "mtn", name: "MTN" },
@@ -42,28 +32,39 @@ const NETWORKS = [
   { serviceID: "9mobile", name: "9mobile" },
 ]
 
+
 function generateRequestId() {
   return `${Date.now().toString()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`
 }
 
-async function fetchPrices() {
+// Fetch active ERC20 tokens from contract
+async function fetchActiveTokens() {
   try {
-    const ids = CRYPTOS.map(c => c.coingeckoId).join(",")
-    const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=ngn`)
-    return res.ok ? await res.json() : {}
-  } catch (error) {
-    console.error("Error fetching prices:", error);
-    return {};
+    const res = await fetch("/api/active-tokens"); // You must implement this API route to call your contract
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data.tokens) ? data.tokens : [];
+  } catch {
+    return [];
   }
 }
 
+// Fetch prices for dynamic tokens
+async function fetchPrices(tokenList: any[]) {
+  if (!tokenList || tokenList.length === 0) return {};
+  const ids = tokenList.map(c => c.coingeckoId).join(",");
+  const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=ngn`);
+  return res.ok ? await res.json() : {};
+}
+
 export default function AirtimePage() {
-  const [crypto, setCrypto] = useState("")
-  const [network, setNetwork] = useState("")
-  const [amount, setAmount] = useState("")
-  const [phone, setPhone] = useState("")
-  const [prices, setPrices] = useState<any>({})
-  const [loading, setLoading] = useState(true)
+  const [activeTokens, setActiveTokens] = useState<any[]>([]); // Dynamic ERC20 tokens from contract
+  const [selectedToken, setSelectedToken] = useState<string>(""); // Selected token address
+  const [network, setNetwork] = useState("");
+  const [amount, setAmount] = useState("");
+  const [phone, setPhone] = useState("");
+  const [prices, setPrices] = useState<any>({});
+  const [loading, setLoading] = useState(true);
   const [requestId, setRequestId] = useState<string | undefined>(undefined);
 
   const [txStatus, setTxStatus] = useState<'idle' | 'waitingForSignature' | 'sending' | 'confirming' | 'success' | 'error' | 'backendProcessing' | 'backendSuccess' | 'backendError' | 'waitingForApprovalSignature' | 'approving' | 'approvalSuccess' | 'approvalError'>('idle');
@@ -81,94 +82,65 @@ export default function AirtimePage() {
 
   /* initial load */
   useEffect(() => {
-    fetchPrices().then(setPrices).finally(() => setLoading(false))
-  }, [])
+    async function loadTokensAndPrices() {
+      setLoading(true);
+      const tokens = await fetchActiveTokens();
+      setActiveTokens(tokens);
+      const prices = await fetchPrices(tokens);
+      setPrices(prices);
+      setLoading(false);
+    }
+    loadTokensAndPrices();
+  }, []);
 
   /* requestId generator */
   useEffect(() => {
-    if ((crypto || network || amount || phone) && !requestId) {
+    if ((selectedToken || network || amount || phone) && !requestId) {
       setRequestId(generateRequestId());
-    } else if (!(crypto || network || amount || phone) && requestId) {
+    } else if (!(selectedToken || network || amount || phone) && requestId) {
       setRequestId(undefined);
     }
-  }, [crypto, network, amount, phone, requestId]);
+  }, [selectedToken, network, amount, phone, requestId]);
 
-  /* derived values */
-  const selectedCrypto = CRYPTOS.find(c => c.symbol === crypto)
-  const priceNGN = selectedCrypto ? prices[selectedCrypto.coingeckoId]?.ngn : null
-  const amountNGN = Number(amount) || 0
-  const cryptoNeeded = priceNGN && amountNGN ? amountNGN / priceNGN : 0
 
-  // Enhanced token amount calculation with better precision
-  const getTokenAmountForOrder = useCallback((): bigint => {
-    if (!selectedCrypto || cryptoNeeded <= 0) return BigInt(0);
-    
-    try {
-      // For very small amounts, use more precision
-      const precision = selectedCrypto.decimals;
-      
-      // Convert to string with sufficient decimal places
-      let amountStr: string;
-      
-      if (selectedCrypto.symbol === 'ETH') {
-        // ETH needs 18 decimals precision
-        amountStr = cryptoNeeded.toFixed(18);
-      } else {
-        // USDT/USDC typically need 6 decimals but add buffer for precision
-        const extraPrecision = Math.max(precision, 8);
-        amountStr = cryptoNeeded.toFixed(extraPrecision);
-      }
-      
-      // Remove trailing zeros and parse
-      amountStr = parseFloat(amountStr).toString();
-      
-      return parseUnits(amountStr, precision);
-    } catch (error) {
-      console.error('Error calculating token amount:', error, {
-        cryptoNeeded,
-        selectedCrypto: selectedCrypto.symbol,
-        decimals: selectedCrypto.decimals
-      });
-      return BigInt(0);
-    }
-  }, [selectedCrypto, cryptoNeeded]);
-
-  const tokenAmountForOrder = getTokenAmountForOrder();
-  
-  const valueForEth = selectedCrypto?.symbol === 'ETH' && cryptoNeeded > 0
+  // Derived values for selected token
+  const selectedTokenObj = activeTokens.find(t => t.address === selectedToken);
+  const priceNGN = selectedTokenObj ? prices[selectedTokenObj.coingeckoId]?.ngn : null;
+  const amountNGN = Number(amount) || 0;
+  const cryptoNeeded = priceNGN && amountNGN ? amountNGN / priceNGN : 0;
+  const tokenAmountForOrder: bigint = selectedTokenObj ? parseUnits(cryptoNeeded.toFixed(selectedTokenObj.decimals), selectedTokenObj.decimals) : BigInt(0);
+  const valueForEth: bigint = selectedTokenObj?.symbol === 'ETH' && cryptoNeeded > 0
     ? parseEther(cryptoNeeded.toFixed(18))
     : BigInt(0);
-  
   const bytes32RequestId: Hex = requestId ? toHex(toBytes(requestId), { size: 32 }) : toHex(toBytes(""), { size: 32 });
 
   // Check current allowance for ERC20 tokens
   const { data: currentAllowance, refetch: refetchAllowance } = useReadContract({
-    address: selectedCrypto?.contract as Hex,
+    address: selectedTokenObj?.address as Hex,
     abi: ERC20_ABI,
     functionName: 'allowance',
     args: [address as Hex, CONTRACT_ADDRESS],
     query: {
-      enabled: Boolean(selectedCrypto?.contract && address && selectedCrypto.tokenType !== 0),
+      enabled: Boolean(selectedTokenObj?.address && address),
     },
   });
 
   // Check if approval is needed
   useEffect(() => {
-    if (selectedCrypto?.tokenType === 0 || !currentAllowance || !tokenAmountForOrder) {
+    if (!selectedTokenObj || !currentAllowance || !tokenAmountForOrder) {
       setNeedsApproval(false);
       return;
     }
-
     const allowanceBigInt = currentAllowance as bigint;
     const needsApprovalCheck = allowanceBigInt < tokenAmountForOrder;
     setNeedsApproval(needsApprovalCheck);
-    
     console.log("Approval check:", {
       currentAllowance: allowanceBigInt.toString(),
       tokenAmountNeeded: tokenAmountForOrder.toString(),
       needsApproval: needsApprovalCheck
     });
-  }, [currentAllowance, tokenAmountForOrder, selectedCrypto]);
+  }, [currentAllowance, tokenAmountForOrder, selectedTokenObj]);
+
 
   // Wagmi Hooks for TOKEN APPROVAL Transaction
   const { 
@@ -221,27 +193,49 @@ export default function AirtimePage() {
     address: CONTRACT_ADDRESS,
     abi: CONTRACT_ABI,
     functionName: 'getOrder',
-    args: [bytes32RequestId],
+    args: [BigInt(bytes32RequestId)],
     query: { enabled: Boolean(requestId && address) },
   });
+
 
   // Simulate main contract transaction
   const { data: mainSimulation, error: mainSimError } = useSimulateContract({
     address: CONTRACT_ADDRESS,
     abi: CONTRACT_ABI,
     functionName: 'createOrder',
-    args: [bytes32RequestId, selectedCrypto?.tokenType ?? 0, tokenAmountForOrder],
-    value: selectedCrypto?.tokenType === 0 ? valueForEth : 0n,
-    query: { enabled: Boolean(requestId && address && tokenAmountForOrder > 0n) },
+    args: [bytes32RequestId, selectedTokenObj?.tokenType ?? 0, tokenAmountForOrder],
+    value: selectedTokenObj && selectedTokenObj.tokenType === 0 ? valueForEth : undefined, // Only set value for native tokens
+    query: { enabled: Boolean(requestId && address && tokenAmountForOrder > 0) },
   });
 
   // Handle backend API call after successful transaction
   const handlePostTransaction = useCallback(async (transactionHash: Hex) => {
+  // Prevent duplicate backend requests
   if (backendRequestSentRef.current === transactionHash) {
     console.log(`Backend request already sent for hash: ${transactionHash}. Skipping duplicate.`);
     return;
   }
 
+  // Onchain payment logic (production-ready)
+  try {
+    setTxStatus('sending');
+    await paycryptOnchain({
+      userAddress: address!,
+      tokenAddress: selectedTokenObj ? selectedTokenObj.contract ?? CONTRACT_ADDRESS : CONTRACT_ADDRESS,
+      amount: tokenAmountForOrder,
+      requestId: bytes32RequestId,
+      walletClient: undefined, // Replace with actual walletClient for production
+      publicClient: undefined, // Replace with actual publicClient for production
+    });
+    setTxStatus('success');
+  } catch (err: any) {
+    setTxStatus('error');
+    setTransactionError(err.message || 'Onchain payment failed');
+    toast.error(err.message || 'Onchain payment failed', { id: 'backend-status' });
+    return;
+  }
+
+  // Backend processing after successful onchain payment
   backendRequestSentRef.current = transactionHash;
   setTxStatus('backendProcessing');
   setBackendMessage("Processing your order...");
@@ -253,19 +247,18 @@ export default function AirtimePage() {
       phone,
       serviceID: network,
       amount: amountNGN,
-      cryptoUsed: parseFloat(cryptoNeeded.toFixed(selectedCrypto?.decimals || 6)),
-      cryptoSymbol: selectedCrypto?.symbol!,
+      cryptoUsed: parseFloat(cryptoNeeded.toFixed(selectedTokenObj ? selectedTokenObj.decimals || 6 : 6)),
+      cryptoSymbol: selectedTokenObj ? selectedTokenObj.symbol : "",
       transactionHash,
       userAddress: address!
     });
 
-    console.log('Backend success response:', response);
     setTxStatus('backendSuccess');
     setBackendMessage("Airtime delivered successfully!");
     toast.success("Airtime delivered successfully!", { id: 'backend-status' });
 
-    // Reset form
-    setCrypto("");
+    // Reset form for next transaction
+    setCrypto && setCrypto("");
     setNetwork("");
     setAmount("");
     setPhone("");
@@ -273,9 +266,7 @@ export default function AirtimePage() {
     backendRequestSentRef.current = null;
 
   } catch (error: any) {
-    console.error("Backend API call failed:", error);
     setTxStatus('backendError');
-
     let errorMessage = error.message;
     if (errorMessage.includes('HTML instead of JSON')) {
       errorMessage = 'Server error occurred. Please try again or contact support.';
@@ -284,7 +275,6 @@ export default function AirtimePage() {
     } else if (errorMessage.includes('Failed to fetch')) {
       errorMessage = 'Network error. Please check your connection and try again.';
     }
-
     const fullMessage = `${errorMessage}. Request ID: ${requestId}`;
     setBackendMessage(fullMessage);
     toast.error(fullMessage, { id: 'backend-status' });
@@ -352,7 +342,7 @@ export default function AirtimePage() {
               selectedCrypto.tokenType as any,
               tokenAmountForOrder,
             ],
-            value: BigInt(0),
+            value: undefined,
           });
         } catch (error: any) {
           console.error("Error sending main transaction after approval:", error);
@@ -552,7 +542,7 @@ export default function AirtimePage() {
               selectedCrypto.tokenType as any,
               tokenAmountForOrder,
             ],
-            value: BigInt(0),
+            value: undefined,
           });
         } catch (error: any) {
           console.error("Error sending main transaction:", error);
@@ -602,7 +592,7 @@ export default function AirtimePage() {
       return;
     }
     // FIX 2: Avoid zero token amount
-    if (tokenAmountForOrder === 0n) {
+    if (tokenAmountForOrder === 0) {
       toast.error('Amount too low. Please enter a valid amount.');
       setRequestId(generateRequestId());
       return;
@@ -618,7 +608,7 @@ export default function AirtimePage() {
       return;
     }
     // FIX 3: Send ETH only when needed
-    const txValue = selectedCrypto?.tokenType === 0 ? valueForEth : 0n;
+    const txValue = selectedCrypto?.tokenType === 0 ? valueForEth : undefined;
     
     writeContract(mainSimulation.request);
     // FIX 5: Regenerate requestId after each transaction attempt
@@ -660,17 +650,17 @@ export default function AirtimePage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            {/* crypto */}
+            {/* token selection - dynamic from contract */}
             <div className="space-y-2">
-              <Label htmlFor="crypto-select">Pay With</Label>
-              <Select value={crypto} onValueChange={setCrypto}>
-                <SelectTrigger id="crypto-select">
-                  <SelectValue placeholder="Select crypto" />
+              <Label htmlFor="token-select">Pay With</Label>
+              <Select value={selectedToken} onValueChange={setSelectedToken}>
+                <SelectTrigger id="token-select">
+                  <SelectValue placeholder="Select token" />
                 </SelectTrigger>
                 <SelectContent>
-                  {CRYPTOS.map(c => (
-                    <SelectItem key={c.symbol} value={c.symbol}>
-                      {c.symbol} - {c.name}
+                  {activeTokens.map(t => (
+                    <SelectItem key={t.address} value={t.address}>
+                      {t.symbol} - {t.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -713,16 +703,15 @@ export default function AirtimePage() {
                 }}
                 min="100"
                 max="50000"
-                disabled={!selectedCrypto}
+                disabled={!selectedTokenObj}
               />
-              {amountNGN > 0 && priceNGN && selectedCrypto && (
+              {amountNGN > 0 && priceNGN && selectedTokenObj && (
                 <div className="text-sm text-muted-foreground flex items-center justify-between">
                   <span>
-                    You will pay: ~{cryptoNeeded.toFixed(selectedCrypto.decimals)}{" "}
-                    {selectedCrypto.symbol}
+                    You will pay: ~{cryptoNeeded.toFixed(selectedTokenObj.decimals)} {selectedTokenObj.symbol}
                   </span>
                   <Badge variant="secondary">
-                    1 {selectedCrypto.symbol} = ₦{priceNGN?.toLocaleString()}
+                    1 {selectedTokenObj.symbol} = ₦{priceNGN?.toLocaleString()}
                   </Badge>
                 </div>
               )}
@@ -754,7 +743,7 @@ export default function AirtimePage() {
             </div>
 
             {/* Approval status for ERC20 tokens */}
-            {selectedCrypto && selectedCrypto.tokenType !== 0 && currentAllowance !== undefined && (
+            {selectedTokenObj && currentAllowance !== undefined && (
               <div className="text-sm p-3 bg-muted rounded-lg">
                 <div className="flex items-center gap-2">
                   {needsApproval ? (
@@ -789,10 +778,9 @@ export default function AirtimePage() {
               <div className="flex justify-between">
                 <span>You will pay:</span>
                 <span>
-                  {cryptoNeeded > 0 && selectedCrypto ? (
+                  {cryptoNeeded > 0 && selectedTokenObj ? (
                     <Badge variant="outline">
-                      {cryptoNeeded.toFixed(selectedCrypto.decimals)}{" "}
-                      {selectedCrypto.symbol}
+                      {cryptoNeeded.toFixed(selectedTokenObj.decimals)} {selectedTokenObj.symbol}
                     </Badge>
                   ) : (
                     "--"

@@ -11,26 +11,34 @@ import BackToDashboard from "@/components/BackToDashboard"
 import AuthGuard from "@/components/AuthGuard"
 import { Input } from "@/components/ui/input"
 
+
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from "@/config/contract";
-import { ERC20_ABI } from "@/config/erc20Abi"; // Import ERC20 ABI
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract, useSimulateContract } from 'wagmi'; // Removed useSimulateContract
+import { paycryptOnchain } from "@/lib/paycryptOnchain";
+import { ERC20_ABI } from "@/config/erc20Abi";
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract, useSimulateContract } from 'wagmi';
 import { usePrivy } from '@privy-io/react-auth';
 import { parseEther, parseUnits, toBytes, toHex, Hex } from 'viem';
 import { toast } from 'sonner';
 import { TransactionStatusModal } from "@/components/TransactionStatusModal";
-import { useBaseNetworkEnforcer } from '@/hooks/useBaseNetworkEnforcer'; // Import the network enforcer hook
+import { useBaseNetworkEnforcer } from '@/hooks/useBaseNetworkEnforcer';
 
 import { payTVSubscription } from "@/lib/api";
+
+// Helper to fetch active tokens from contract/backend
+async function fetchActiveTokens() {
+  // You can swap this to a direct contract call if needed
+  const res = await fetch("/api/active-tokens");
+  if (!res.ok) return [];
+  const data = await res.json();
+  // Expected: [{ symbol, name, coingeckoId, tokenType, decimals, contract }]
+  return data.tokens || [];
+}
 
 // Base chain contract addresses (ensure these are correct for Base Mainnet)
 const USDT_CONTRACT_ADDRESS = "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2"; // Replace with actual USDT contract on Base
 const USDC_CONTRACT_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"; // Corrected USDC contract address for consistency
 
-const CRYPTOS = [
-  { symbol: "ETH", name: "Ethereum", coingeckoId: "ethereum", tokenType: 0, decimals: 18, contract: undefined }, // ETH has no contract address
-  { symbol: "USDT", name: "Tether", coingeckoId: "tether", tokenType: 1, decimals: 6, contract: USDT_CONTRACT_ADDRESS },
-  { symbol: "USDC", name: "USD Coin", coingeckoId: "usd-coin", tokenType: 2, decimals: 6, contract: USDC_CONTRACT_ADDRESS },
-]
+
 
 interface TVProvider {
   serviceID: string
@@ -56,10 +64,12 @@ function generateRequestId() {
 }
 
 /* ---------- fetch helpers ---------- */
-async function fetchPrices() {
-  const ids = CRYPTOS.map(c => c.coingeckoId).join(",")
-  const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=ngn`)
-  return res.ok ? await res.json() : {}
+
+async function fetchPrices(tokenList: { coingeckoId: string }[]): Promise<Record<string, any>> {
+  const ids = tokenList.map((c: { coingeckoId: string }) => c.coingeckoId).join(",");
+  if (!ids) return {};
+  const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=ngn`);
+  return res.ok ? await res.json() : {};
 }
 
 async function fetchTVProviders() {
@@ -98,25 +108,28 @@ function getSmartCardLength(serviceID: string): number[] {
   return SMART_CARD_LENGTHS[id] ?? SMART_CARD_LENGTHS.default
 }
 
+
 export default function TVPage() {
-  const [crypto, setCrypto] = useState("")
-  const [provider, setProvider] = useState("")
-  const [plan, setPlan] = useState("")
-  const [smartCardNumber, setSmartCardNumber] = useState("")
-  const [customerName, setCustomerName] = useState("")
-  const [currentBouquet, setCurrentBouquet] = useState("")
-  const [dueDate, setDueDate] = useState("")
-  const [renewalAmount, setRenewalAmount] = useState("")
-  const [providers, setProviders] = useState<TVProvider[]>([])
-  const [plans, setPlans] = useState<TVPlan[]>([])
-  const [prices, setPrices] = useState<any>({})
-  const [loading, setLoading] = useState(true)
-  const [loadingProviders, setLoadingProviders] = useState(true)
-  const [loadingPlans, setLoadingPlans] = useState(false)
-  const [verifyingCard, setVerifyingCard] = useState(false)
-  const [verificationError, setVerificationError] = useState("")
-  const [verificationSuccess, setVerificationSuccess] = useState(false)
+  const [crypto, setCrypto] = useState("");
+  const [provider, setProvider] = useState("");
+  const [plan, setPlan] = useState("");
+  const [smartCardNumber, setSmartCardNumber] = useState("");
+  const [customerName, setCustomerName] = useState("");
+  const [currentBouquet, setCurrentBouquet] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  const [renewalAmount, setRenewalAmount] = useState("");
+  const [providers, setProviders] = useState<TVProvider[]>([]);
+  const [plans, setPlans] = useState<TVPlan[]>([]);
+  const [prices, setPrices] = useState<any>({});
+  const [loading, setLoading] = useState(true);
+  const [loadingProviders, setLoadingProviders] = useState(true);
+  const [loadingPlans, setLoadingPlans] = useState(false);
+  const [verifyingCard, setVerifyingCard] = useState(false);
+  const [verificationError, setVerificationError] = useState("");
+  const [verificationSuccess, setVerificationSuccess] = useState(false);
   const [requestId, setRequestId] = useState<string | undefined>(undefined);
+
+  const [activeTokens, setActiveTokens] = useState<any[]>([]);
 
   const [txStatus, setTxStatus] = useState<'idle' | 'waitingForSignature' | 'sending' | 'confirming' | 'success' | 'error' | 'backendProcessing' | 'backendSuccess' | 'backendError' | 'waitingForApprovalSignature' | 'approving' | 'approvalSuccess' | 'approvalError'>('idle');
   const [transactionError, setTransactionError] = useState<string | null>(null);
@@ -125,7 +138,7 @@ export default function TVPage() {
   const [transactionHashForModal, setTransactionHashForModal] = useState<Hex | undefined>(undefined);
 
   const [approvalError, setApprovalError] = useState<string | null>(null);
-  const backendRequestSentRef = useRef<Hex | null>(null); // Added to track if backend request has been sent
+  const backendRequestSentRef = useRef<Hex | null>(null);
 
   const { connectWallet, authenticated, user } = usePrivy();
   const { isConnected, address } = useAccount();
@@ -133,14 +146,25 @@ export default function TVPage() {
   const { isOnBaseChain, isSwitchingChain, promptSwitchToBase } = useBaseNetworkEnforcer();
 
   /* initial load */
+
+  // Initial load: fetch active tokens, then prices, then providers
   useEffect(() => {
-    Promise.all([fetchPrices(), fetchTVProviders()]).then(([p, prov]) => {
-      setPrices(p)
-      setProviders(prov)
-      setLoading(false)
-      setLoadingProviders(false)
-    })
-  }, [])
+    let mounted = true;
+    (async () => {
+      const tokens = await fetchActiveTokens();
+      if (!mounted) return;
+      setActiveTokens(tokens);
+      const prices = await fetchPrices(tokens);
+      if (!mounted) return;
+      setPrices(prices);
+      const prov = await fetchTVProviders();
+      if (!mounted) return;
+      setProviders(prov);
+      setLoading(false);
+      setLoadingProviders(false);
+    })();
+    return () => { mounted = false; };
+  }, []);
 
   /* plans when provider changes */
   useEffect(() => {
@@ -218,23 +242,23 @@ export default function TVPage() {
     return () => clearTimeout(id)
   }, [smartCardNumber, provider, providers])
 
-  /* derived values */
-  const selectedCrypto = CRYPTOS.find(c => c.symbol === crypto)
-  const selectedPlan   = plans.find(p => p.variation_code === plan)
-  const priceNGN       = selectedCrypto ? prices[selectedCrypto.coingeckoId]?.ngn : null
-  const amountNGN      = selectedPlan ? Number(selectedPlan.variation_amount) : 0
-  const cryptoNeeded   = priceNGN && amountNGN ? amountNGN / priceNGN : 0
+
+  // Derived values
+  const selectedCrypto = activeTokens.find(c => c.symbol === crypto);
+  const selectedPlan   = plans.find(p => p.variation_code === plan);
+  const priceNGN       = selectedCrypto ? prices[selectedCrypto.coingeckoId]?.ngn : null;
+  const amountNGN      = selectedPlan ? Number(selectedPlan.variation_amount) : 0;
+  const cryptoNeeded   = priceNGN && amountNGN ? amountNGN / priceNGN : 0;
 
   // For the main contract call, use the exact amount needed.
-  // FIX: Use selectedCrypto.decimals for toFixed to ensure correct precision
-  const tokenAmountForOrder = selectedCrypto ? parseUnits(cryptoNeeded.toFixed(selectedCrypto.decimals), selectedCrypto.decimals) : BigInt(0);
-  const valueForEth = selectedCrypto?.symbol === 'ETH' && cryptoNeeded > 0
-      ? parseEther(cryptoNeeded.toFixed(18)) // ETH needs full 18 decimals for parseEther
+  const tokenAmountForOrder: bigint = selectedCrypto ? parseUnits(cryptoNeeded.toFixed(selectedCrypto.decimals), selectedCrypto.decimals) : BigInt(0);
+  const valueForEth: bigint = selectedCrypto?.symbol === 'ETH' && cryptoNeeded > 0
+      ? parseEther(cryptoNeeded.toFixed(18))
       : BigInt(0);
   const bytes32RequestId: Hex = toHex(toBytes(requestId || ""), { size: 32 });
 
   // For approval, use the maximum uint256 value for unlimited approval.
-  const unlimitedApprovalAmount = parseUnits('115792089237316195423570985008687907853269984665640564039457584007913129639935', 0);
+  const unlimitedApprovalAmount: bigint = parseUnits('115792089237316195423570985008687907853269984665640564039457584007913129639935', 0);
 
   // Wagmi Hooks for TOKEN APPROVAL Transaction (removed simulation)
   const { writeContract: writeApprove, data: approveHash, isPending: isApprovePending, isError: isApproveError, error: approveWriteError } = useWriteContract();
@@ -262,6 +286,25 @@ export default function TVPage() {
   const handlePostTransaction = useCallback(async (transactionHash: Hex) => {
   if (backendRequestSentRef.current === transactionHash) {
     console.log(`Backend request already sent for hash: ${transactionHash}. Skipping duplicate.`);
+    return;
+  }
+
+  // Onchain payment logic
+  try {
+    setTxStatus('sending');
+    await paycryptOnchain({
+      userAddress: address!,
+      tokenAddress: selectedCrypto?.contract ?? CONTRACT_ADDRESS,
+      amount: tokenAmountForOrder,
+      requestId: bytes32RequestId,
+      walletClient: undefined, // Provide walletClient from wagmi if needed
+      publicClient: undefined, // Provide publicClient from wagmi if needed
+    });
+    setTxStatus('success');
+  } catch (err: any) {
+    setTxStatus('error');
+    setTransactionError(err.message || 'Onchain payment failed');
+    toast.error(err.message || 'Onchain payment failed', { id: 'backend-status' });
     return;
   }
 
@@ -652,13 +695,14 @@ export default function TVPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            {/* crypto selection */}
+
+            {/* crypto selection - now dynamic */}
             <div className="space-y-2">
               <Label htmlFor="crypto-select">Pay With</Label>
               <Select value={crypto} onValueChange={setCrypto}>
                 <SelectTrigger id="crypto-select"><SelectValue placeholder="Select crypto" /></SelectTrigger>
                 <SelectContent>
-                  {CRYPTOS.map(c => (
+                  {activeTokens.map(c => (
                     <SelectItem key={c.symbol} value={c.symbol}>
                       {c.symbol} - {c.name}
                     </SelectItem>

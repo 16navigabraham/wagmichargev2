@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
       `VTPass API returned status ${res.status}`
 
     return NextResponse.json(
-      { error: errorMessage },
+      { error: errorMessage, vtpassResponse: data },
       { status: res.status }
     )
   } catch (err) {

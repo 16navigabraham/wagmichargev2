@@ -24,14 +24,22 @@ import { useBaseNetworkEnforcer } from '@/hooks/useBaseNetworkEnforcer'; // Impo
 import { buyinternet } from "@/lib/api";
 
 // Base chain contract addresses (ensure these are correct for Base Mainnet)
-const USDT_CONTRACT_ADDRESS = "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2"; // Replace with actual USDT contract on Base
-const USDC_CONTRACT_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"; // Replace with actual USDC contract on Base
 
-const CRYPTOS = [
-    { symbol: "ETH", name: "Ethereum", coingeckoId: "ethereum", tokenType: 0, decimals: 18, contract: undefined }, // ETH has no contract address
-    { symbol: "USDT", name: "Tether", coingeckoId: "tether", tokenType: 1, decimals: 6, contract: USDT_CONTRACT_ADDRESS },
-    { symbol: "USDC", name: "USD Coin", coingeckoId: "usd-coin", tokenType: 2, decimals: 6, contract: USDC_CONTRACT_ADDRESS },
-]
+// Helper to fetch active tokens from contract/backend
+async function fetchActiveTokens() {
+  const res = await fetch("/api/active-tokens");
+  if (!res.ok) return [];
+  const data = await res.json();
+  // Expected: [{ symbol, name, coingeckoId, tokenType, decimals, contract }]
+  return data.tokens || [];
+}
+
+async function fetchPrices(tokenList: { coingeckoId: string }[]): Promise<Record<string, any>> {
+  const ids = tokenList.map((c: { coingeckoId: string }) => c.coingeckoId).join(",");
+  if (!ids) return {};
+  const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=ngn`);
+  return res.ok ? await res.json() : {};
+}
 
 interface InternetPlan {
     variation_code: string
@@ -45,13 +53,8 @@ function generateRequestId(): string {
     return `${Date.now()}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`
 }
 
-async function fetchPrices() {
-    const ids = CRYPTOS.map((c) => c.coingeckoId).join(",")
-    const res = await fetch(
-        `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=ngn`
-    )
-    return await res.json()
-}
+// Remove duplicate fetchPrices and declare CRYPTOS
+const CRYPTOS: { coingeckoId: string }[] = [];
 
 async function fetchInternetPlans(serviceID: string) {
     try {
@@ -102,15 +105,16 @@ async function fetchDataServices() {
 }
 
 export default function InternetPage() {
-    const [crypto, setCrypto] = useState("")
-    const [provider, setProvider] = useState("")
-    const [plan, setPlan] = useState("")
-    const [customerID, setCustomerID] = useState("")
-    const [plans, setPlans] = useState<InternetPlan[]>([])
-    const [prices, setPrices] = useState<any>({})
-    const [loading, setLoading] = useState(false)
-    const [loadingPlans, setLoadingPlans] = useState(false)
-    const [availableProviders, setAvailableProviders] = useState<any[]>([])
+    const [activeTokens, setActiveTokens] = useState<any[]>([]); // Dynamic ERC20 tokens from contract
+    const [crypto, setCrypto] = useState("");
+    const [provider, setProvider] = useState("");
+    const [plan, setPlan] = useState("");
+    const [customerID, setCustomerID] = useState("");
+    const [plans, setPlans] = useState<InternetPlan[]>([]);
+    const [prices, setPrices] = useState<any>({});
+    const [loading, setLoading] = useState(false);
+    const [loadingPlans, setLoadingPlans] = useState(false);
+    const [availableProviders, setAvailableProviders] = useState<any[]>([]);
     const [requestId, setRequestId] = useState<string | undefined>(undefined);
 
     const [txStatus, setTxStatus] = useState<'idle' | 'waitingForSignature' | 'sending' | 'confirming' | 'success' | 'error' | 'backendProcessing' | 'backendSuccess' | 'backendError' | 'waitingForApprovalSignature' | 'approving' | 'approvalSuccess' | 'approvalError'>('idle');
@@ -120,22 +124,23 @@ export default function InternetPage() {
     const [transactionHashForModal, setTransactionHashForModal] = useState<Hex | undefined>(undefined);
 
     const [approvalError, setApprovalError] = useState<string | null>(null);
-    const backendRequestSentRef = useRef<Hex | null>(null); // Added to track if backend request has been sent
+    const backendRequestSentRef = useRef<Hex | null>(null);
 
     const { connectWallet, authenticated, user } = usePrivy();
     const { isConnected, address } = useAccount();
 
     const { isOnBaseChain, isSwitchingChain, promptSwitchToBase } = useBaseNetworkEnforcer();
 
-    const selectedCrypto = CRYPTOS.find((c) => c.symbol === crypto)
-    const selectedPlan = plans.find((p) => p.variation_code === plan)
-    const priceNGN = selectedCrypto ? prices[selectedCrypto.coingeckoId]?.ngn : null
-    const amountNGN = selectedPlan ? Number(selectedPlan.variation_amount) : 0
-    const cryptoNeeded = priceNGN && amountNGN ? amountNGN / priceNGN : 0
+    // Derived values
+    const selectedCrypto = activeTokens.find((c) => c.symbol === crypto);
+    const selectedPlan = plans.find((p) => p.variation_code === plan);
+    const priceNGN = selectedCrypto ? prices[selectedCrypto.coingeckoId]?.ngn : null;
+    const amountNGN = selectedPlan ? Number(selectedPlan.variation_amount) : 0;
+    const cryptoNeeded = priceNGN && amountNGN ? amountNGN / priceNGN : 0;
 
     // For the main contract call, use the exact amount needed.
-    let tokenAmountForOrder: bigint = BigInt(0);
-    let valueForEth: bigint = BigInt(0);
+let tokenAmountForOrder: bigint = BigInt(0);
+let valueForEth: bigint = BigInt(0);
 
     if (selectedCrypto && cryptoNeeded > 0) {
         if (selectedCrypto.symbol === 'ETH') {
@@ -150,7 +155,7 @@ export default function InternetPage() {
     const bytes32RequestId: Hex = toHex(toBytes(requestId || ""), { size: 32 });
 
     // For approval, use the maximum uint256 value for unlimited approval.
-    const unlimitedApprovalAmount = parseUnits('115792089237316195423570985008687907853269984665640564039457584007913129639935', 0);
+const unlimitedApprovalAmount: bigint = parseUnits('115792089237316195423570985008687907853269984665640564039457584007913129639935', 0);
 
     // FIX 1: Check if requestId is already used
     const { data: existingOrder } = useReadContract({
@@ -212,14 +217,24 @@ export default function InternetPage() {
         },
     });
 
+    // Initial load: fetch active tokens, then prices, then providers
     useEffect(() => {
-        setLoading(true)
-        Promise.all([fetchPrices(), fetchDataServices()]).then(([priceData, serviceData]) => {
-            setPrices(priceData)
-            setAvailableProviders(serviceData)
-            setLoading(false)
-        })
-    }, [])
+      let mounted = true;
+      (async () => {
+        setLoading(true);
+        const tokens = await fetchActiveTokens();
+        if (!mounted) return;
+        setActiveTokens(tokens);
+        const prices = await fetchPrices(tokens);
+        if (!mounted) return;
+        setPrices(prices);
+        const serviceData = await fetchDataServices();
+        if (!mounted) return;
+        setAvailableProviders(serviceData);
+        setLoading(false);
+      })();
+      return () => { mounted = false; };
+    }, []);
 
     useEffect(() => {
         if (provider) {
@@ -659,13 +674,13 @@ export default function InternetPage() {
                                     <SelectTrigger>
                                         <SelectValue placeholder="Select crypto" />
                                     </SelectTrigger>
-                                    <SelectContent>
-                                        {CRYPTOS.map((c) => (
-                                            <SelectItem key={c.symbol} value={c.symbol}>
-                                                {c.symbol} - {c.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
+                                <SelectContent>
+                                    {activeTokens.map((c) => (
+                                        <SelectItem key={c.symbol} value={c.symbol}>
+                                            {c.symbol} - {c.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
                                 </Select>
                             </div>
                             <div className="space-y-2">
