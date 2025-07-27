@@ -2,7 +2,7 @@
 
 import { Abi } from 'viem';
 
-export const CONTRACT_ADDRESS = "0x001a390fb9D2411DAdfb538974fbeF0AD3A47184";
+export const CONTRACT_ADDRESS = "0x3afb7150694f8C6633DeB5967Bb8c0e58cA32830";
 export const CONTRACT_ABI = [
   {
     "inputs": [],
@@ -1158,3 +1158,5 @@ export const CONTRACT_ABI = [
     "type": "function"
   }
 ] as const; // `as const` is important for type inference
+
+// using the EIP-1967 Transparent Proxy pattern.
