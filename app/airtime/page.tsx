@@ -40,7 +40,7 @@ function generateRequestId() {
 
 // Fetch active ERC20 tokens from contract
 const [activeTokens, setActiveTokens] = useState<TokenConfig[]>([]); // Change any[] to TokenConfig[]
-}
+
 
 // Fetch prices for dynamic tokens
 async function fetchPrices(tokenList: any[]) {
