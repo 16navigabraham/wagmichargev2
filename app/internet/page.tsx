@@ -22,17 +22,13 @@ import { TransactionStatusModal } from "@/components/TransactionStatusModal";
 import { useBaseNetworkEnforcer } from '@/hooks/useBaseNetworkEnforcer'; // Import the network enforcer hook
 
 import { buyinternet } from "@/lib/api";
+import { TokenConfig } from "@/lib/tokenlist";
+import { fetchActiveTokensWithMetadata } from "@/lib/tokenUtils";
 
 // Base chain contract addresses (ensure these are correct for Base Mainnet)
 
 // Helper to fetch active tokens from contract/backend
-async function fetchActiveTokens() {
-  const res = await fetch("/api/active-tokens");
-  if (!res.ok) return [];
-  const data = await res.json();
-  // Expected: [{ symbol, name, coingeckoId, tokenType, decimals, contract }]
-  return data.tokens || [];
-}
+const [activeTokens, setActiveTokens] = useState<TokenConfig[]>([]); // Change any[] to TokenConfig[]
 
 async function fetchPrices(tokenList: { coingeckoId: string }[]): Promise<Record<string, any>> {
   const ids = tokenList.map((c: { coingeckoId: string }) => c.coingeckoId).join(",");
@@ -131,8 +127,9 @@ export default function InternetPage() {
 
     const { isOnBaseChain, isSwitchingChain, promptSwitchToBase } = useBaseNetworkEnforcer();
 
+
     // Derived values
-    const selectedCrypto = activeTokens.find((c) => c.symbol === crypto);
+  const selectedCrypto = activeTokens.find((c) => c.address === crypto); // Change from c.symbol to c.address
     const selectedPlan = plans.find((p) => p.variation_code === plan);
     const priceNGN = selectedCrypto ? prices[selectedCrypto.coingeckoId]?.ngn : null;
     const amountNGN = selectedPlan ? Number(selectedPlan.variation_amount) : 0;
@@ -215,23 +212,23 @@ const unlimitedApprovalAmount: bigint = parseUnits('1157920892373161954235709850
     });
 
     // Initial load: fetch active tokens, then prices, then providers
-    useEffect(() => {
-      let mounted = true;
-      (async () => {
-        setLoading(true);
-        const tokens = await fetchActiveTokens();
-        if (!mounted) return;
-        setActiveTokens(tokens);
-        const prices = await fetchPrices(tokens);
-        if (!mounted) return;
-        setPrices(prices);
-        const serviceData = await fetchDataServices();
-        if (!mounted) return;
-        setAvailableProviders(serviceData);
-        setLoading(false);
-      })();
-      return () => { mounted = false; };
-    }, []);
+   useEffect(() => {
+  let mounted = true;
+  (async () => {
+    setLoading(true);
+    const tokens = await fetchActiveTokensWithMetadata(); // Use the new function
+    if (!mounted) return;
+    setActiveTokens(tokens);
+    const prices = await fetchPrices(tokens);
+    if (!mounted) return;
+    setPrices(prices);
+    const serviceData = await fetchDataServices();
+    if (!mounted) return;
+    setAvailableProviders(serviceData);
+    setLoading(false);
+  })();
+  return () => { mounted = false; };
+}, []);
 
     useEffect(() => {
         if (provider) {
@@ -669,18 +666,18 @@ const unlimitedApprovalAmount: bigint = parseUnits('1157920892373161954235709850
                         <div className="space-y-4">
                             <div className="space-y-2">
                                 <Label htmlFor="crypto">Pay With</Label>
-                                <Select value={crypto} onValueChange={setCrypto}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select crypto" />
-                                    </SelectTrigger>
-                                <SelectContent>
-                                    {activeTokens.map((c) => (
-                                        <SelectItem key={c.symbol} value={c.symbol}>
-                                            {c.symbol} - {c.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                                </Select>
+                               <Select value={crypto} onValueChange={setCrypto}>
+                         <SelectTrigger>
+                           <SelectValue placeholder="Select crypto" />
+                            </SelectTrigger>
+                                 <SelectContent>
+                                 {activeTokens.map((c) => (
+                              <SelectItem key={c.address} value={c.address}> {/* Change key and value from c.symbol to c.address */}
+                                 {c.symbol} - {c.name}
+                                     </SelectItem>
+                                          ))}
+                                     </SelectContent>
+                                 </Select>
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="provider">Internet Provider</Label>

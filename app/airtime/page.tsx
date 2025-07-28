@@ -22,7 +22,8 @@ import { TransactionStatusModal } from "@/components/TransactionStatusModal";
 import { useBaseNetworkEnforcer } from '@/hooks/useBaseNetworkEnforcer';
 
 import { buyAirtime } from "@/lib/api";
-
+import { TokenConfig } from "@/lib/tokenlist";
+import { fetchActiveTokensWithMetadata } from "@/lib/tokenUtils";
 // Dynamic ERC20 token list from contract
 
 const NETWORKS = [
@@ -38,15 +39,7 @@ function generateRequestId() {
 }
 
 // Fetch active ERC20 tokens from contract
-async function fetchActiveTokens() {
-  try {
-    const res = await fetch("/api/active-tokens"); // You must implement this API route to call your contract
-    if (!res.ok) return [];
-    const data = await res.json();
-    return Array.isArray(data.tokens) ? data.tokens : [];
-  } catch {
-    return [];
-  }
+const [activeTokens, setActiveTokens] = useState<TokenConfig[]>([]); // Change any[] to TokenConfig[]
 }
 
 // Fetch prices for dynamic tokens
@@ -82,17 +75,17 @@ export default function AirtimePage() {
   const { isOnBaseChain, isSwitchingChain, promptSwitchToBase } = useBaseNetworkEnforcer();
 
   /* initial load */
-  useEffect(() => {
-    async function loadTokensAndPrices() {
-      setLoading(true);
-      const tokens = await fetchActiveTokens();
-      setActiveTokens(tokens);
-      const prices = await fetchPrices(tokens);
-      setPrices(prices);
-      setLoading(false);
-    }
-    loadTokensAndPrices();
-  }, []);
+ useEffect(() => {
+  async function loadTokensAndPrices() {
+    setLoading(true);
+    const tokens = await fetchActiveTokensWithMetadata();
+    setActiveTokens(tokens);
+    const prices = await fetchPrices(tokens); // Use your existing fetchPrices function
+    setPrices(prices);
+    setLoading(false);
+  }
+  loadTokensAndPrices();
+}, []);
 
   /* requestId generator */
   useEffect(() => {
