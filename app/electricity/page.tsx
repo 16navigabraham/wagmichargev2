@@ -231,6 +231,7 @@ export default function ElectricityPage() {
 const tokenAmountForOrder: bigint = selectedTokenObj ? parseUnits(cryptoNeeded.toFixed(selectedTokenObj.decimals), selectedTokenObj.decimals) : BigInt(0);
 const bytes32RequestId: Hex = toHex(toBytes(requestId || ""), { size: 32 });
 const unlimitedApprovalAmount: bigint = parseUnits('115792089237316195423570985008687907853269984665640564039457584007913129639935', 0);
+const valueForEth: bigint = selectedTokenObj && selectedTokenObj.tokenType === 0 ? tokenAmountForOrder : BigInt(0);
 
   // Wagmi Hooks for TOKEN APPROVAL Transaction
   const { writeContract: writeApprove, data: approveHash, isPending: isApprovePending, isError: isApproveError, error: approveWriteError } = useWriteContract();
@@ -261,7 +262,6 @@ const unlimitedApprovalAmount: bigint = parseUnits('1157920892373161954235709850
     abi: CONTRACT_ABI,
     functionName: 'createOrder',
     args: [bytes32RequestId, selectedTokenObj?.tokenType ?? 0, tokenAmountForOrder],
-    value: selectedTokenObj && selectedTokenObj.tokenType === 0 ? valueForEth : undefined, // Only set value for native tokens
     query: { enabled: Boolean(requestId && address && tokenAmountForOrder > 0) },
   });
 

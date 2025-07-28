@@ -252,9 +252,9 @@ export default function TVPage() {
 
   // For the main contract call, use the exact amount needed.
   const tokenAmountForOrder: bigint = selectedCrypto ? parseUnits(cryptoNeeded.toFixed(selectedCrypto.decimals), selectedCrypto.decimals) : BigInt(0);
-  const valueForEth: bigint = selectedCrypto?.symbol === 'ETH' && cryptoNeeded > 0
+  const valueForEth: bigint | undefined = selectedCrypto?.symbol === 'ETH' && cryptoNeeded > 0
       ? parseEther(cryptoNeeded.toFixed(18))
-      : BigInt(0);
+      : undefined;
   const bytes32RequestId: Hex = toHex(toBytes(requestId || ""), { size: 32 });
 
   // For approval, use the maximum uint256 value for unlimited approval.
@@ -453,7 +453,7 @@ export default function TVPage() {
     address: CONTRACT_ADDRESS,
     abi: CONTRACT_ABI,
     functionName: 'getOrder',
-    args: [bytes32RequestId],
+    args: [BigInt(bytes32RequestId)],
     query: { enabled: Boolean(requestId && address) },
   });
 
@@ -463,7 +463,6 @@ export default function TVPage() {
     abi: CONTRACT_ABI,
     functionName: 'createOrder',
     args: [bytes32RequestId, selectedCrypto?.tokenType ?? 0, tokenAmountForOrder],
-    value: selectedCrypto?.tokenType === 0 ? valueForEth : 0n,
     query: { enabled: Boolean(requestId && address && tokenAmountForOrder > 0n) },
   });
 
@@ -539,7 +538,7 @@ export default function TVPage() {
     console.log("RequestId (bytes32):", bytes32RequestId);
     console.log("TokenType:", selectedCrypto.tokenType);
     console.log("TokenAmount for Order (parsed):", tokenAmountForOrder.toString()); // Log as string to see full BigInt
-    console.log("Value (for ETH, 0 for ERC20):", valueForEth.toString()); // Log as string to see full BigInt
+    console.log("Value (for ETH, 0 for ERC20):", (valueForEth ?? BigInt(0)).toString()); // Log as string to see full BigInt
     console.log("Selected Crypto:", selectedCrypto.symbol);
     console.log("Crypto Needed (float):", cryptoNeeded);
     console.log("Selected Crypto Decimals:", selectedCrypto.decimals);
@@ -611,7 +610,7 @@ export default function TVPage() {
                         selectedCrypto.tokenType as any,
                         tokenAmountForOrder,
                     ],
-                    value: valueForEth,
+                   ...(valueForEth && valueForEth > 0n ? { value: valueForEth as any } : {}),
                 });
             } catch (error: any) {
                 console.error("Error sending main transaction:", error);
@@ -625,7 +624,7 @@ export default function TVPage() {
         // If ETH, no approval needed, proceed directly with main transaction
         try {
           setTxStatus('waitingForSignature'); // Set status for main transaction signature
-          writeContract({
+          const txOptions: any = {
               address: CONTRACT_ADDRESS,
               abi: CONTRACT_ABI,
               functionName: 'createOrder',
@@ -634,8 +633,9 @@ export default function TVPage() {
                   selectedCrypto.tokenType as any,
                   tokenAmountForOrder,
               ],
-              value: valueForEth,
-          });
+              ...(valueForEth && valueForEth > 0n ? { value: valueForEth as any } : {}),
+          };
+          writeContract(txOptions);
         } catch (error: any) {
           console.error("Error sending main transaction:", error);
           const errorMsg = error.message || "Failed to send transaction.";

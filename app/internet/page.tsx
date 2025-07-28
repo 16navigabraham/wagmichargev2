@@ -162,7 +162,7 @@ const unlimitedApprovalAmount: bigint = parseUnits('1157920892373161954235709850
         address: CONTRACT_ADDRESS,
         abi: CONTRACT_ABI,
         functionName: 'getOrder',
-        args: [bytes32RequestId],
+        args: [BigInt(bytes32RequestId)],
         query: {
             enabled: Boolean(requestId && address), // Only query when requestId and address exist
         },
@@ -180,20 +180,17 @@ const unlimitedApprovalAmount: bigint = parseUnits('1157920892373161954235709850
     });
 
     // FIX 4: Simulate main contract transaction
-    const { data: mainSimulation, error: mainSimError } = useSimulateContract({
-        address: CONTRACT_ADDRESS,
-        abi: CONTRACT_ABI,
-        functionName: 'createOrder',
-        args: [
-            bytes32RequestId,
-            selectedCrypto?.tokenType ?? 0,
-            tokenAmountForOrder,
-        ],
-        value: selectedCrypto?.tokenType === 0 ? valueForEth : 0n,
-        query: {
-            enabled: Boolean(requestId && address && tokenAmountForOrder > 0n),
-        },
-    });
+    const tokenTypeHex: Hex = toHex(toBytes(String(selectedCrypto?.tokenType ?? 0)), { size: 32 });
+    const simulateMainTxArgs = {
+            address: CONTRACT_ADDRESS as `0x${string}`,
+            abi: CONTRACT_ABI,
+            functionName: 'createOrder' as const,
+            args: [bytes32RequestId, tokenTypeHex, tokenAmountForOrder] as [Hex, Hex, bigint],
+            query: {
+                enabled: Boolean(requestId && address && tokenAmountForOrder > 0n),
+            },
+        } as const;
+    const { data: mainSimulation, error: mainSimError } = useSimulateContract(simulateMainTxArgs);
 
     // Wagmi Hooks for TOKEN APPROVAL Transaction
     const { writeContract: writeApprove, data: approveHash, isPending: isApprovePending, isError: isApproveError, error: approveWriteError } = useWriteContract();
@@ -302,20 +299,22 @@ const unlimitedApprovalAmount: bigint = parseUnits('1157920892373161954235709850
             setRequestId(generateRequestId()); // Generate new requestId for next transaction
             backendRequestSentRef.current = null;
 
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Backend API call failed:", error);
             setTxStatus('backendError');
 
-            let errorMessage = error.message;
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+            let userFriendlyMessage = errorMessage;
             if (errorMessage.includes('HTML instead of JSON')) {
-                errorMessage = 'Server error occurred. Please try again or contact support.';
+                userFriendlyMessage = 'Server error occurred. Please try again or contact support.';
             } else if (errorMessage.includes('Invalid JSON')) {
-                errorMessage = 'Communication error with server. Please try again.';
+                userFriendlyMessage = 'Communication error with server. Please try again.';
             } else if (errorMessage.includes('Failed to fetch')) {
-                errorMessage = 'Network error. Please check your connection and try again.';
+                userFriendlyMessage = 'Network error. Please check your connection and try again.';
             }
 
-            const fullMessage = `${errorMessage}. Request ID: ${requestId}`;
+            const fullMessage = `${userFriendlyMessage}. Request ID: ${requestId}`;
             setBackendMessage(fullMessage);
             toast.error(fullMessage, { id: 'backend-status' });
             
@@ -562,7 +561,7 @@ const unlimitedApprovalAmount: bigint = parseUnits('1157920892373161954235709850
             
             // Check main transaction simulation
             if (mainSimError) {
-                const errorMsg = mainSimError.message || "Transaction simulation failed";
+                const errorMsg = (mainSimError as Error)?.message || "Transaction simulation failed";
                 setTransactionError(errorMsg);
                 setTxStatus('error');
                 toast.error(`Transaction simulation failed: ${errorMsg}`);

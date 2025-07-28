@@ -58,8 +58,9 @@ async function fetchPrices(tokenList: any[]) {
 }
 
 export default function AirtimePage() {
+  const [crypto, setCrypto] = useState(""); // Add missing state
   const [activeTokens, setActiveTokens] = useState<any[]>([]); // Dynamic ERC20 tokens from contract
-  const [selectedToken, setSelectedToken] = useState<string>(""); // Selected token address
+  const [selectedToken, setSelectedToken] = useState<string | undefined>(undefined); // Selected token address
   const [network, setNetwork] = useState("");
   const [amount, setAmount] = useState("");
   const [phone, setPhone] = useState("");
@@ -199,13 +200,14 @@ export default function AirtimePage() {
 
 
   // Simulate main contract transaction
+  const tokenAmountForZeroCheck = BigInt(0);
+  const simulationValue = selectedTokenObj?.tokenType === 0 ? valueForEth : undefined;
   const { data: mainSimulation, error: mainSimError } = useSimulateContract({
     address: CONTRACT_ADDRESS,
     abi: CONTRACT_ABI,
     functionName: 'createOrder',
     args: [bytes32RequestId, selectedTokenObj?.tokenType ?? 0, tokenAmountForOrder],
-    value: selectedTokenObj && selectedTokenObj.tokenType === 0 ? valueForEth : undefined, // Only set value for native tokens
-    query: { enabled: Boolean(requestId && address && tokenAmountForOrder > 0) },
+    query: { enabled: Boolean(requestId && address && tokenAmountForOrder > tokenAmountForZeroCheck) },
   });
 
   // Handle backend API call after successful transaction
@@ -247,8 +249,8 @@ export default function AirtimePage() {
       phone,
       serviceID: network,
       amount: amountNGN,
-      cryptoUsed: parseFloat(cryptoNeeded.toFixed(selectedTokenObj ? selectedTokenObj.decimals || 6 : 6)),
-      cryptoSymbol: selectedTokenObj ? selectedTokenObj.symbol : "",
+      cryptoUsed: parseFloat(cryptoNeeded.toFixed(selectedTokenObj?.decimals || 6)),
+      cryptoSymbol: selectedTokenObj?.symbol ?? "",
       transactionHash,
       userAddress: address!
     });
@@ -279,7 +281,7 @@ export default function AirtimePage() {
     setBackendMessage(fullMessage);
     toast.error(fullMessage, { id: 'backend-status' });
   }
-}, [requestId, phone, network, amountNGN, cryptoNeeded, selectedCrypto?.symbol, selectedCrypto?.decimals, address]);
+}, [requestId, phone, network, amountNGN, cryptoNeeded, selectedTokenObj?.symbol, selectedTokenObj?.decimals, address]);
 
   // Effect to monitor approval transaction status
   useEffect(() => {
@@ -321,13 +323,13 @@ export default function AirtimePage() {
 
   // Auto-trigger main transaction after approval
   useEffect(() => {
-    if (isApprovalTxConfirmed && txStatus === 'approvalSuccess' && selectedCrypto && selectedCrypto.tokenType !== 0) {
+    if (isApprovalTxConfirmed && txStatus === 'approvalSuccess' && selectedTokenObj && selectedTokenObj.tokenType !== 0) {
       // Small delay to ensure allowance is updated
       setTimeout(() => {
         console.log("Approval confirmed! Initiating main transaction...");
         console.log("Contract call params:", {
           requestId: bytes32RequestId,
-          tokenType: selectedCrypto.tokenType,
+          tokenType: selectedTokenObj.tokenType,
           tokenAmount: tokenAmountForOrder.toString()
         });
         
@@ -339,7 +341,7 @@ export default function AirtimePage() {
             functionName: 'createOrder',
             args: [
               bytes32RequestId,
-              selectedCrypto.tokenType as any,
+              selectedTokenObj.tokenType as any,
               tokenAmountForOrder,
             ],
             value: undefined,
@@ -353,7 +355,7 @@ export default function AirtimePage() {
         }
       }, 2000); // 2 second delay
     }
-  }, [isApprovalTxConfirmed, txStatus, selectedCrypto, bytes32RequestId, tokenAmountForOrder, writeContract]);
+  }, [isApprovalTxConfirmed, txStatus, selectedTokenObj, bytes32RequestId, tokenAmountForOrder, writeContract]);
 
   // Effect to monitor main transaction status
   useEffect(() => {
@@ -434,7 +436,7 @@ export default function AirtimePage() {
       return;
     }
 
-    if (!address || !requestId || !selectedCrypto || amountNGN <= 0) {
+    if (!address || !requestId || !selectedTokenObj || amountNGN <= 0) {
       toast.error("Please check all form fields and wallet connection.");
       setTxStatus('error');
       return;
@@ -470,11 +472,11 @@ export default function AirtimePage() {
 
     console.log("--- Initiating Contract Call ---");
     console.log("RequestId (bytes32):", bytes32RequestId);
-    console.log("TokenType:", selectedCrypto.tokenType);
+    console.log("TokenType:", selectedTokenObj.tokenType);
     console.log("TokenAmount for Order:", tokenAmountForOrder.toString());
-    console.log("Formatted amount:", formatUnits(tokenAmountForOrder, selectedCrypto.decimals));
+    console.log("Formatted amount:", formatUnits(tokenAmountForOrder, selectedTokenObj.decimals));
     console.log("Value (for ETH):", valueForEth.toString());
-    console.log("Selected Crypto:", selectedCrypto.symbol);
+    console.log("Selected Crypto:", selectedTokenObj.symbol);
     console.log("Needs Approval:", needsApproval);
     console.log("Current Allowance:", currentAllowance?.toString());
     console.log("Crypto needed (float):", cryptoNeeded);
@@ -487,8 +489,8 @@ export default function AirtimePage() {
     resetWrite();
 
     // Handle ERC20 tokens - Check if approval is needed
-    if (selectedCrypto.tokenType !== 0) {
-      if (!selectedCrypto.contract) {
+    if (selectedTokenObj.tokenType !== 0) {
+      if (!selectedTokenObj.contract) {
         toast.error("Selected crypto has no contract address.");
         setTxStatus('error');
         return;
@@ -502,13 +504,13 @@ export default function AirtimePage() {
           // Approve a reasonable amount to avoid frequent approvals
           // Use a large enough amount but not too excessive
           const approvalAmount = tokenAmountForOrder * BigInt(10); // 10x the needed amount
-          const maxReasonableApproval = parseUnits('100000', selectedCrypto.decimals); // 100k tokens max
+          const maxReasonableApproval = parseUnits('100000', selectedTokenObj.decimals); // 100k tokens max
           const finalApprovalAmount = approvalAmount > maxReasonableApproval ? maxReasonableApproval : approvalAmount;
           
-          console.log("Approving amount:", finalApprovalAmount.toString(), "formatted:", formatUnits(finalApprovalAmount, selectedCrypto.decimals));
+          console.log("Approving amount:", finalApprovalAmount.toString(), "formatted:", formatUnits(finalApprovalAmount, selectedTokenObj.decimals));
           
           writeApprove({
-            address: selectedCrypto.contract as Hex,
+            address: selectedTokenObj.contract as Hex,
             abi: ERC20_ABI,
             functionName: 'approve',
             args: [CONTRACT_ADDRESS, finalApprovalAmount],
@@ -528,9 +530,9 @@ export default function AirtimePage() {
           console.log("Sending ERC20 transaction with params:", {
             contractAddress: CONTRACT_ADDRESS,
             requestId: bytes32RequestId,
-            tokenType: selectedCrypto.tokenType,
+            tokenType: selectedTokenObj.tokenType,
             tokenAmount: tokenAmountForOrder.toString(),
-            formattedAmount: formatUnits(tokenAmountForOrder, selectedCrypto.decimals)
+            formattedAmount: formatUnits(tokenAmountForOrder, selectedTokenObj.decimals)
           });
           
           writeContract({
@@ -539,7 +541,7 @@ export default function AirtimePage() {
             functionName: 'createOrder',
             args: [
               bytes32RequestId,
-              selectedCrypto.tokenType as any,
+              selectedTokenObj.tokenType as any,
               tokenAmountForOrder,
             ],
             value: undefined,
@@ -559,7 +561,7 @@ export default function AirtimePage() {
         console.log("Sending ETH transaction with params:", {
           contractAddress: CONTRACT_ADDRESS,
           requestId: bytes32RequestId,
-          tokenType: selectedCrypto.tokenType,
+          tokenType: selectedTokenObj.tokenType,
           tokenAmount: tokenAmountForOrder.toString(),
           ethValue: valueForEth.toString(),
           formattedEthValue: formatUnits(valueForEth, 18)
@@ -571,10 +573,10 @@ export default function AirtimePage() {
           functionName: 'createOrder',
           args: [
             bytes32RequestId,
-            selectedCrypto.tokenType as any,
+            selectedTokenObj.tokenType as any,
             tokenAmountForOrder,
           ],
-          value: valueForEth,
+          value: valueForEth as any,
         });
       } catch (error: any) {
         console.error("Error sending ETH transaction:", error);
@@ -592,7 +594,7 @@ export default function AirtimePage() {
       return;
     }
     // FIX 2: Avoid zero token amount
-    if (tokenAmountForOrder === 0) {
+    if (tokenAmountForOrder === 0n) {
       toast.error('Amount too low. Please enter a valid amount.');
       setRequestId(generateRequestId());
       return;
@@ -608,7 +610,7 @@ export default function AirtimePage() {
       return;
     }
     // FIX 3: Send ETH only when needed
-    const txValue = selectedCrypto?.tokenType === 0 ? valueForEth : undefined;
+    const txValue = selectedTokenObj?.tokenType === 0 ? valueForEth : undefined;
     
     writeContract(mainSimulation.request);
     // FIX 5: Regenerate requestId after each transaction attempt
