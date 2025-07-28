@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server';
 import { createPublicClient, http } from 'viem';
 import { base } from 'viem/chains';
-import { CONTRACT_ADDRESS, CONTRACT_ABI } from '@/lib/contract';
+import { CONTRACT_ADDRESS, CONTRACT_ABI } from '@/config/contract';
 
 // Create a public client for Base chain
 const publicClient = createPublicClient({
