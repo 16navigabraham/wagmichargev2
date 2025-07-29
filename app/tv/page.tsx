@@ -256,7 +256,11 @@ export default function TVPage() {
 
         console.log("Parsed customer data:", { name, bouquet, due, renewal, rawContent: content });
 
-        if (!name || name.trim() === "") {
+        if (!name || name.trim() === "" || name === "null" || !content?.Customer_Name) {
+          // Check if it's a valid response but inactive card
+          if (content?.WrongBillersCode === false && content?.Customer_Name === null) {
+            throw new Error("This smart card number appears to be inactive or has no active subscription. Please check the card number or contact your service provider.");
+          }
           throw new Error("Customer name not found. Please check the smart card number.");
         }
 

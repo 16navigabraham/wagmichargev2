@@ -601,7 +601,7 @@ export default function ElectricityPage() {
     plan &&
     meterNumber &&
     amount &&
-    amountNGN >= 100 &&
+    amountNGN >= 500 &&
     phone &&
     priceNGN &&
     requestId &&
@@ -759,9 +759,9 @@ export default function ElectricityPage() {
               <Input
                 id="amount"
                 type="number"
-                min={100}
+                min={500}
                 max={50000}
-                placeholder="Enter amount in Naira, minimum ₦100"
+                placeholder="Enter amount in Naira, minimum ₦500"
                 value={amount}
                 onChange={(e) => {
                     const val = e.target.value;
