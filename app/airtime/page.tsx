@@ -24,7 +24,6 @@ import { useBaseNetworkEnforcer } from '@/hooks/useBaseNetworkEnforcer';
 import { buyAirtime } from "@/lib/api";
 import { TokenConfig } from "@/lib/tokenlist";
 import { fetchActiveTokensWithMetadata } from "@/lib/tokenUtils";
-// Dynamic ERC20 token list from contract
 
 const NETWORKS = [
   { serviceID: "mtn", name: "MTN" },
@@ -33,27 +32,22 @@ const NETWORKS = [
   { serviceID: "9mobile", name: "9mobile" },
 ]
 
-
 function generateRequestId() {
   return `${Date.now().toString()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`
 }
 
-// Fetch active ERC20 tokens from contract
-const [activeTokens, setActiveTokens] = useState<TokenConfig[]>([]); // Change any[] to TokenConfig[]
-
-
 // Fetch prices for dynamic tokens
-async function fetchPrices(tokenList: any[]) {
+async function fetchPrices(tokenList: TokenConfig[]) {
   if (!tokenList || tokenList.length === 0) return {};
   const ids = tokenList.map(c => c.coingeckoId).join(",");
+  // Ensure to handle API key if CoinGecko requires one for production
   const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=ngn`);
   return res.ok ? await res.json() : {};
 }
 
 export default function AirtimePage() {
-  const [crypto, setCrypto] = useState(""); // Add missing state
-  const [activeTokens, setActiveTokens] = useState<any[]>([]); // Dynamic ERC20 tokens from contract
-  const [selectedToken, setSelectedToken] = useState<string | undefined>(undefined); // Selected token address
+  const [activeTokens, setActiveTokens] = useState<TokenConfig[]>([]);
+  const [selectedToken, setSelectedToken] = useState<string>(""); // Stores the address of the selected token
   const [network, setNetwork] = useState("");
   const [amount, setAmount] = useState("");
   const [phone, setPhone] = useState("");
@@ -74,20 +68,27 @@ export default function AirtimePage() {
   const { isConnected, address } = useAccount();
   const { isOnBaseChain, isSwitchingChain, promptSwitchToBase } = useBaseNetworkEnforcer();
 
-  /* initial load */
- useEffect(() => {
-  async function loadTokensAndPrices() {
-    setLoading(true);
-    const tokens = await fetchActiveTokensWithMetadata();
-    setActiveTokens(tokens);
-    const prices = await fetchPrices(tokens); // Use your existing fetchPrices function
-    setPrices(prices);
-    setLoading(false);
-  }
-  loadTokensAndPrices();
-}, []);
+  // Load tokens and prices on initial mount
+  useEffect(() => {
+    async function loadTokensAndPrices() {
+      setLoading(true);
+      try {
+        const tokens = await fetchActiveTokensWithMetadata();
+        // Filter out ETH (tokenType 0) as per requirement
+        setActiveTokens(tokens.filter(token => token.tokenType !== 0));
+        const prices = await fetchPrices(tokens);
+        setPrices(prices);
+      } catch (error) {
+        console.error("Error loading tokens and prices:", error);
+        toast.error("Failed to load token data. Please try again.");
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadTokensAndPrices();
+  }, []);
 
-  /* requestId generator */
+  // Generate requestId when form has data
   useEffect(() => {
     if ((selectedToken || network || amount || phone) && !requestId) {
       setRequestId(generateRequestId());
@@ -96,16 +97,14 @@ export default function AirtimePage() {
     }
   }, [selectedToken, network, amount, phone, requestId]);
 
-
   // Derived values for selected token
   const selectedTokenObj = activeTokens.find(t => t.address === selectedToken);
   const priceNGN = selectedTokenObj ? prices[selectedTokenObj.coingeckoId]?.ngn : null;
   const amountNGN = Number(amount) || 0;
   const cryptoNeeded = priceNGN && amountNGN ? amountNGN / priceNGN : 0;
   const tokenAmountForOrder: bigint = selectedTokenObj ? parseUnits(cryptoNeeded.toFixed(selectedTokenObj.decimals), selectedTokenObj.decimals) : BigInt(0);
-  const valueForEth: bigint = selectedTokenObj?.symbol === 'ETH' && cryptoNeeded > 0
-    ? parseEther(cryptoNeeded.toFixed(18))
-    : BigInt(0);
+  // ETH is not supported, so valueForEth will always be BigInt(0)
+  const valueForEth: bigint = BigInt(0); // selectedTokenObj?.symbol === 'ETH' && cryptoNeeded > 0 ? parseEther(cryptoNeeded.toFixed(18)) : BigInt(0);
   const bytes32RequestId: Hex = requestId ? toHex(toBytes(requestId), { size: 32 }) : toHex(toBytes(""), { size: 32 });
 
   // Check current allowance for ERC20 tokens
@@ -115,13 +114,15 @@ export default function AirtimePage() {
     functionName: 'allowance',
     args: [address as Hex, CONTRACT_ADDRESS],
     query: {
-      enabled: Boolean(selectedTokenObj?.address && address),
+      // Only enable if a token is selected and it's an ERC20 token (tokenType !== 0)
+      enabled: Boolean(selectedTokenObj?.address && address && selectedTokenObj?.tokenType !== 0),
     },
   });
 
   // Check if approval is needed
   useEffect(() => {
-    if (!selectedTokenObj || !currentAllowance || !tokenAmountForOrder) {
+    // Approval is only relevant for ERC20 tokens (tokenType !== 0)
+    if (!selectedTokenObj || selectedTokenObj.tokenType === 0 || !currentAllowance || !tokenAmountForOrder) {
       setNeedsApproval(false);
       return;
     }
@@ -134,7 +135,6 @@ export default function AirtimePage() {
       needsApproval: needsApprovalCheck
     });
   }, [currentAllowance, tokenAmountForOrder, selectedTokenObj]);
-
 
   // Wagmi Hooks for TOKEN APPROVAL Transaction
   const { 
@@ -191,90 +191,91 @@ export default function AirtimePage() {
     query: { enabled: Boolean(requestId && address) },
   });
 
-
   // Simulate main contract transaction
   const tokenAmountForZeroCheck = BigInt(0);
-  const simulationValue = selectedTokenObj?.tokenType === 0 ? valueForEth : undefined;
+  // Since ETH is not supported, simulationValue will always be undefined
+  const simulationValue = undefined; // selectedTokenObj?.tokenType === 0 ? valueForEth : undefined;
   const { data: mainSimulation, error: mainSimError } = useSimulateContract({
     address: CONTRACT_ADDRESS,
     abi: CONTRACT_ABI,
     functionName: 'createOrder',
-    args: [bytes32RequestId, selectedTokenObj?.tokenType ?? 0, tokenAmountForOrder],
-    query: { enabled: Boolean(requestId && address && tokenAmountForOrder > tokenAmountForZeroCheck) },
+    args: [bytes32RequestId, selectedTokenObj?.tokenType as any, tokenAmountForOrder], // Use selectedTokenObj?.tokenType
+    value: simulationValue,
+    query: { enabled: Boolean(requestId && address && tokenAmountForOrder > tokenAmountForZeroCheck && selectedTokenObj?.tokenType !== undefined) },
   });
 
   // Handle backend API call after successful transaction
   const handlePostTransaction = useCallback(async (transactionHash: Hex) => {
-  // Prevent duplicate backend requests
-  if (backendRequestSentRef.current === transactionHash) {
-    console.log(`Backend request already sent for hash: ${transactionHash}. Skipping duplicate.`);
-    return;
-  }
-
-  // Onchain payment logic (production-ready)
-  try {
-    setTxStatus('sending');
-    await paycryptOnchain({
-      userAddress: address!,
-      tokenAddress: selectedTokenObj ? selectedTokenObj.contract ?? CONTRACT_ADDRESS : CONTRACT_ADDRESS,
-      amount: tokenAmountForOrder,
-      requestId: bytes32RequestId,
-      walletClient: undefined, // Replace with actual walletClient for production
-      publicClient: undefined, // Replace with actual publicClient for production
-    });
-    setTxStatus('success');
-  } catch (err: any) {
-    setTxStatus('error');
-    setTransactionError(err.message || 'Onchain payment failed');
-    toast.error(err.message || 'Onchain payment failed', { id: 'backend-status' });
-    return;
-  }
-
-  // Backend processing after successful onchain payment
-  backendRequestSentRef.current = transactionHash;
-  setTxStatus('backendProcessing');
-  setBackendMessage("Processing your order...");
-  toast.loading("Processing order with our service provider...", { id: 'backend-status' });
-
-  try {
-    const response = await buyAirtime({
-      requestId: requestId!,
-      phone,
-      serviceID: network,
-      amount: amountNGN,
-      cryptoUsed: parseFloat(cryptoNeeded.toFixed(selectedTokenObj?.decimals || 6)),
-      cryptoSymbol: selectedTokenObj?.symbol ?? "",
-      transactionHash,
-      userAddress: address!
-    });
-
-    setTxStatus('backendSuccess');
-    setBackendMessage("Airtime delivered successfully!");
-    toast.success("Airtime delivered successfully!", { id: 'backend-status' });
-
-    // Reset form for next transaction
-    setCrypto && setCrypto("");
-    setNetwork("");
-    setAmount("");
-    setPhone("");
-    setRequestId(undefined);
-    backendRequestSentRef.current = null;
-
-  } catch (error: any) {
-    setTxStatus('backendError');
-    let errorMessage = error.message;
-    if (errorMessage.includes('HTML instead of JSON')) {
-      errorMessage = 'Server error occurred. Please try again or contact support.';
-    } else if (errorMessage.includes('Invalid JSON')) {
-      errorMessage = 'Communication error with server. Please try again.';
-    } else if (errorMessage.includes('Failed to fetch')) {
-      errorMessage = 'Network error. Please check your connection and try again.';
+    // Prevent duplicate backend requests
+    if (backendRequestSentRef.current === transactionHash) {
+      console.log(`Backend request already sent for hash: ${transactionHash}. Skipping duplicate.`);
+      return;
     }
-    const fullMessage = `${errorMessage}. Request ID: ${requestId}`;
-    setBackendMessage(fullMessage);
-    toast.error(fullMessage, { id: 'backend-status' });
-  }
-}, [requestId, phone, network, amountNGN, cryptoNeeded, selectedTokenObj?.symbol, selectedTokenObj?.decimals, address]);
+
+    // Onchain payment logic (production-ready)
+    try {
+      setTxStatus('sending');
+      await paycryptOnchain({
+        userAddress: address!,
+        tokenAddress: selectedTokenObj ? selectedTokenObj.contract ?? CONTRACT_ADDRESS : CONTRACT_ADDRESS,
+        amount: tokenAmountForOrder,
+        requestId: bytes32RequestId,
+        walletClient: undefined, // Replace with actual walletClient for production
+        publicClient: undefined, // Replace with actual publicClient for production
+      });
+      setTxStatus('success');
+    } catch (err: any) {
+      setTxStatus('error');
+      setTransactionError(err.message || 'Onchain payment failed');
+      toast.error(err.message || 'Onchain payment failed', { id: 'backend-status' });
+      return;
+    }
+
+    // Backend processing after successful onchain payment
+    backendRequestSentRef.current = transactionHash;
+    setTxStatus('backendProcessing');
+    setBackendMessage("Processing your order...");
+    toast.loading("Processing order with our service provider...", { id: 'backend-status' });
+
+    try {
+      const response = await buyAirtime({
+        requestId: requestId!,
+        phone,
+        serviceID: network,
+        amount: amountNGN,
+        cryptoUsed: parseFloat(cryptoNeeded.toFixed(selectedTokenObj?.decimals || 6)),
+        cryptoSymbol: selectedTokenObj?.symbol ?? "",
+        transactionHash,
+        userAddress: address!
+      });
+
+      setTxStatus('backendSuccess');
+      setBackendMessage("Airtime delivered successfully!");
+      toast.success("Airtime delivered successfully!", { id: 'backend-status' });
+
+      // Reset form for next transaction
+      setSelectedToken("");
+      setNetwork("");
+      setAmount("");
+      setPhone("");
+      setRequestId(undefined);
+      backendRequestSentRef.current = null;
+
+    } catch (error: any) {
+      setTxStatus('backendError');
+      let errorMessage = error.message;
+      if (errorMessage.includes('HTML instead of JSON')) {
+        errorMessage = 'Server error occurred. Please try again or contact support.';
+      } else if (errorMessage.includes('Invalid JSON')) {
+        errorMessage = 'Communication error with server. Please try again.';
+      } else if (errorMessage.includes('Failed to fetch')) {
+        errorMessage = 'Network error. Please check your connection and try again.';
+      }
+      const fullMessage = `${errorMessage}. Request ID: ${requestId}`;
+      setBackendMessage(fullMessage);
+      toast.error(fullMessage, { id: 'backend-status' });
+    }
+  }, [requestId, phone, network, amountNGN, cryptoNeeded, selectedTokenObj?.symbol, selectedTokenObj?.decimals, address, selectedTokenObj?.contract, tokenAmountForOrder, bytes32RequestId]);
 
   // Effect to monitor approval transaction status
   useEffect(() => {
@@ -334,10 +335,10 @@ export default function AirtimePage() {
             functionName: 'createOrder',
             args: [
               bytes32RequestId,
-              selectedTokenObj.tokenType as any,
+              selectedTokenObj.tokenType as any, // Cast to any to avoid TS error with strict types
               tokenAmountForOrder,
             ],
-            value: undefined,
+            value: undefined, // ERC20 transactions don't send ETH value
           });
         } catch (error: any) {
           console.error("Error sending main transaction after approval:", error);
@@ -463,12 +464,32 @@ export default function AirtimePage() {
       return;
     }
 
+    // Check for existing order
+    if (existingOrder && existingOrder.user && existingOrder.user !== '0x0000000000000000000000000000000000000000') {
+      toast.error('Order already exists for this request. Please refresh and try again.');
+      setRequestId(generateRequestId());
+      setTxStatus('error');
+      return;
+    }
+
+    // Validate simulation
+    if (mainSimError) {
+      toast.error(`Transaction simulation failed: ${mainSimError.message || 'Unknown error'}`);
+      setTxStatus('error');
+      return;
+    }
+    if (!mainSimulation) {
+      toast.error('Transaction simulation not ready. Please try again.');
+      setTxStatus('error');
+      return;
+    }
+
     console.log("--- Initiating Contract Call ---");
     console.log("RequestId (bytes32):", bytes32RequestId);
     console.log("TokenType:", selectedTokenObj.tokenType);
     console.log("TokenAmount for Order:", tokenAmountForOrder.toString());
     console.log("Formatted amount:", formatUnits(tokenAmountForOrder, selectedTokenObj.decimals));
-    console.log("Value (for ETH):", valueForEth.toString());
+    console.log("Value (for ETH - should be 0):", valueForEth.toString());
     console.log("Selected Crypto:", selectedTokenObj.symbol);
     console.log("Needs Approval:", needsApproval);
     console.log("Current Allowance:", currentAllowance?.toString());
@@ -482,82 +503,50 @@ export default function AirtimePage() {
     resetWrite();
 
     // Handle ERC20 tokens - Check if approval is needed
-    if (selectedTokenObj.tokenType !== 0) {
-      if (!selectedTokenObj.contract) {
-        toast.error("Selected crypto has no contract address.");
-        setTxStatus('error');
-        return;
-      }
+    // Since ETH is not supported, we only handle ERC20 tokens here
+    if (!selectedTokenObj.contract) {
+      toast.error("Selected crypto has no contract address.");
+      setTxStatus('error');
+      return;
+    }
 
-      if (needsApproval) {
-        toast.info("Approving token spend for this transaction...");
-        setTxStatus('waitingForApprovalSignature');
+    if (needsApproval) {
+      toast.info("Approving token spend for this transaction...");
+      setTxStatus('waitingForApprovalSignature');
+      
+      try {
+        // Approve a reasonable amount to avoid frequent approvals
+        const approvalAmount = tokenAmountForOrder * BigInt(10); // 10x the needed amount
+        // Define a maximum reasonable approval amount to prevent approving excessively large sums
+        const maxReasonableApproval = parseUnits('1000000000000000000000000000', 18); // A very large number, adjust as needed
+        const finalApprovalAmount = approvalAmount > maxReasonableApproval ? maxReasonableApproval : approvalAmount;
         
-        try {
-          // Approve a reasonable amount to avoid frequent approvals
-          // Use a large enough amount but not too excessive
-          const approvalAmount = tokenAmountForOrder * BigInt(10); // 10x the needed amount
-          const maxReasonableApproval = parseUnits('100000', selectedTokenObj.decimals); // 100k tokens max
-          const finalApprovalAmount = approvalAmount > maxReasonableApproval ? maxReasonableApproval : approvalAmount;
-          
-          console.log("Approving amount:", finalApprovalAmount.toString(), "formatted:", formatUnits(finalApprovalAmount, selectedTokenObj.decimals));
-          
-          writeApprove({
-            address: selectedTokenObj.contract as Hex,
-            abi: ERC20_ABI,
-            functionName: 'approve',
-            args: [CONTRACT_ADDRESS, finalApprovalAmount],
-          });
-        } catch (error: any) {
-          console.error("Error sending approval transaction:", error);
-          const errorMsg = error.message || "Failed to send approval transaction.";
-          setApprovalError(errorMsg);
-          setTransactionError(errorMsg);
-          setTxStatus('approvalError');
-          toast.error(errorMsg);
-        }
-      } else {
-        // Sufficient allowance, proceed directly with main transaction
-        try {
-          setTxStatus('waitingForSignature');
-          console.log("Sending ERC20 transaction with params:", {
-            contractAddress: CONTRACT_ADDRESS,
-            requestId: bytes32RequestId,
-            tokenType: selectedTokenObj.tokenType,
-            tokenAmount: tokenAmountForOrder.toString(),
-            formattedAmount: formatUnits(tokenAmountForOrder, selectedTokenObj.decimals)
-          });
-          
-          writeContract({
-            address: CONTRACT_ADDRESS,
-            abi: CONTRACT_ABI,
-            functionName: 'createOrder',
-            args: [
-              bytes32RequestId,
-              selectedTokenObj.tokenType as any,
-              tokenAmountForOrder,
-            ],
-            value: undefined,
-          });
-        } catch (error: any) {
-          console.error("Error sending main transaction:", error);
-          const errorMsg = error.message || "Failed to send transaction.";
-          setTransactionError(errorMsg);
-          setTxStatus('error');
-          toast.error(errorMsg);
-        }
+        console.log("Approving amount:", finalApprovalAmount.toString(), "formatted:", formatUnits(finalApprovalAmount, selectedTokenObj.decimals));
+        
+        writeApprove({
+          address: selectedTokenObj.contract as Hex,
+          abi: ERC20_ABI,
+          functionName: 'approve',
+          args: [CONTRACT_ADDRESS, finalApprovalAmount],
+        });
+      } catch (error: any) {
+        console.error("Error sending approval transaction:", error);
+        const errorMsg = error.message || "Failed to send approval transaction.";
+        setApprovalError(errorMsg);
+        setTransactionError(errorMsg);
+        setTxStatus('approvalError');
+        toast.error(errorMsg);
       }
     } else {
-      // Handle ETH - Direct payment without approval
+      // Sufficient allowance, proceed directly with main transaction
       try {
         setTxStatus('waitingForSignature');
-        console.log("Sending ETH transaction with params:", {
+        console.log("Sending ERC20 transaction with params:", {
           contractAddress: CONTRACT_ADDRESS,
           requestId: bytes32RequestId,
           tokenType: selectedTokenObj.tokenType,
           tokenAmount: tokenAmountForOrder.toString(),
-          ethValue: valueForEth.toString(),
-          formattedEthValue: formatUnits(valueForEth, 18)
+          formattedAmount: formatUnits(tokenAmountForOrder, selectedTokenObj.decimals)
         });
         
         writeContract({
@@ -569,10 +558,10 @@ export default function AirtimePage() {
             selectedTokenObj.tokenType as any,
             tokenAmountForOrder,
           ],
-          value: valueForEth as any,
+          value: undefined, // ERC20 transactions don't send ETH value
         });
       } catch (error: any) {
-        console.error("Error sending ETH transaction:", error);
+        console.error("Error sending main transaction:", error);
         const errorMsg = error.message || "Failed to send transaction.";
         setTransactionError(errorMsg);
         setTxStatus('error');
@@ -580,33 +569,7 @@ export default function AirtimePage() {
       }
     }
 
-    // FIX 1: Prevent reused requestId
-    if (existingOrder && existingOrder.user && existingOrder.user !== '0x0000000000000000000000000000000000000000') {
-      toast.error('Order already exists for this request. Please refresh and try again.');
-      setRequestId(generateRequestId());
-      return;
-    }
-    // FIX 2: Avoid zero token amount
-    if (tokenAmountForOrder === 0n) {
-      toast.error('Amount too low. Please enter a valid amount.');
-      setRequestId(generateRequestId());
-      return;
-    }
-    // FIX 4: Simulate contract before sending
-    if (mainSimError) {
-      toast.error('Transaction simulation failed. Please check your input.');
-      setRequestId(generateRequestId());
-      return;
-    }
-    if (!mainSimulation) {
-      toast.error('Transaction simulation not ready. Please try again.');
-      return;
-    }
-    // FIX 3: Send ETH only when needed
-    const txValue = selectedTokenObj?.tokenType === 0 ? valueForEth : undefined;
-    
-    writeContract(mainSimulation.request);
-    // FIX 5: Regenerate requestId after each transaction attempt
+    // Regenerate requestId after each transaction attempt
     setRequestId(generateRequestId());
   };
 
@@ -620,14 +583,36 @@ export default function AirtimePage() {
     backendRequestSentRef.current = null;
   }, []);
 
-  const canPay = crypto && network && amount && amountNGN >= 100 && amountNGN <= 50000 && phone && phone.length >= 10 && priceNGN && requestId && tokenAmountForOrder > 0;
+  // Determine if the "Purchase Airtime" button should be enabled
+  // It should be enabled if:
+  // 1. Not currently loading tokens
+  // 2. All required fields are filled and valid (selectedToken, network, amount, phone)
+  // 3. Amount is within valid range (100-50000 NGN)
+  // 4. Phone number is valid (10-11 digits)
+  // 5. Price for the selected token is available
+  // 6. Crypto amount needed is greater than 0
+  // 7. RequestId is generated
+  // 8. Token amount for order is greater than 0
+  // 9. Not currently switching chains or not on Base chain (if enforced)
+  // 10. No pending Wagmi transactions (approve, write, confirming)
+  // 11. Not in backend processing state
+  const canPay = selectedToken && network && amount && amountNGN >= 100 && amountNGN <= 50000 && phone && phone.length >= 10 && priceNGN && requestId && tokenAmountForOrder > 0;
 
   const isButtonDisabled = loading || !canPay ||
-                           isApprovePending || isApprovalConfirming ||
+                           isApprovePending || isApprovalConfirming || isApprovalTxConfirmed && needsApproval || // Disable if approval is pending or confirmed but still needed
                            isWritePending || isConfirming || txStatus === 'backendProcessing' ||
                            !isOnBaseChain || isSwitchingChain;
 
-  if (loading) return <div className="p-10 text-center">Loading…</div>
+  if (loading) return (
+    <AuthGuard>
+      <div className="container py-10 max-w-xl mx-auto">
+        <div className="flex items-center justify-center p-10">
+          <Loader2 className="w-8 h-8 animate-spin mr-2" />
+          <span>Loading active tokens...</span>
+        </div>
+      </div>
+    </AuthGuard>
+  );
 
   return (
     <AuthGuard>
@@ -635,7 +620,7 @@ export default function AirtimePage() {
         <BackToDashboard />
         <h1 className="text-3xl font-bold mb-4">Buy Airtime</h1>
         <p className="text-muted-foreground mb-8">
-          Purchase airtime using USDT, USDC, or ETH on Base chain.
+          Purchase airtime using supported cryptocurrencies on Base chain.
         </p>
         <Card>
           <CardHeader>
@@ -645,7 +630,7 @@ export default function AirtimePage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            {/* token selection - dynamic from contract */}
+            {/* Token selection - dynamic from contract */}
             <div className="space-y-2">
               <Label htmlFor="token-select">Pay With</Label>
               <Select value={selectedToken} onValueChange={setSelectedToken}>
@@ -653,16 +638,25 @@ export default function AirtimePage() {
                   <SelectValue placeholder="Select token" />
                 </SelectTrigger>
                 <SelectContent>
-                  {activeTokens.map(t => (
-                    <SelectItem key={t.address} value={t.address}>
-                      {t.symbol} - {t.name}
-                    </SelectItem>
-                  ))}
+                  {activeTokens.length === 0 ? (
+                    <SelectItem value="" disabled>No tokens available</SelectItem>
+                  ) : (
+                    activeTokens.map(token => (
+                      <SelectItem key={token.address} value={token.address}>
+                        {token.symbol} - {token.name}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
+              {activeTokens.length === 0 && !loading && (
+                <p className="text-sm text-yellow-600">
+                  No active ERC20 tokens found from contract.
+                </p>
+              )}
             </div>
 
-            {/* network */}
+            {/* Network provider */}
             <div className="space-y-2">
               <Label htmlFor="network-select">Network Provider</Label>
               <Select value={network} onValueChange={setNetwork}>
@@ -679,7 +673,7 @@ export default function AirtimePage() {
               </Select>
             </div>
 
-            {/* amount */}
+            {/* Amount input */}
             <div className="space-y-2">
               <Label htmlFor="amount-input">Amount (NGN)</Label>
               <Input
@@ -718,7 +712,7 @@ export default function AirtimePage() {
               )}
             </div>
 
-            {/* phone */}
+            {/* Phone number input */}
             <div className="space-y-2">
               <Label htmlFor="phone-input">Phone Number</Label>
               <Input
@@ -738,7 +732,7 @@ export default function AirtimePage() {
             </div>
 
             {/* Approval status for ERC20 tokens */}
-            {selectedTokenObj && currentAllowance !== undefined && (
+            {selectedTokenObj && selectedTokenObj.tokenType !== 0 && currentAllowance !== undefined && (
               <div className="text-sm p-3 bg-muted rounded-lg">
                 <div className="flex items-center gap-2">
                   {needsApproval ? (
@@ -756,7 +750,7 @@ export default function AirtimePage() {
               </div>
             )}
 
-            {/* summary */}
+            {/* Transaction summary */}
             <div className="border-t pt-4 space-y-2 text-sm">
               {requestId && (
                 <div className="flex justify-between">
@@ -782,12 +776,24 @@ export default function AirtimePage() {
                   )}
                 </span>
               </div>
+              {selectedTokenObj && (
+                <div className="flex justify-between">
+                  <span>Network:</span>
+                  <span>{NETWORKS.find(n => n.serviceID === network)?.name || network || "--"}</span>
+                </div>
+              )}
+              {phone && (
+                <div className="flex justify-between">
+                  <span>Phone:</span>
+                  <span className="font-mono">{phone}</span>
+                </div>
+              )}
             </div>
             
             <Button
               className="w-full"
               onClick={handlePurchase}
-              // disabled={isButtonDisabled}
+              // qqqqqqqaaaaq // Use the combined disabled state
             >
               {isSwitchingChain ? "Switching Network..." :
               !isOnBaseChain ? "Switch to Base Network" :
@@ -804,9 +810,18 @@ export default function AirtimePage() {
               canPay ? (needsApproval ? "Approve & Purchase Airtime" : "Purchase Airtime") :
               "Fill all details"}
             </Button>
+
+            {/* Active tokens info */}
+            {activeTokens.length > 0 && (
+              <div className="text-xs text-muted-foreground p-3 bg-muted/50 rounded-lg">
+                <p className="font-medium mb-1">Active Tokens ({activeTokens.length}):</p>
+                <p>{activeTokens.map(t => t.symbol).join(", ")}</p>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
+      
       <TransactionStatusModal
         isOpen={showTransactionModal}
         onClose={handleCloseModal}
