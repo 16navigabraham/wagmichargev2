@@ -103,14 +103,14 @@ export default function InternetPage() {
     const [availableProviders, setAvailableProviders] = useState<any[]>([]);
     const [requestId, setRequestId] = useState<string | undefined>(undefined);
 
-    const [txStatus, setTxStatus] = useState<'idle' | 'waitingForSignature' | 'sending' | 'confirming' | 'success' | 'error' | 'backendProcessing' | 'backendSuccess' | 'backendError' | 'waitingForApprovalSignature' | 'approving' | 'approvalSuccess' | 'approvalError'>('idle');
+    const [txStatus, setTxStatus] = useState<'idle' | 'waitingForApprovalSignature' | 'approving' | 'approvalSuccess' | 'waitingForSignature' | 'sending' | 'confirming' | 'success' | 'backendProcessing' | 'backendSuccess' | 'backendError' | 'error'>('idle');
     const [transactionError, setTransactionError] = useState<string | null>(null);
     const [backendMessage, setBackendMessage] = useState<string | null>(null);
     const [showTransactionModal, setShowTransactionModal] = useState(false);
     const [transactionHashForModal, setTransactionHashForModal] = useState<Hex | undefined>(undefined);
 
-    const [approvalError, setApprovalError] = useState<string | null>(null);
     const backendRequestSentRef = useRef<Hex | null>(null);
+    const [needsApproval, setNeedsApproval] = useState(false);
 
     const { connectWallet, authenticated, user } = usePrivy();
     const { isConnected, address } = useAccount();
@@ -123,16 +123,12 @@ export default function InternetPage() {
             setLoading(true);
             try {
                 const tokens = await fetchActiveTokensWithMetadata();
+                // Filter out ETH (tokenType 0) - only ERC20 tokens supported
                 setActiveTokens(tokens.filter(token => token.tokenType !== 0));
                 const prices = await fetchPrices(tokens);
                 setPrices(prices);
                 const serviceData = await fetchDataServices();
                 setAvailableProviders(serviceData);
-
-                // Set initial selected token if available and nothing is selected
-                if (tokens.length > 0 && !selectedTokenAddress) {
-                    setSelectedTokenAddress(tokens[0].address);
-                }
 
             } catch (error) {
                 console.error("Error loading tokens, prices, or providers:", error);
@@ -142,7 +138,7 @@ export default function InternetPage() {
             }
         }
         loadTokensAndPricesAndProviders();
-    }, [selectedTokenAddress]);
+    }, []);
 
     // Effect to fetch plans when provider changes
     useEffect(() => {
@@ -193,21 +189,19 @@ export default function InternetPage() {
     }
     const bytes32RequestId: Hex = toHex(toBytes(requestId || ""), { size: 32 });
 
-    const unlimitedApprovalAmount: bigint = parseUnits('115792089237316195423570985008687907853269984665640564039457584007913129639935', 0);
-
     const { data: currentAllowance, refetch: refetchAllowance } = useReadContract({
         address: selectedCrypto?.address as Hex,
         abi: ERC20_ABI,
         functionName: 'allowance',
         args: [address as Hex, CONTRACT_ADDRESS],
         query: {
-            enabled: Boolean(selectedCrypto?.address && address && selectedCrypto?.tokenType !== 0),
+            enabled: Boolean(selectedCrypto?.address && address),
         },
     });
 
-    const [needsApproval, setNeedsApproval] = useState(false);
+    // Check if approval is needed - always require approval for ERC20 tokens
     useEffect(() => {
-        if (!selectedCrypto || selectedCrypto.tokenType === 0 || !currentAllowance || !tokenAmountForOrder) {
+        if (!selectedCrypto || !currentAllowance || !tokenAmountForOrder) {
             setNeedsApproval(false);
             return;
         }
@@ -280,12 +274,15 @@ export default function InternetPage() {
             setBackendMessage("Internet data delivered successfully!");
             toast.success("Internet data delivered successfully!", { id: 'backend-status' });
 
-            setSelectedTokenAddress("");
-            setProvider("");
-            setPlan("");
-            setCustomerID("");
-            setRequestId(generateRequestId());
-            backendRequestSentRef.current = null;
+            // Reset form for next transaction after a delay
+            setTimeout(() => {
+                setSelectedTokenAddress("");
+                setProvider("");
+                setPlan("");
+                setCustomerID("");
+                setRequestId(undefined);
+                backendRequestSentRef.current = null;
+            }, 3000); // 3 second delay to allow user to see success
 
         } catch (error: unknown) {
             console.error("Backend API call failed:", error);
@@ -305,11 +302,10 @@ export default function InternetPage() {
             const fullMessage = `${userFriendlyMessage}. Request ID: ${requestId}`;
             setBackendMessage(fullMessage);
             toast.error(fullMessage, { id: 'backend-status' });
-            
-            setRequestId(generateRequestId());
         }
-    }, [requestId, customerID, provider, plan, amountNGN, cryptoNeeded, selectedCrypto?.symbol, selectedCrypto?.decimals, address, selectedCrypto?.address, tokenAmountForOrder, bytes32RequestId]);
+    }, [requestId, customerID, provider, plan, amountNGN, cryptoNeeded, selectedCrypto?.symbol, selectedCrypto?.decimals, address]);
 
+    // Effect to monitor approval transaction status
     useEffect(() => {
         if (!showTransactionModal) return;
 
@@ -318,11 +314,10 @@ export default function InternetPage() {
             setTransactionHashForModal(undefined);
             setTransactionError(null);
             setBackendMessage(null);
-            setApprovalError(null);
             toast.info("Awaiting token approval signature...");
             backendRequestSentRef.current = null;
         } else if (approveHash && !isApprovalTxConfirmed && !isApprovalConfirming) {
-            setTxStatus('sending');
+            setTxStatus('approving');
             setTransactionHashForModal(approveHash);
             toast.loading("Token approval sent, waiting for confirmation...", { id: 'approval-status' });
         } else if (isApprovalConfirming) {
@@ -331,30 +326,17 @@ export default function InternetPage() {
             toast.loading("Token approval confirming on blockchain...", { id: 'approval-status' });
         } else if (isApprovalTxConfirmed) {
             setTxStatus('approvalSuccess');
-            setApprovalError(null);
-            toast.success("Token approved for unlimited spending! Proceeding with payment...", { id: 'approval-status' });
+            toast.success("Token approved! Proceeding with payment...", { id: 'approval-status' });
             
             refetchAllowance();
             
             console.log("Approval: Blockchain confirmed! Initiating main transaction...");
-        } else if (isApproveError || isApprovalConfirmError) {
-            setTxStatus('approvalError');
-            const errorMsg = (approveWriteError?.message || approveConfirmError?.message || "Token approval failed").split('\n')[0];
-            setApprovalError(errorMsg);
-            setTransactionError(errorMsg);
-            toast.error(`Approval failed: ${errorMsg}`, { id: 'approval-status' });
             
-            setRequestId(generateRequestId());
-        }
-    }, [isApprovePending, approveHash, isApprovalTxConfirmed, isApprovalConfirming, isApproveError, isApprovalConfirmError, approveWriteError, approveConfirmError, showTransactionModal, refetchAllowance]);
-
-    useEffect(() => {
-        if (isApprovalTxConfirmed && txStatus === 'approvalSuccess' && selectedCrypto && selectedCrypto.tokenType !== 0) {
+            // Automatically proceed with main transaction
             setTimeout(() => {
-                console.log("Approval confirmed! Initiating main transaction...");
                 console.log("Contract call params:", {
                   requestId: bytes32RequestId,
-                  tokenAddress: selectedCrypto.address,
+                  tokenAddress: selectedCrypto?.address,
                   amount: tokenAmountForOrder.toString()
                 });
                 
@@ -366,7 +348,7 @@ export default function InternetPage() {
                         functionName: 'createOrder',
                         args: [
                             bytes32RequestId,
-                            selectedCrypto.address as Hex, // Use token address directly
+                            selectedCrypto?.address as Hex,
                             tokenAmountForOrder,
                         ],
                         value: undefined,
@@ -379,12 +361,21 @@ export default function InternetPage() {
                     toast.error(errorMsg);
                 }
             }, 2000);
+            
+        } else if (isApproveError || isApprovalConfirmError) {
+            setTxStatus('error');
+            const errorMsg = (approveWriteError?.message || approveConfirmError?.message || "Token approval failed").split('\n')[0];
+            setTransactionError(errorMsg);
+            toast.error(`Approval failed: ${errorMsg}`, { id: 'approval-status' });
         }
-    }, [isApprovalTxConfirmed, txStatus, selectedCrypto, bytes32RequestId, tokenAmountForOrder, writeContract]);
+    }, [isApprovePending, approveHash, isApprovalTxConfirmed, isApprovalConfirming, isApproveError, isApprovalConfirmError, approveWriteError, approveConfirmError, showTransactionModal, refetchAllowance, bytes32RequestId, selectedCrypto?.address, tokenAmountForOrder, writeContract]);
 
+    // Effect to monitor main transaction status
     useEffect(() => {
         if (!showTransactionModal) return;
-        if (['waitingForApprovalSignature', 'approving', 'approvalSuccess', 'approvalError'].includes(txStatus)) {
+        
+        // Skip if we're in approval phase
+        if (['waitingForApprovalSignature', 'approving', 'approvalSuccess'].includes(txStatus)) {
             return;
         }
 
@@ -393,21 +384,23 @@ export default function InternetPage() {
             setTransactionHashForModal(undefined);
             setTransactionError(null);
             setBackendMessage(null);
-            toast.info("Awaiting wallet signature...");
+            toast.info("Awaiting wallet signature for payment...");
             backendRequestSentRef.current = null;
         } else if (hash && !isConfirmed && !isConfirming) {
             setTxStatus('sending');
             setTransactionHashForModal(hash);
-            toast.loading("Transaction sent, waiting for blockchain confirmation...", { id: 'tx-status' });
+            toast.loading("Payment transaction sent, waiting for blockchain confirmation...", { id: 'tx-status' });
         } else if (isConfirming) {
             setTxStatus('confirming');
             setTransactionHashForModal(hash);
-            toast.loading("Transaction confirming on blockchain...", { id: 'tx-status' });
+            toast.loading("Payment transaction confirming on blockchain...", { id: 'tx-status' });
         } else if (isConfirmed) {
             if (txStatus !== 'backendProcessing' && txStatus !== 'backendSuccess' && txStatus !== 'backendError') {
                 setTxStatus('success');
                 setTransactionHashForModal(hash);
                 toast.success("Blockchain transaction confirmed! Processing order...", { id: 'tx-status' });
+                
+                // Process backend transaction
                 if (hash) {
                     handlePostTransaction(hash);
                 }
@@ -418,15 +411,6 @@ export default function InternetPage() {
             setTransactionError(errorMsg);
             setTransactionHashForModal(hash);
             toast.error(`Transaction failed: ${errorMsg}`, { id: 'tx-status' });
-            
-            setRequestId(generateRequestId());
-        } else {
-            if (!['backendProcessing', 'backendSuccess', 'backendError'].includes(txStatus)) {
-                setTxStatus('idle');
-                setTransactionError(null);
-                setBackendMessage(null);
-                setTransactionHashForModal(undefined);
-            }
         }
     }, [isWritePending, hash, isConfirming, isConfirmed, isWriteError, isConfirmError, writeError, confirmError, txStatus, handlePostTransaction, showTransactionModal]);
 
@@ -452,7 +436,6 @@ export default function InternetPage() {
         setShowTransactionModal(true);
         setTransactionError(null);
         setBackendMessage(null);
-        setApprovalError(null);
         setTxStatus('idle');
         backendRequestSentRef.current = null;
 
@@ -501,7 +484,7 @@ export default function InternetPage() {
             return;
         }
 
-        console.log("--- Initiating Contract Call ---");
+        console.log("--- Initiating ERC20 Transaction Flow ---");
         console.log("RequestId (bytes32):", bytes32RequestId);
         console.log("Token Address:", selectedCrypto.address);
         console.log("TokenAmount for Order (parsed):", tokenAmountForOrder.toString());
@@ -511,7 +494,7 @@ export default function InternetPage() {
         console.log("Existing order check:", existingOrder);
         console.log("Needs Approval:", needsApproval);
         console.log("Current Allowance:", currentAllowance?.toString());
-        console.log("--------------------------------");
+        console.log("----------------------------------------");
 
         resetApprove();
         resetWrite();
@@ -522,36 +505,51 @@ export default function InternetPage() {
             return;
         }
 
+        // Always start with approval for ERC20 tokens (either first approval or re-approval if insufficient)
         if (needsApproval) {
             toast.info("Approving token spend for this transaction...");
             setTxStatus('waitingForApprovalSignature');
             
             try {
+                // Approve a larger amount to reduce future approvals (10x the needed amount)
+                const approvalAmount = tokenAmountForOrder * BigInt(10);
+                const maxReasonableApproval = parseUnits('1000000000000', selectedCrypto.decimals); // 1 trillion tokens
+                const finalApprovalAmount = approvalAmount > maxReasonableApproval ? maxReasonableApproval : approvalAmount;
+                
+                console.log("Approving amount:", finalApprovalAmount.toString(), "formatted:", formatUnits(finalApprovalAmount, selectedCrypto.decimals));
+                
                 writeApprove({
                     address: selectedCrypto.address as Hex,
                     abi: ERC20_ABI,
                     functionName: 'approve',
-                    args: [CONTRACT_ADDRESS, unlimitedApprovalAmount],
+                    args: [CONTRACT_ADDRESS, finalApprovalAmount],
                 });
             } catch (error: any) {
                 console.error("Error sending approval transaction:", error);
                 const errorMsg = error.message || "Failed to send approval transaction.";
-                setApprovalError(errorMsg);
                 setTransactionError(errorMsg);
-                setTxStatus('approvalError');
+                setTxStatus('error');
                 toast.error(errorMsg);
-                setRequestId(generateRequestId());
             }
         } else {
+            // Sufficient allowance, proceed directly with main transaction
             try {
                 setTxStatus('waitingForSignature');
+                console.log("Sending ERC20 transaction with params:", {
+                    contractAddress: CONTRACT_ADDRESS,
+                    requestId: bytes32RequestId,
+                    tokenAddress: selectedCrypto.address,
+                    tokenAmount: tokenAmountForOrder.toString(),
+                    formattedAmount: formatUnits(tokenAmountForOrder, selectedCrypto.decimals)
+                });
+                
                 writeContract({
                     address: CONTRACT_ADDRESS,
                     abi: CONTRACT_ABI,
                     functionName: 'createOrder',
                     args: [
                         bytes32RequestId,
-                        selectedCrypto.address as Hex, // Use token address directly
+                        selectedCrypto.address as Hex,
                         tokenAmountForOrder,
                     ],
                     value: undefined,
@@ -562,20 +560,27 @@ export default function InternetPage() {
                 setTransactionError(errorMsg);
                 setTxStatus('error');
                 toast.error(errorMsg);
-                setRequestId(generateRequestId());
             }
         }
+
+        // Regenerate requestId for next transaction
+        setRequestId(generateRequestId());
     };
 
     const handleCloseModal = useCallback(() => {
+        // Don't allow closing during critical phases
+        if (['waitingForApprovalSignature', 'approving', 'waitingForSignature', 'sending', 'confirming', 'backendProcessing'].includes(txStatus)) {
+            toast.info("Please wait for the transaction to complete before closing.");
+            return;
+        }
+        
         setShowTransactionModal(false);
         setTxStatus('idle');
         setTransactionError(null);
         setBackendMessage(null);
         setTransactionHashForModal(undefined);
-        setApprovalError(null);
         backendRequestSentRef.current = null;
-    }, []);
+    }, [txStatus]);
 
     const providersToShow = availableProviders.length > 0 ? availableProviders : [];
 
@@ -587,7 +592,7 @@ export default function InternetPage() {
                              loadingPlans || 
                              isWritePending || 
                              isConfirming || 
-                             txStatus === 'backendProcessing' || 
+                             ['backendProcessing', 'waitingForApprovalSignature', 'approving', 'waitingForSignature', 'sending', 'confirming'].includes(txStatus) ||
                              !isFormValid ||
                              isApprovePending || 
                              isApprovalConfirming || 
@@ -614,7 +619,7 @@ export default function InternetPage() {
                 <BackToDashboard />
                 <h1 className="text-3xl font-bold mb-4">Buy Internet Data</h1>
                 <p className="text-muted-foreground mb-8">
-                    Purchase internet data bundles using supported cryptocurrencies on Base chain.
+                    Purchase internet data bundles using supported ERC20 cryptocurrencies on Base chain.
                 </p>
                 <Card>
                     <CardHeader>
@@ -625,68 +630,6 @@ export default function InternetPage() {
                     </CardHeader>
                     <CardContent className="space-y-6">
                         <div className="space-y-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="crypto">Pay With</Label>
-                               <Select value={selectedTokenAddress} onValueChange={setSelectedTokenAddress}>
-                                 <SelectTrigger>
-                                   <SelectValue placeholder="Select token" />
-                                 </SelectTrigger>
-                                 <SelectContent>
-                                   {activeTokens.length === 0 ? (
-                                     <SelectItem value="" disabled>No tokens available</SelectItem>
-                                   ) : (
-                                     activeTokens.map((c) => (
-                                       <SelectItem key={c.address} value={c.address}>
-                                         {c.symbol} - {c.name}
-                                       </SelectItem>
-                                     ))
-                                   )}
-                                 </SelectContent>
-                               </Select>
-                               {activeTokens.length === 0 && !loading && (
-                                 <p className="text-sm text-yellow-600">
-                                   No active ERC20 tokens found from contract.
-                                 </p>
-                               )}
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="provider">Internet Provider</Label>
-                                <Select value={provider} onValueChange={setProvider}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select provider" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {providersToShow.map((p) => (
-                                            <SelectItem key={p.serviceID || p.id} value={p.serviceID}>
-                                                {p.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="plan">Data Plan</Label>
-                                <Select value={plan} onValueChange={setPlan} disabled={!provider || loadingPlans}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder={loadingPlans ? "Loading plans..." : "Select data plan"} />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {plans.length > 0 ? (
-                                            plans.map((p) => (
-                                                <SelectItem key={p.variation_code} value={p.variation_code}>
-                                                    {p.name} - ₦{Number(p.variation_amount).toLocaleString()}
-                                                </SelectItem>
-                                            ))
-                                        ) : (
-                                            !loadingPlans && provider && (
-                                                <SelectItem value="no-plans" disabled>
-                                                    No plans available for this provider
-                                                </SelectItem>
-                                            )
-                                        )}
-                                    </SelectContent>
-                                </Select>
-                            </div>
                             <div className="space-y-2">
                                 <Label htmlFor="customerID">Customer ID / Phone Number</Label>
                                 <Input
@@ -710,21 +653,16 @@ export default function InternetPage() {
                             </div>
                         )}
                         
-                        {/* Approval status for ERC20 tokens */}
-                        {selectedCrypto && selectedCrypto.tokenType !== 0 && currentAllowance !== undefined && (
-                          <div className="text-sm p-3 bg-muted rounded-lg">
+                        {/* Token approval info */}
+                        {selectedCrypto && (
+                          <div className="text-sm p-3 bg-blue-50 border border-blue-200 rounded-lg">
                             <div className="flex items-center gap-2">
-                              {needsApproval ? (
-                                <>
-                                  <AlertCircle className="w-4 h-4 text-orange-500" />
-                                  <span>Token approval required for this transaction</span>
-                                </>
-                              ) : (
-                                <>
-                                  <CheckCircle className="w-4 h-4 text-green-500" />
-                                  <span>Sufficient token allowance available</span>
-                                </>
-                              )}
+                              <AlertCircle className="w-4 h-4 text-blue-500" />
+                              <span className="text-blue-700">
+                                {needsApproval 
+                                  ? "Token approval required for this transaction" 
+                                  : "Token approval may be required (will check before payment)"}
+                              </span>
                             </div>
                           </div>
                         )}
@@ -763,6 +701,7 @@ export default function InternetPage() {
                                 </span>
                             </div>
                         </div>
+                        
                         <Button
                             className="w-full"
                             onClick={handlePurchase}
@@ -771,16 +710,17 @@ export default function InternetPage() {
                             {isSwitchingChain ? "Switching Network..." :
                             !isOnBaseChain ? "Switch to Base Network" :
                             isRequestIdUsed ? "Generating New Request ID..." :
-                            isApprovePending ? "Awaiting Approval Signature..." :
-                            isApprovalConfirming ? "Approving Token..." :
+                            txStatus === 'waitingForApprovalSignature' ? "Awaiting Approval Signature..." :
+                            txStatus === 'approving' ? "Approving Token..." :
+                            txStatus === 'approvalSuccess' ? "Approval Complete - Starting Payment..." :
                             txStatus === 'waitingForSignature' ? "Awaiting Payment Signature..." :
-                            txStatus === 'sending' ? "Sending Transaction..." :
-                            txStatus === 'confirming' ? "Confirming Blockchain..." :
-                            txStatus === 'success' ? "Blockchain Confirmed!" :
+                            txStatus === 'sending' ? "Sending Payment..." :
+                            txStatus === 'confirming' ? "Confirming Payment..." :
+                            txStatus === 'success' ? "Payment Confirmed!" :
                             txStatus === 'backendProcessing' ? "Processing Order..." :
-                            txStatus === 'backendSuccess' ? "Payment Successful!" :
-                            txStatus === 'backendError' ? "Payment Failed - Try Again" :
-                            txStatus === 'error' ? "Blockchain Failed - Try Again" :
+                            txStatus === 'backendSuccess' ? "Data Delivered Successfully!" :
+                            txStatus === 'backendError' ? "Order Failed - Try Again" :
+                            txStatus === 'error' ? "Transaction Failed - Try Again" :
                             isFormValid ? (needsApproval ? "Approve & Purchase Internet Data" : "Purchase Internet Data") :
                             "Fill all details"}
                         </Button>
@@ -788,10 +728,16 @@ export default function InternetPage() {
                         {/* Active tokens info */}
                         {activeTokens.length > 0 && (
                             <div className="text-xs text-muted-foreground p-3 bg-muted/50 rounded-lg">
-                                <p className="font-medium mb-1">Active Tokens ({activeTokens.length}):</p>
+                                <p className="font-medium mb-1">Active ERC20 Tokens ({activeTokens.length}):</p>
                                 <p>{activeTokens.map(t => t.symbol).join(", ")}</p>
                             </div>
                         )}
+
+                        {/* Transaction flow info */}
+                        <div className="text-xs text-muted-foreground p-3 bg-blue-50 rounded-lg">
+                            <p className="font-medium mb-1">Transaction Flow:</p>
+                            <p>1. Token Approval → 2. Payment Transaction → 3. Order Processing</p>
+                        </div>
                     </CardContent>
                 </Card>
             </div>
@@ -800,7 +746,7 @@ export default function InternetPage() {
                 onClose={handleCloseModal}
                 txStatus={txStatus}
                 transactionHash={transactionHashForModal}
-                errorMessage={transactionError || approvalError}
+                errorMessage={transactionError}
                 backendMessage={backendMessage}
                 requestId={requestId}
             />

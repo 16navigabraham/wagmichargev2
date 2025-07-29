@@ -40,7 +40,6 @@ function generateRequestId() {
 async function fetchPrices(tokenList: TokenConfig[]) {
   if (!tokenList || tokenList.length === 0) return {};
   const ids = tokenList.map(c => c.coingeckoId).join(",");
-  // Ensure to handle API key if CoinGecko requires one for production
   const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=ngn`);
   return res.ok ? await res.json() : {};
 }
@@ -55,12 +54,11 @@ export default function AirtimePage() {
   const [loading, setLoading] = useState(true);
   const [requestId, setRequestId] = useState<string | undefined>(undefined);
 
-  const [txStatus, setTxStatus] = useState<'idle' | 'waitingForSignature' | 'sending' | 'confirming' | 'success' | 'error' | 'backendProcessing' | 'backendSuccess' | 'backendError' | 'waitingForApprovalSignature' | 'approving' | 'approvalSuccess' | 'approvalError'>('idle');
+  const [txStatus, setTxStatus] = useState<'idle' | 'waitingForApprovalSignature' | 'approving' | 'approvalSuccess' | 'waitingForSignature' | 'sending' | 'confirming' | 'success' | 'backendProcessing' | 'backendSuccess' | 'backendError' | 'error'>('idle');
   const [transactionError, setTransactionError] = useState<string | null>(null);
   const [backendMessage, setBackendMessage] = useState<string | null>(null);
   const [showTransactionModal, setShowTransactionModal] = useState(false);
   const [transactionHashForModal, setTransactionHashForModal] = useState<Hex | undefined>(undefined);
-  const [approvalError, setApprovalError] = useState<string | null>(null);
   const backendRequestSentRef = useRef<Hex | null>(null);
   const [needsApproval, setNeedsApproval] = useState(false);
 
@@ -74,7 +72,7 @@ export default function AirtimePage() {
       setLoading(true);
       try {
         const tokens = await fetchActiveTokensWithMetadata();
-        // Filter out ETH (tokenType 0) as per requirement
+        // Filter out ETH (tokenType 0) - only ERC20 tokens supported
         setActiveTokens(tokens.filter(token => token.tokenType !== 0));
         const prices = await fetchPrices(tokens);
         setPrices(prices);
@@ -112,15 +110,13 @@ export default function AirtimePage() {
     functionName: 'allowance',
     args: [address as Hex, CONTRACT_ADDRESS],
     query: {
-      // Only enable if a token is selected and it's an ERC20 token (tokenType !== 0)
-      enabled: Boolean(selectedTokenObj?.address && address && selectedTokenObj?.tokenType !== 0),
+      enabled: Boolean(selectedTokenObj?.address && address),
     },
   });
 
-  // Check if approval is needed
+  // Check if approval is needed - always require approval for ERC20 tokens
   useEffect(() => {
-    // Approval is only relevant for ERC20 tokens (tokenType !== 0)
-    if (!selectedTokenObj || selectedTokenObj.tokenType === 0 || !currentAllowance || !tokenAmountForOrder) {
+    if (!selectedTokenObj || !currentAllowance || !tokenAmountForOrder) {
       setNeedsApproval(false);
       return;
     }
@@ -180,12 +176,12 @@ export default function AirtimePage() {
     },
   });
 
-  // Check if requestId is already used - Fixed to use proper parameter conversion
+  // Check if requestId is already used
   const { data: existingOrder } = useReadContract({
     address: CONTRACT_ADDRESS,
     abi: CONTRACT_ABI,
     functionName: 'getOrder',
-    args: [fromHex(bytes32RequestId, 'bigint')], // This should work for getting order by ID
+    args: [fromHex(bytes32RequestId, 'bigint')],
     query: { enabled: Boolean(requestId && address) },
   });
 
@@ -197,26 +193,6 @@ export default function AirtimePage() {
       return;
     }
 
-    // Onchain payment logic (production-ready)
-    try {
-      setTxStatus('sending');
-      await paycryptOnchain({
-        userAddress: address!,
-        tokenAddress: selectedTokenObj ? selectedTokenObj.address : CONTRACT_ADDRESS,
-        amount: tokenAmountForOrder,
-        requestId: bytes32RequestId,
-        walletClient: undefined, // Replace with actual walletClient for production
-        publicClient: undefined, // Replace with actual publicClient for production
-      });
-      setTxStatus('success');
-    } catch (err: any) {
-      setTxStatus('error');
-      setTransactionError(err.message || 'Onchain payment failed');
-      toast.error(err.message || 'Onchain payment failed', { id: 'backend-status' });
-      return;
-    }
-
-    // Backend processing after successful onchain payment
     backendRequestSentRef.current = transactionHash;
     setTxStatus('backendProcessing');
     setBackendMessage("Processing your order...");
@@ -238,13 +214,15 @@ export default function AirtimePage() {
       setBackendMessage("Airtime delivered successfully!");
       toast.success("Airtime delivered successfully!", { id: 'backend-status' });
 
-      // Reset form for next transaction
-      setSelectedToken("");
-      setNetwork("");
-      setAmount("");
-      setPhone("");
-      setRequestId(undefined);
-      backendRequestSentRef.current = null;
+      // Reset form for next transaction after a delay
+      setTimeout(() => {
+        setSelectedToken("");
+        setNetwork("");
+        setAmount("");
+        setPhone("");
+        setRequestId(undefined);
+        backendRequestSentRef.current = null;
+      }, 3000); // 3 second delay to allow user to see success
 
     } catch (error: any) {
       setTxStatus('backendError');
@@ -260,7 +238,7 @@ export default function AirtimePage() {
       setBackendMessage(fullMessage);
       toast.error(fullMessage, { id: 'backend-status' });
     }
-  }, [requestId, phone, network, amountNGN, cryptoNeeded, selectedTokenObj?.symbol, selectedTokenObj?.decimals, address, selectedTokenObj?.address, tokenAmountForOrder, bytes32RequestId]);
+  }, [requestId, phone, network, amountNGN, cryptoNeeded, selectedTokenObj?.symbol, selectedTokenObj?.decimals, address]);
 
   // Effect to monitor approval transaction status
   useEffect(() => {
@@ -271,11 +249,10 @@ export default function AirtimePage() {
       setTransactionHashForModal(undefined);
       setTransactionError(null);
       setBackendMessage(null);
-      setApprovalError(null);
       toast.info("Awaiting token approval signature...");
       backendRequestSentRef.current = null;
     } else if (approveHash && !isApprovalTxConfirmed && !isApprovalConfirming) {
-      setTxStatus('sending');
+      setTxStatus('approving');
       setTransactionHashForModal(approveHash);
       toast.loading("Token approval sent, waiting for confirmation...", { id: 'approval-status' });
     } else if (isApprovalConfirming) {
@@ -284,31 +261,18 @@ export default function AirtimePage() {
       toast.loading("Token approval confirming on blockchain...", { id: 'approval-status' });
     } else if (isApprovalTxConfirmed) {
       setTxStatus('approvalSuccess');
-      setApprovalError(null);
       toast.success("Token approved! Proceeding with payment...", { id: 'approval-status' });
       
-      // Refetch allowance and proceed with main transaction
+      // Refetch allowance
       refetchAllowance();
       
       console.log("Approval confirmed! Initiating main transaction...");
-    } else if (isApproveError || isApprovalConfirmError) {
-      setTxStatus('approvalError');
-      const errorMsg = (approveWriteError?.message || approveConfirmError?.message || "Token approval failed").split('\n')[0];
-      setApprovalError(errorMsg);
-      setTransactionError(errorMsg);
-      toast.error(`Approval failed: ${errorMsg}`, { id: 'approval-status' });
-    }
-  }, [isApprovePending, approveHash, isApprovalTxConfirmed, isApprovalConfirming, isApproveError, isApprovalConfirmError, approveWriteError, approveConfirmError, showTransactionModal, refetchAllowance]);
-
-  // Auto-trigger main transaction after approval
-  useEffect(() => {
-    if (isApprovalTxConfirmed && txStatus === 'approvalSuccess' && selectedTokenObj && selectedTokenObj.tokenType !== 0) {
-      // Small delay to ensure allowance is updated
+      
+      // Automatically proceed with main transaction
       setTimeout(() => {
-        console.log("Approval confirmed! Initiating main transaction...");
         console.log("Contract call params:", {
           requestId: bytes32RequestId,
-          tokenAddress: selectedTokenObj.address,
+          tokenAddress: selectedTokenObj?.address,
           amount: tokenAmountForOrder.toString()
         });
         
@@ -320,10 +284,10 @@ export default function AirtimePage() {
             functionName: 'createOrder',
             args: [
               bytes32RequestId,
-              selectedTokenObj.address as Hex, // Use token address directly
+              selectedTokenObj?.address as Hex,
               tokenAmountForOrder,
             ],
-            value: undefined, // ERC20 transactions don't send ETH value
+            value: undefined,
           });
         } catch (error: any) {
           console.error("Error sending main transaction after approval:", error);
@@ -333,13 +297,21 @@ export default function AirtimePage() {
           toast.error(errorMsg);
         }
       }, 2000); // 2 second delay
+      
+    } else if (isApproveError || isApprovalConfirmError) {
+      setTxStatus('error');
+      const errorMsg = (approveWriteError?.message || approveConfirmError?.message || "Token approval failed").split('\n')[0];
+      setTransactionError(errorMsg);
+      toast.error(`Approval failed: ${errorMsg}`, { id: 'approval-status' });
     }
-  }, [isApprovalTxConfirmed, txStatus, selectedTokenObj, bytes32RequestId, tokenAmountForOrder, writeContract]);
+  }, [isApprovePending, approveHash, isApprovalTxConfirmed, isApprovalConfirming, isApproveError, isApprovalConfirmError, approveWriteError, approveConfirmError, showTransactionModal, refetchAllowance, bytes32RequestId, selectedTokenObj?.address, tokenAmountForOrder, writeContract]);
 
   // Effect to monitor main transaction status
   useEffect(() => {
     if (!showTransactionModal) return;
-    if (['waitingForApprovalSignature', 'approving', 'approvalSuccess', 'approvalError'].includes(txStatus)) {
+    
+    // Skip if we're in approval phase
+    if (['waitingForApprovalSignature', 'approving', 'approvalSuccess'].includes(txStatus)) {
       return;
     }
 
@@ -348,21 +320,23 @@ export default function AirtimePage() {
       setTransactionHashForModal(undefined);
       setTransactionError(null);
       setBackendMessage(null);
-      toast.info("Awaiting wallet signature...");
+      toast.info("Awaiting wallet signature for payment...");
       backendRequestSentRef.current = null;
     } else if (hash && !isConfirmed && !isConfirming) {
       setTxStatus('sending');
       setTransactionHashForModal(hash);
-      toast.loading("Transaction sent, waiting for blockchain confirmation...", { id: 'tx-status' });
+      toast.loading("Payment transaction sent, waiting for blockchain confirmation...", { id: 'tx-status' });
     } else if (isConfirming) {
       setTxStatus('confirming');
       setTransactionHashForModal(hash);
-      toast.loading("Transaction confirming on blockchain...", { id: 'tx-status' });
+      toast.loading("Payment transaction confirming on blockchain...", { id: 'tx-status' });
     } else if (isConfirmed) {
       if (txStatus !== 'backendProcessing' && txStatus !== 'backendSuccess' && txStatus !== 'backendError') {
         setTxStatus('success');
         setTransactionHashForModal(hash);
         toast.success("Blockchain transaction confirmed! Processing order...", { id: 'tx-status' });
+        
+        // Process backend transaction
         if (hash) {
           handlePostTransaction(hash);
         }
@@ -373,13 +347,6 @@ export default function AirtimePage() {
       setTransactionError(errorMsg);
       setTransactionHashForModal(hash);
       toast.error(`Transaction failed: ${errorMsg}`, { id: 'tx-status' });
-    } else {
-      if (!['backendProcessing', 'backendSuccess', 'backendError'].includes(txStatus)) {
-        setTxStatus('idle');
-        setTransactionError(null);
-        setBackendMessage(null);
-        setTransactionHashForModal(undefined);
-      }
     }
   }, [isWritePending, hash, isConfirming, isConfirmed, isWriteError, isConfirmError, writeError, confirmError, txStatus, handlePostTransaction, showTransactionModal]);
 
@@ -405,7 +372,6 @@ export default function AirtimePage() {
     setShowTransactionModal(true);
     setTransactionError(null);
     setBackendMessage(null);
-    setApprovalError(null);
     setTxStatus('idle');
     backendRequestSentRef.current = null;
 
@@ -457,7 +423,7 @@ export default function AirtimePage() {
       return;
     }
 
-    console.log("--- Initiating Contract Call ---");
+    console.log("--- Initiating ERC20 Transaction Flow ---");
     console.log("RequestId (bytes32):", bytes32RequestId);
     console.log("Token Address:", selectedTokenObj.address);
     console.log("TokenAmount for Order:", tokenAmountForOrder.toString());
@@ -468,28 +434,27 @@ export default function AirtimePage() {
     console.log("Crypto needed (float):", cryptoNeeded);
     console.log("Price NGN:", priceNGN);
     console.log("Amount NGN:", amountNGN);
-    console.log("--------------------------------");
+    console.log("----------------------------------------");
 
     // Reset previous transaction states
     resetApprove();
     resetWrite();
 
-    // Handle ERC20 tokens - Check if approval is needed
     if (!selectedTokenObj.address) {
       toast.error("Selected crypto has no contract address.");
       setTxStatus('error');
       return;
     }
 
+    // Always start with approval for ERC20 tokens (either first approval or re-approval if insufficient)
     if (needsApproval) {
       toast.info("Approving token spend for this transaction...");
       setTxStatus('waitingForApprovalSignature');
       
       try {
-        // Approve a reasonable amount to avoid frequent approvals
-        const approvalAmount = tokenAmountForOrder * BigInt(10); // 10x the needed amount
-        // Define a maximum reasonable approval amount to prevent approving excessively large sums
-        const maxReasonableApproval = parseUnits('1000000000000000000000000000', 18); // A very large number, adjust as needed
+        // Approve a larger amount to reduce future approvals (10x the needed amount)
+        const approvalAmount = tokenAmountForOrder * BigInt(10);
+        const maxReasonableApproval = parseUnits('1000000000000', selectedTokenObj.decimals); // 1 trillion tokens
         const finalApprovalAmount = approvalAmount > maxReasonableApproval ? maxReasonableApproval : approvalAmount;
         
         console.log("Approving amount:", finalApprovalAmount.toString(), "formatted:", formatUnits(finalApprovalAmount, selectedTokenObj.decimals));
@@ -503,9 +468,8 @@ export default function AirtimePage() {
       } catch (error: any) {
         console.error("Error sending approval transaction:", error);
         const errorMsg = error.message || "Failed to send approval transaction.";
-        setApprovalError(errorMsg);
         setTransactionError(errorMsg);
-        setTxStatus('approvalError');
+        setTxStatus('error');
         toast.error(errorMsg);
       }
     } else {
@@ -526,10 +490,10 @@ export default function AirtimePage() {
           functionName: 'createOrder',
           args: [
             bytes32RequestId,
-            selectedTokenObj.address as Hex, // Use token address directly
+            selectedTokenObj.address as Hex,
             tokenAmountForOrder,
           ],
-          value: undefined, // ERC20 transactions don't send ETH value
+          value: undefined,
         });
       } catch (error: any) {
         console.error("Error sending main transaction:", error);
@@ -540,26 +504,32 @@ export default function AirtimePage() {
       }
     }
 
-    // Regenerate requestId after each transaction attempt
+    // Regenerate requestId for next transaction
     setRequestId(generateRequestId());
   };
 
   const handleCloseModal = useCallback(() => {
+    // Don't allow closing during critical phases
+    if (['waitingForApprovalSignature', 'approving', 'waitingForSignature', 'sending', 'confirming', 'backendProcessing'].includes(txStatus)) {
+      toast.info("Please wait for the transaction to complete before closing.");
+      return;
+    }
+    
     setShowTransactionModal(false);
     setTxStatus('idle');
     setTransactionError(null);
     setBackendMessage(null);
     setTransactionHashForModal(undefined);
-    setApprovalError(null);
     backendRequestSentRef.current = null;
-  }, []);
+  }, [txStatus]);
 
   // Determine if the "Purchase Airtime" button should be enabled
   const canPay = selectedToken && network && amount && amountNGN >= 100 && amountNGN <= 50000 && phone && phone.length >= 10 && priceNGN && requestId && tokenAmountForOrder > 0;
 
   const isButtonDisabled = loading || !canPay ||
-                           isApprovePending || isApprovalConfirming || isApprovalTxConfirmed && needsApproval ||
-                           isWritePending || isConfirming || txStatus === 'backendProcessing' ||
+                           isApprovePending || isApprovalConfirming || 
+                           isWritePending || isConfirming || 
+                           ['backendProcessing', 'waitingForApprovalSignature', 'approving', 'waitingForSignature', 'sending', 'confirming'].includes(txStatus) ||
                            !isOnBaseChain || isSwitchingChain;
 
   if (loading) return (
@@ -579,7 +549,7 @@ export default function AirtimePage() {
         <BackToDashboard />
         <h1 className="text-3xl font-bold mb-4">Buy Airtime</h1>
         <p className="text-muted-foreground mb-8">
-          Purchase airtime using supported cryptocurrencies on Base chain.
+          Purchase airtime using supported ERC20 cryptocurrencies on Base chain.
         </p>
         <Card>
           <CardHeader>
@@ -589,16 +559,16 @@ export default function AirtimePage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            {/* Token selection - dynamic from contract */}
+            {/* Token selection */}
             <div className="space-y-2">
               <Label htmlFor="token-select">Pay With</Label>
               <Select value={selectedToken} onValueChange={setSelectedToken}>
                 <SelectTrigger id="token-select">
-                  <SelectValue placeholder="Select token" />
+                  <SelectValue placeholder="Select ERC20 token" />
                 </SelectTrigger>
                 <SelectContent>
                   {activeTokens.length === 0 ? (
-                    <SelectItem value="" disabled>No tokens available</SelectItem>
+                    <SelectItem value="" disabled>No ERC20 tokens available</SelectItem>
                   ) : (
                     activeTokens.map(token => (
                       <SelectItem key={token.address} value={token.address}>
@@ -690,21 +660,16 @@ export default function AirtimePage() {
               )}
             </div>
 
-            {/* Approval status for ERC20 tokens */}
-            {selectedTokenObj && selectedTokenObj.tokenType !== 0 && currentAllowance !== undefined && (
-              <div className="text-sm p-3 bg-muted rounded-lg">
+            {/* Token approval info */}
+            {selectedTokenObj && (
+              <div className="text-sm p-3 bg-blue-50 border border-blue-200 rounded-lg">
                 <div className="flex items-center gap-2">
-                  {needsApproval ? (
-                    <>
-                      <AlertCircle className="w-4 h-4 text-orange-500" />
-                      <span>Token approval required for this transaction</span>
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle className="w-4 h-4 text-green-500" />
-                      <span>Sufficient token allowance available</span>
-                    </>
-                  )}
+                  <AlertCircle className="w-4 h-4 text-blue-500" />
+                  <span className="text-blue-700">
+                    {needsApproval 
+                      ? "Token approval required for this transaction" 
+                      : "Token approval may be required (will check before payment)"}
+                  </span>
                 </div>
               </div>
             )}
@@ -756,15 +721,16 @@ export default function AirtimePage() {
             >
               {isSwitchingChain ? "Switching Network..." :
               !isOnBaseChain ? "Switch to Base Network" :
-              isApprovePending ? "Awaiting Approval Signature..." :
-              isApprovalConfirming ? "Approving Token..." :
+              txStatus === 'waitingForApprovalSignature' ? "Awaiting Approval Signature..." :
+              txStatus === 'approving' ? "Approving Token..." :
+              txStatus === 'approvalSuccess' ? "Approval Complete - Starting Payment..." :
               txStatus === 'waitingForSignature' ? "Awaiting Payment Signature..." :
-              txStatus === 'sending' ? "Sending Transaction..." :
-              txStatus === 'confirming' ? "Confirming Blockchain..." :
-              txStatus === 'success' ? "Blockchain Confirmed!" :
+              txStatus === 'sending' ? "Sending Payment..." :
+              txStatus === 'confirming' ? "Confirming Payment..." :
+              txStatus === 'success' ? "Payment Confirmed!" :
               txStatus === 'backendProcessing' ? "Processing Order..." :
-              txStatus === 'backendSuccess' ? "Payment Successful!" :
-              txStatus === 'backendError' ? "Payment Failed - Try Again" :
+              txStatus === 'backendSuccess' ? "Airtime Delivered Successfully!" :
+              txStatus === 'backendError' ? "Order Failed - Try Again" :
               txStatus === 'error' ? "Transaction Failed - Try Again" :
               canPay ? (needsApproval ? "Approve & Purchase Airtime" : "Purchase Airtime") :
               "Fill all details"}
@@ -773,10 +739,16 @@ export default function AirtimePage() {
             {/* Active tokens info */}
             {activeTokens.length > 0 && (
               <div className="text-xs text-muted-foreground p-3 bg-muted/50 rounded-lg">
-                <p className="font-medium mb-1">Active Tokens ({activeTokens.length}):</p>
+                <p className="font-medium mb-1">Active ERC20 Tokens ({activeTokens.length}):</p>
                 <p>{activeTokens.map(t => t.symbol).join(", ")}</p>
               </div>
             )}
+
+            {/* Transaction flow info */}
+            <div className="text-xs text-muted-foreground p-3 bg-blue-50 rounded-lg">
+              <p className="font-medium mb-1">Transaction Flow:</p>
+              <p>1. Token Approval → 2. Payment Transaction → 3. Order Processing</p>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -786,7 +758,7 @@ export default function AirtimePage() {
         onClose={handleCloseModal}
         txStatus={txStatus}
         transactionHash={transactionHashForModal}
-        errorMessage={transactionError || approvalError}
+        errorMessage={transactionError}
         backendMessage={backendMessage}
         requestId={requestId}
       />
