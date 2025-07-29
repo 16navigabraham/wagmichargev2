@@ -459,18 +459,6 @@ export default function AirtimePage() {
       return;
     }
 
-    // Removed simulation checks as per request
-    // if (mainSimError) {
-    //   toast.error(`Transaction simulation failed: ${mainSimError.message || 'Unknown error'}`);
-    //   setTxStatus('error');
-    //   return;
-    // }
-    // if (!mainSimulation) {
-    //   toast.error('Transaction simulation not ready. Please try again.');
-    //   setTxStatus('error');
-    //   return;
-    // }
-
     console.log("--- Initiating Contract Call ---");
     console.log("RequestId (bytes32):", bytes32RequestId);
     console.log("TokenType:", selectedTokenObj.tokenType);

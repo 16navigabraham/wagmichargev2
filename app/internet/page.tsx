@@ -44,9 +44,8 @@ function generateRequestId(): string {
 }
 
 async function fetchInternetPlans(serviceID: string) {
-    console.log(`[fetchInternetPlans] Attempting to fetch plans for serviceID: ${serviceID}`); // Debug log
+    console.log(`[fetchInternetPlans] Attempting to fetch plans for serviceID: ${serviceID}`);
     try {
-        console.log(`Fetching plans for service: ${serviceID}`)
         const response = await fetch(`/api/vtpass/service-variations?serviceID=${serviceID}`, {
             method: 'GET',
             headers: {
@@ -61,10 +60,10 @@ async function fetchInternetPlans(serviceID: string) {
         }
 
         const data = await response.json()
-        console.log('[fetchInternetPlans] Fetched plans data:', data) // Debug log
+        console.log('[fetchInternetPlans] Fetched plans data:', data)
         return data.content?.variations || []
     } catch (error) {
-        console.error('[fetchInternetPlans] Error fetching internet plans:', error) // Debug log
+        console.error('[fetchInternetPlans] Error fetching internet plans:', error)
         return []
     }
 }
@@ -129,6 +128,12 @@ export default function InternetPage() {
                 setPrices(prices);
                 const serviceData = await fetchDataServices();
                 setAvailableProviders(serviceData);
+
+                // Set initial selected token if available and nothing is selected
+                if (tokens.length > 0 && !selectedTokenAddress) {
+                    setSelectedTokenAddress(tokens[0].address);
+                }
+
             } catch (error) {
                 console.error("Error loading tokens, prices, or providers:", error);
                 toast.error("Failed to load essential data. Please try again.");
@@ -137,11 +142,11 @@ export default function InternetPage() {
             }
         }
         loadTokensAndPricesAndProviders();
-    }, []);
+    }, [selectedTokenAddress]);
 
     // Effect to fetch plans when provider changes
     useEffect(() => {
-        console.log(`[useEffect - provider] Provider changed to: ${provider}`); // Debug log
+        console.log(`[useEffect - provider] Provider changed to: ${provider}`);
         if (!provider) {
             setPlans([]);
             setPlan("");
@@ -150,16 +155,20 @@ export default function InternetPage() {
         setLoadingPlans(true)
         fetchInternetPlans(provider)
             .then(data => {
-                console.log(`[useEffect - provider] Plans received:`, data); // Debug log
+                console.log(`[useEffect - provider] Plans received:`, data);
                 setPlans(data);
+                // Optionally set a default plan if plans are loaded and none is selected
+                if (data.length > 0 && !plan) {
+                    setPlan(data[0].variation_code);
+                }
             })
             .catch(error => {
-                console.error(`[useEffect - provider] Error fetching plans for ${provider}:`, error); // Debug log
+                console.error(`[useEffect - provider] Error fetching plans for ${provider}:`, error);
                 setPlans([]);
                 toast.error(`Failed to load plans for ${provider}.`);
             })
             .finally(() => setLoadingPlans(false));
-    }, [provider]);
+    }, [provider, plan]);
 
     // Generate requestId when form has data
     useEffect(() => {
@@ -358,7 +367,7 @@ export default function InternetPage() {
                         functionName: 'createOrder',
                         args: [
                             bytes32RequestId,
-                            toHex(BigInt(selectedCrypto.tokenType), { size: 32 }),
+                            toHex(BigInt(selectedCrypto.tokenType), { size: 32 }), // Changed to toHex(BigInt(...))
                             tokenAmountForOrder,
                         ],
                         value: undefined,
@@ -544,7 +553,7 @@ export default function InternetPage() {
                     functionName: 'createOrder',
                     args: [
                         bytes32RequestId,
-                        toHex(BigInt(selectedCrypto.tokenType), { size: 32 }),
+                        toHex(BigInt(selectedCrypto.tokenType), { size: 32 }), // Changed to toHex(BigInt(...))
                         tokenAmountForOrder,
                     ],
                     value: undefined,
