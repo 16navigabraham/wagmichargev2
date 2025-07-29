@@ -905,7 +905,7 @@ export default function TVPage() {
             <Button
                 className="w-full"
                 onClick={handlePurchase}
-                // disabled={isButtonDisabled} // Use the combined disabled state
+                disabled={isButtonDisabled} // Use the combined disabled state
             >
                 {isSwitchingChain ? "Switching Network..." :
                 !isOnBaseChain ? "Switch to Base Network" :

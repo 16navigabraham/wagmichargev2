@@ -860,7 +860,7 @@ export default function ElectricityPage() {
             <Button
                 className="w-full"
                 onClick={handlePurchase}
-                // disabled={isButtonDisabled}
+                disabled={isButtonDisabled}
             >
                 {isSwitchingChain ? "Switching Network..." :
                 !isOnBaseChain ? "Switch to Base Network" :

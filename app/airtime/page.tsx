@@ -14,9 +14,9 @@ import { Input } from "@/components/ui/input"
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from "@/config/contract";
 import { paycryptOnchain } from "@/lib/paycryptOnchain";
 import { ERC20_ABI } from "@/config/erc20Abi";
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract, useSimulateContract } from 'wagmi';
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi'; // Removed useSimulateContract
 import { usePrivy } from '@privy-io/react-auth';
-import { parseEther, parseUnits, toBytes, toHex, Hex, formatUnits } from 'viem';
+import { parseEther, parseUnits, toBytes, toHex, Hex, fromHex, formatUnits } from 'viem'; // Added fromHex
 import { toast } from 'sonner';
 import { TransactionStatusModal } from "@/components/TransactionStatusModal";
 import { useBaseNetworkEnforcer } from '@/hooks/useBaseNetworkEnforcer';
@@ -104,7 +104,7 @@ export default function AirtimePage() {
   const cryptoNeeded = priceNGN && amountNGN ? amountNGN / priceNGN : 0;
   const tokenAmountForOrder: bigint = selectedTokenObj ? parseUnits(cryptoNeeded.toFixed(selectedTokenObj.decimals), selectedTokenObj.decimals) : BigInt(0);
   // ETH is not supported, so valueForEth will always be BigInt(0)
-  const valueForEth: bigint = BigInt(0); // selectedTokenObj?.symbol === 'ETH' && cryptoNeeded > 0 ? parseEther(cryptoNeeded.toFixed(18)) : BigInt(0);
+  const valueForEth: bigint = BigInt(0);
   const bytes32RequestId: Hex = requestId ? toHex(toBytes(requestId), { size: 32 }) : toHex(toBytes(""), { size: 32 });
 
   // Check current allowance for ERC20 tokens
@@ -187,21 +187,8 @@ export default function AirtimePage() {
     address: CONTRACT_ADDRESS,
     abi: CONTRACT_ABI,
     functionName: 'getOrder',
-    args: [BigInt(bytes32RequestId)],
+    args: [fromHex(bytes32RequestId, 'bigint')], // Converted Hex to BigInt for getOrder
     query: { enabled: Boolean(requestId && address) },
-  });
-
-  // Simulate main contract transaction
-  const tokenAmountForZeroCheck = BigInt(0);
-  // Since ETH is not supported, simulationValue will always be undefined
-  const simulationValue = undefined; // selectedTokenObj?.tokenType === 0 ? valueForEth : undefined;
-  const { data: mainSimulation, error: mainSimError } = useSimulateContract({
-    address: CONTRACT_ADDRESS,
-    abi: CONTRACT_ABI,
-    functionName: 'createOrder',
-    args: [bytes32RequestId, selectedTokenObj?.tokenType as any, tokenAmountForOrder], // Use selectedTokenObj?.tokenType
-    value: simulationValue,
-    query: { enabled: Boolean(requestId && address && tokenAmountForOrder > tokenAmountForZeroCheck && selectedTokenObj?.tokenType !== undefined) },
   });
 
   // Handle backend API call after successful transaction
@@ -335,7 +322,7 @@ export default function AirtimePage() {
             functionName: 'createOrder',
             args: [
               bytes32RequestId,
-              selectedTokenObj.tokenType as any, // Cast to any to avoid TS error with strict types
+              toHex(BigInt(selectedTokenObj.tokenType), { size: 32 }), // Converted number to BigInt then to Hex for bytes32
               tokenAmountForOrder,
             ],
             value: undefined, // ERC20 transactions don't send ETH value
@@ -472,17 +459,17 @@ export default function AirtimePage() {
       return;
     }
 
-    // Validate simulation
-    if (mainSimError) {
-      toast.error(`Transaction simulation failed: ${mainSimError.message || 'Unknown error'}`);
-      setTxStatus('error');
-      return;
-    }
-    if (!mainSimulation) {
-      toast.error('Transaction simulation not ready. Please try again.');
-      setTxStatus('error');
-      return;
-    }
+    // Removed simulation checks as per request
+    // if (mainSimError) {
+    //   toast.error(`Transaction simulation failed: ${mainSimError.message || 'Unknown error'}`);
+    //   setTxStatus('error');
+    //   return;
+    // }
+    // if (!mainSimulation) {
+    //   toast.error('Transaction simulation not ready. Please try again.');
+    //   setTxStatus('error');
+    //   return;
+    // }
 
     console.log("--- Initiating Contract Call ---");
     console.log("RequestId (bytes32):", bytes32RequestId);
@@ -555,7 +542,7 @@ export default function AirtimePage() {
           functionName: 'createOrder',
           args: [
             bytes32RequestId,
-            selectedTokenObj.tokenType as any,
+            toHex(BigInt(selectedTokenObj.tokenType), { size: 32 }), // Converted number to BigInt then to Hex for bytes32
             tokenAmountForOrder,
           ],
           value: undefined, // ERC20 transactions don't send ETH value
@@ -793,7 +780,7 @@ export default function AirtimePage() {
             <Button
               className="w-full"
               onClick={handlePurchase}
-              // qqqqqqqaaaaq // Use the combined disabled state
+              // disabled={isButtonDisabled} // Use the combined disabled state
             >
               {isSwitchingChain ? "Switching Network..." :
               !isOnBaseChain ? "Switch to Base Network" :

@@ -14,9 +14,9 @@ import { Loader2, AlertCircle, CheckCircle } from "lucide-react"
 
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from "@/config/contract";
 import { ERC20_ABI } from "@/config/erc20Abi";
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi'; // Removed useSimulateContract
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi';
 import { usePrivy } from '@privy-io/react-auth';
-import { parseEther, parseUnits, toBytes, toHex, Hex, fromHex } from 'viem'; // Added fromHex
+import { parseEther, parseUnits, toBytes, toHex, Hex, fromHex } from 'viem';
 import { toast } from 'sonner';
 import { TransactionStatusModal } from "@/components/TransactionStatusModal";
 import { useBaseNetworkEnforcer } from '@/hooks/useBaseNetworkEnforcer';
@@ -44,6 +44,7 @@ function generateRequestId(): string {
 }
 
 async function fetchInternetPlans(serviceID: string) {
+    console.log(`[fetchInternetPlans] Attempting to fetch plans for serviceID: ${serviceID}`); // Debug log
     try {
         console.log(`Fetching plans for service: ${serviceID}`)
         const response = await fetch(`/api/vtpass/service-variations?serviceID=${serviceID}`, {
@@ -60,10 +61,10 @@ async function fetchInternetPlans(serviceID: string) {
         }
 
         const data = await response.json()
-        console.log('Fetched plans data:', data)
+        console.log('[fetchInternetPlans] Fetched plans data:', data) // Debug log
         return data.content?.variations || []
     } catch (error) {
-        console.error('Error fetching internet plans:', error)
+        console.error('[fetchInternetPlans] Error fetching internet plans:', error) // Debug log
         return []
     }
 }
@@ -91,14 +92,14 @@ async function fetchDataServices() {
 }
 
 export default function InternetPage() {
-    const [activeTokens, setActiveTokens] = useState<TokenConfig[]>([]); // Dynamic ERC20 tokens from contract
-    const [selectedTokenAddress, setSelectedTokenAddress] = useState<string>(""); // Stores the address of the selected token
+    const [activeTokens, setActiveTokens] = useState<TokenConfig[]>([]);
+    const [selectedTokenAddress, setSelectedTokenAddress] = useState<string>("");
     const [provider, setProvider] = useState("");
     const [plan, setPlan] = useState("");
     const [customerID, setCustomerID] = useState("");
     const [plans, setPlans] = useState<InternetPlan[]>([]);
     const [prices, setPrices] = useState<any>({});
-    const [loading, setLoading] = useState(true); // Set to true initially for token loading
+    const [loading, setLoading] = useState(true);
     const [loadingPlans, setLoadingPlans] = useState(false);
     const [availableProviders, setAvailableProviders] = useState<any[]>([]);
     const [requestId, setRequestId] = useState<string | undefined>(undefined);
@@ -123,7 +124,6 @@ export default function InternetPage() {
             setLoading(true);
             try {
                 const tokens = await fetchActiveTokensWithMetadata();
-                // Filter out ETH (tokenType 0) as per requirement
                 setActiveTokens(tokens.filter(token => token.tokenType !== 0));
                 const prices = await fetchPrices(tokens);
                 setPrices(prices);
@@ -139,6 +139,37 @@ export default function InternetPage() {
         loadTokensAndPricesAndProviders();
     }, []);
 
+    // Effect to fetch plans when provider changes
+    useEffect(() => {
+        console.log(`[useEffect - provider] Provider changed to: ${provider}`); // Debug log
+        if (!provider) {
+            setPlans([]);
+            setPlan("");
+            return;
+        }
+        setLoadingPlans(true)
+        fetchInternetPlans(provider)
+            .then(data => {
+                console.log(`[useEffect - provider] Plans received:`, data); // Debug log
+                setPlans(data);
+            })
+            .catch(error => {
+                console.error(`[useEffect - provider] Error fetching plans for ${provider}:`, error); // Debug log
+                setPlans([]);
+                toast.error(`Failed to load plans for ${provider}.`);
+            })
+            .finally(() => setLoadingPlans(false));
+    }, [provider]);
+
+    // Generate requestId when form has data
+    useEffect(() => {
+        if ((selectedTokenAddress || provider || plan || customerID) && !requestId) {
+            setRequestId(generateRequestId());
+        } else if (!(selectedTokenAddress || provider || plan || customerID) && requestId) {
+            setRequestId(undefined);
+        }
+    }, [selectedTokenAddress, provider, plan, customerID, requestId]);
+
     // Derived values
     const selectedCrypto = activeTokens.find((c) => c.address === selectedTokenAddress);
     const selectedPlan = plans.find((p) => p.variation_code === plan);
@@ -147,19 +178,15 @@ export default function InternetPage() {
     const cryptoNeeded = priceNGN && amountNGN ? amountNGN / priceNGN : 0;
 
     let tokenAmountForOrder: bigint = BigInt(0);
-    // ETH is not supported for this page, so valueForEth will always be 0
     let valueForEth: bigint = BigInt(0);
 
     if (selectedCrypto && cryptoNeeded > 0) {
-        // For ERC20 tokens, parse units based on their decimals
         tokenAmountForOrder = parseUnits(cryptoNeeded.toFixed(selectedCrypto.decimals), selectedCrypto.decimals);
     }
     const bytes32RequestId: Hex = toHex(toBytes(requestId || ""), { size: 32 });
 
-    // For approval, use the maximum uint256 value for unlimited approval.
     const unlimitedApprovalAmount: bigint = parseUnits('115792089237316195423570985008687907853269984665640564039457584007913129639935', 0);
 
-    // Check current allowance for ERC20 tokens
     const { data: currentAllowance, refetch: refetchAllowance } = useReadContract({
         address: selectedCrypto?.address as Hex,
         abi: ERC20_ABI,
@@ -171,7 +198,6 @@ export default function InternetPage() {
     });
 
     const [needsApproval, setNeedsApproval] = useState(false);
-    // Check if approval is needed
     useEffect(() => {
         if (!selectedCrypto || selectedCrypto.tokenType === 0 || !currentAllowance || !tokenAmountForOrder) {
             setNeedsApproval(false);
@@ -187,18 +213,16 @@ export default function InternetPage() {
         });
     }, [currentAllowance, tokenAmountForOrder, selectedCrypto]);
 
-    // Check if requestId is already used
     const { data: existingOrder } = useReadContract({
         address: CONTRACT_ADDRESS,
         abi: CONTRACT_ABI,
         functionName: 'getOrder',
-        args: [fromHex(bytes32RequestId, 'bigint')], // Converted Hex to BigInt for getOrder
+        args: [fromHex(bytes32RequestId, 'bigint')],
         query: {
             enabled: Boolean(requestId && address),
         },
     });
 
-    // Wagmi Hooks for TOKEN APPROVAL Transaction
     const { writeContract: writeApprove, data: approveHash, isPending: isApprovePending, isError: isApproveError, error: approveWriteError, reset: resetApprove } = useWriteContract();
 
     const { isLoading: isApprovalConfirming, isSuccess: isApprovalTxConfirmed, isError: isApprovalConfirmError, error: approveConfirmError } = useWaitForTransactionReceipt({
@@ -209,7 +233,6 @@ export default function InternetPage() {
         },
     });
 
-    // Wagmi Hooks for MAIN PAYMENT Transaction
     const { writeContract, data: hash, isPending: isWritePending, isError: isWriteError, error: writeError, reset: resetWrite } = useWriteContract();
 
     const { isLoading: isConfirming, isSuccess: isConfirmed, isError: isConfirmError, error: confirmError } = useWaitForTransactionReceipt({
@@ -220,7 +243,6 @@ export default function InternetPage() {
         },
     });
 
-    // Handle backend API call after successful transaction
     const handlePostTransaction = useCallback(async (transactionHash: Hex) => {
         if (backendRequestSentRef.current === transactionHash) {
             console.log(`Backend request already sent for hash: ${transactionHash}. Skipping duplicate.`);
@@ -280,7 +302,6 @@ export default function InternetPage() {
         }
     }, [requestId, customerID, provider, plan, amountNGN, cryptoNeeded, selectedCrypto?.symbol, selectedCrypto?.decimals, address, selectedCrypto?.contract, tokenAmountForOrder, bytes32RequestId]);
 
-    // Effect to monitor approval transaction status
     useEffect(() => {
         if (!showTransactionModal) return;
 
@@ -319,7 +340,6 @@ export default function InternetPage() {
         }
     }, [isApprovePending, approveHash, isApprovalTxConfirmed, isApprovalConfirming, isApproveError, isApprovalConfirmError, approveWriteError, approveConfirmError, showTransactionModal, refetchAllowance]);
 
-    // Auto-trigger main transaction after approval
     useEffect(() => {
         if (isApprovalTxConfirmed && txStatus === 'approvalSuccess' && selectedCrypto && selectedCrypto.tokenType !== 0) {
             setTimeout(() => {
@@ -338,7 +358,7 @@ export default function InternetPage() {
                         functionName: 'createOrder',
                         args: [
                             bytes32RequestId,
-                            toHex(BigInt(selectedCrypto.tokenType), { size: 32 }), // Converted number to BigInt then to Hex for bytes32
+                            toHex(BigInt(selectedCrypto.tokenType), { size: 32 }),
                             tokenAmountForOrder,
                         ],
                         value: undefined,
@@ -354,7 +374,6 @@ export default function InternetPage() {
         }
     }, [isApprovalTxConfirmed, txStatus, selectedCrypto, bytes32RequestId, tokenAmountForOrder, writeContract]);
 
-    // Effect to monitor main transaction status
     useEffect(() => {
         if (!showTransactionModal) return;
         if (['waitingForApprovalSignature', 'approving', 'approvalSuccess', 'approvalError'].includes(txStatus)) {
@@ -525,7 +544,7 @@ export default function InternetPage() {
                     functionName: 'createOrder',
                     args: [
                         bytes32RequestId,
-                        toHex(BigInt(selectedCrypto.tokenType), { size: 32 }), // Converted number to BigInt then to Hex for bytes32
+                        toHex(BigInt(selectedCrypto.tokenType), { size: 32 }),
                         tokenAmountForOrder,
                     ],
                     value: undefined,
