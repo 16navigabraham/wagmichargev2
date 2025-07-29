@@ -21,7 +21,7 @@ import { toast } from 'sonner';
 import { TransactionStatusModal } from "@/components/TransactionStatusModal";
 import { useBaseNetworkEnforcer } from '@/hooks/useBaseNetworkEnforcer';
 
-import { buyinternet, getServiceVariations, getServices } from "@/lib/api";
+import { buyinternet } from "@/lib/api";
 import { TokenConfig } from "@/lib/tokenlist";
 import { fetchActiveTokensWithMetadata } from "@/lib/tokenUtils";
 
@@ -82,14 +82,8 @@ async function fetchDataServices() {
         }
 
         const data = await response.json()
-        console.log('Available data services response:', data);
-        console.log('Content array:', data.content);
-        
-        // Return the actual services array
-        const services = data.content || [];
-        console.log('Processed services:', services);
-        
-        return services;
+        console.log('Available data services:', data)
+        return data.content || []
     } catch (error) {
         console.error('Error fetching data services:', error)
         return []
@@ -126,22 +120,12 @@ export default function InternetPage() {
         async function loadTokensAndPricesAndProviders() {
             setLoading(true);
             try {
-                console.log("Starting to load tokens, prices, and providers...");
-                
                 const tokens = await fetchActiveTokensWithMetadata();
-                console.log("Fetched tokens:", tokens);
-                
                 // Filter out ETH (tokenType 0) - only ERC20 tokens supported
-                const erc20Tokens = tokens.filter(token => token.tokenType !== 0);
-                setActiveTokens(erc20Tokens);
-                console.log("Filtered ERC20 tokens:", erc20Tokens);
-                
+                setActiveTokens(tokens.filter(token => token.tokenType !== 0));
                 const prices = await fetchPrices(tokens);
-                console.log("Fetched prices:", prices);
                 setPrices(prices);
-                
                 const serviceData = await fetchDataServices();
-                console.log("Fetched service data:", serviceData);
                 setAvailableProviders(serviceData);
 
             } catch (error) {
@@ -562,6 +546,7 @@ export default function InternetPage() {
 
     const providersToShow = availableProviders.length > 0 ? availableProviders : [];
 
+    const isFormValid = Boolean(selectedTokenAddress && provider && plan && customerID && requestId && cryptoNeeded > 0);
     
     const isRequestIdUsed = existingOrder && existingOrder.user && existingOrder.user !== '0x0000000000000000000000000000000000000000';
     
@@ -640,22 +625,13 @@ export default function InternetPage() {
                                     <SelectValue placeholder="Select provider" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {providersToShow.length === 0 ? (
-                                        <SelectItem value="" disabled>No providers available</SelectItem>
-                                    ) : (
-                                        providersToShow.map((p) => (
-                                            <SelectItem key={p.serviceID} value={p.serviceID}>
-                                                {p.name}
-                                            </SelectItem>
-                                        ))
-                                    )}
+                                    {providersToShow.map((p) => (
+                                        <SelectItem key={p.serviceID || p.id} value={p.serviceID}>
+                                            {p.name}
+                                        </SelectItem>
+                                    ))}
                                 </SelectContent>
                             </Select>
-                            {availableProviders.length === 0 && !loading && (
-                                <p className="text-sm text-yellow-600">
-                                    No internet providers found from backend.
-                                </p>
-                            )}
                         </div>
                         
                         {/* Data Plan Selection */}
