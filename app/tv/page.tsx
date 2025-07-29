@@ -20,7 +20,7 @@ import { toast } from 'sonner';
 import { TransactionStatusModal } from "@/components/TransactionStatusModal";
 import { useBaseNetworkEnforcer } from '@/hooks/useBaseNetworkEnforcer';
 
-import { payTVSubscription } from "@/lib/api";
+import { payTVSubscription, verifySmartCard, getServiceVariations, getServices } from "@/lib/api";
 import { TokenConfig } from "@/lib/tokenlist";
 import { fetchActiveTokensWithMetadata } from "@/lib/tokenUtils";
 
@@ -47,7 +47,7 @@ function generateRequestId() {
   return `${Date.now()}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`
 }
 
-/* ---------- fetch helpers ---------- */
+/* ---------- fetch helpers - using backend API ---------- */
 
 async function fetchPrices(tokenList: TokenConfig[]): Promise<Record<string, any>> {
   const ids = tokenList.map((c: TokenConfig) => c.coingeckoId).join(",");
@@ -58,13 +58,8 @@ async function fetchPrices(tokenList: TokenConfig[]): Promise<Record<string, any
 
 async function fetchTVProviders() {
   try {
-    const res = await fetch("/api/vtpass/services?identifier=tv-subscription")
-    if (!res.ok) {
-      console.error("Failed to fetch TV providers:", res.status);
-      return [];
-    }
-    const data = await res.json()
-    return data.content || []
+    const data = await getServices("tv-subscription");
+    return data.content || [];
   } catch (error) {
     console.error("Error fetching TV providers:", error);
     return [];
@@ -73,49 +68,31 @@ async function fetchTVProviders() {
 
 async function fetchTVPlans(serviceID: string) {
   try {
-    const res = await fetch(`/api/vtpass/service-variations?serviceID=${serviceID}`)
-    if (!res.ok) {
-      console.error("Failed to fetch TV plans:", res.status);
-      return [];
-    }
-    const data = await res.json()
-    return data.content?.variations || []
+    const data = await getServiceVariations(serviceID);
+    return data.content?.variations || [];
   } catch (error) {
     console.error("Error fetching TV plans:", error);
     return [];
   }
 }
 
-/* ---------- VTpass verify - FIXED VERSION ---------- */
+/* ---------- VTpass verify - using backend API ---------- */
 async function verifyCard(billersCode: string, serviceID: string) {
   try {
-    const res = await fetch("/api/vtpass/verify", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ 
-        billersCode, 
-        serviceID, 
-        type: "smartcard" 
-      }),
-    })
+    console.log("Verifying card:", billersCode, "for provider:", serviceID);
+    const data = await verifySmartCard({ billersCode, serviceID, type: "smartcard" });
+    console.log("Verification response:", data);
 
-    if (!res.ok) {
-      const errorText = await res.text();
-      console.error("Verify API error:", res.status, errorText);
-      throw new Error(`Verification failed: ${res.status}`);
-    }
-
-    const data = await res.json()
-
-    if (data.success) {
-      return data.data || {};
+    if (data.success && data.data) {
+      return data.data;
     } else {
       throw new Error(data.error || "Verification failed");
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error("Verify card error:", error);
+    if (error.message.includes('Failed to verify smart card')) {
+      throw new Error("Service temporarily unavailable. Please try again later.");
+    }
     throw error;
   }
 }
@@ -205,7 +182,7 @@ export default function TVPage() {
     }
   }, [selectedTokenAddress, provider, plan, smartCardNumber, customerName, verificationSuccess, requestId])
 
-  /* auto-verify card - FIXED VERSION */
+  /* auto-verify card - using backend API */
   useEffect(() => {
     if (!provider || !smartCardNumber) {
       setCustomerName("")
@@ -238,31 +215,62 @@ export default function TVPage() {
       setRenewalAmount("")
 
       try {
-        console.log("Verifying card:", smartCardNumber, "for provider:", provider);
         const content = await verifyCard(smartCardNumber, provider)
-        console.log("Verification response:", content);
 
-        const name = String(content?.Customer_Name || "").trim()
-        const bouquet = String(content?.Current_Bouquet || "").trim()
-        const due = String(content?.Due_Date || "").trim()
-        const renewal = String(content?.Renewal_Amount || "").trim()
+        // Enhanced handling of customer data with multiple fallbacks
+        const name = content?.Customer_Name || 
+                    content?.customer_name || 
+                    content?.customerName ||
+                    content?.name || 
+                    content?.Name || "";
+                    
+        const bouquet = content?.Current_Bouquet || 
+                       content?.current_bouquet || 
+                       content?.currentBouquet ||
+                       content?.bouquet || 
+                       content?.Bouquet || "";
 
-        if (!name) throw new Error("Customer name not found. Please check the smart card number.")
+        const due = content?.Due_Date || 
+                   content?.due_date || 
+                   content?.dueDate ||
+                   content?.date || 
+                   content?.Date || "";
 
-        setCustomerName(name)
-        setCurrentBouquet(bouquet)
-        setDueDate(due)
-        setRenewalAmount(renewal)
+        const renewal = content?.Renewal_Amount || 
+                       content?.renewal_amount || 
+                       content?.renewalAmount ||
+                       content?.amount || 
+                       content?.Amount || "";
+
+        console.log("Parsed customer data:", { name, bouquet, due, renewal, rawContent: content });
+
+        if (!name || name.trim() === "") {
+          throw new Error("Customer name not found. Please check the smart card number.");
+        }
+
+        setCustomerName(name.trim())
+        setCurrentBouquet(bouquet.trim())
+        setDueDate(due.trim())
+        setRenewalAmount(renewal.trim())
         setVerificationSuccess(true)
-        toast.success(`Card verified for ${name}`)
+        toast.success(`Card verified for ${name.trim()}`)
       } catch (err: any) {
         console.error("Verification error:", err);
-        setVerificationError(err.message || "Verification failed. Please try again.")
-        toast.error("Card verification failed")
+        let errorMessage = err.message || "Verification failed. Please try again.";
+        
+        // Handle specific error cases
+        if (errorMessage.includes("Service temporarily unavailable")) {
+          // Keep the original message
+        } else if (errorMessage.includes("Network error") || errorMessage.includes("Failed to fetch")) {
+          errorMessage = "Network error. Please check your connection and try again.";
+        }
+        
+        setVerificationError(errorMessage);
+        toast.error("Card verification failed");
       } finally {
         setVerifyingCard(false)
       }
-    }, 1000) // Increased delay to 1 second
+    }, 1000) // 1 second delay
 
     return () => clearTimeout(timeoutId)
   }, [smartCardNumber, provider, providers])
@@ -734,7 +742,6 @@ export default function TVPage() {
               <Label htmlFor="smart-card-input">Smart Card / IUC Number</Label>
               <Input
                 id="smart-card-input"
-                type="text"
                 placeholder={provider ? `Enter ${getSmartCardLength(provider).join(" or ")}-digit card number` : "Select a TV Provider first"}
                 value={smartCardNumber}
                 onChange={(e) => {

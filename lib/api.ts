@@ -122,3 +122,56 @@ export async function getUserHistory(userAddress: string) {
   return await res.json();
 }
 
+// ========== NEW VERIFICATION FUNCTIONS ==========
+
+export const verifyMeter = async (data: {
+  billersCode: string;
+  serviceID: string;
+  type: string;
+}) => {
+  const res = await fetch(`${BASE_URL}/api/vtpass/verify`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+
+  if (!res.ok) throw new Error("Failed to verify meter");
+
+  return await res.json();
+};
+
+export const verifySmartCard = async (data: {
+  billersCode: string;
+  serviceID: string;
+  type?: string;
+}) => {
+  const res = await fetch(`${BASE_URL}/api/vtpass/verify`, {
+    method: "POST",  
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...data, type: data.type || "smartcard" }),
+  });
+
+  if (!res.ok) throw new Error("Failed to verify smart card");
+
+  return await res.json();
+};
+
+export const getServiceVariations = async (serviceID: string) => {
+  const res = await fetch(`${BASE_URL}/api/vtpass/service-variations?serviceID=${serviceID}`);
+  
+  if (!res.ok) throw new Error("Failed to fetch service variations");
+
+  return await res.json();
+};
+
+export const getServices = async (identifier?: string) => {
+  const url = identifier 
+    ? `${BASE_URL}/api/vtpass/services?identifier=${identifier}`
+    : `${BASE_URL}/api/vtpass/services`;
+    
+  const res = await fetch(url);
+  
+  if (!res.ok) throw new Error("Failed to fetch services");
+
+  return await res.json();
+};

@@ -21,7 +21,7 @@ import { toast } from 'sonner';
 import { TransactionStatusModal } from "@/components/TransactionStatusModal";
 import { useBaseNetworkEnforcer } from '@/hooks/useBaseNetworkEnforcer';
 
-import { buyinternet } from "@/lib/api";
+import { buyinternet, getServiceVariations, getServices } from "@/lib/api";
 import { TokenConfig } from "@/lib/tokenlist";
 import { fetchActiveTokensWithMetadata } from "@/lib/tokenUtils";
 
@@ -46,47 +46,23 @@ function generateRequestId(): string {
 async function fetchInternetPlans(serviceID: string) {
     console.log(`[fetchInternetPlans] Attempting to fetch plans for serviceID: ${serviceID}`);
     try {
-        const response = await fetch(`/api/vtpass/service-variations?serviceID=${serviceID}`, {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-        })
-
-        if (!response.ok) {
-            const errorData = await response.json()
-            console.error(`HTTP error! status: ${response.status}`, errorData)
-            throw new Error(`HTTP error! status: ${response.status}`)
-        }
-
-        const data = await response.json()
-        console.log('[fetchInternetPlans] Fetched plans data:', data)
-        return data.content?.variations || []
+        const data = await getServiceVariations(serviceID);
+        console.log('[fetchInternetPlans] Fetched plans data:', data);
+        return data.content?.variations || [];
     } catch (error) {
-        console.error('[fetchInternetPlans] Error fetching internet plans:', error)
-        return []
+        console.error('[fetchInternetPlans] Error fetching internet plans:', error);
+        return [];
     }
 }
 
 async function fetchDataServices() {
     try {
-        const response = await fetch('/api/vtpass/services?identifier=data', {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-        })
-
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`)
-        }
-
-        const data = await response.json()
-        console.log('Available data services:', data)
-        return data.content || []
+        const data = await getServices("data");
+        console.log('Available data services:', data);
+        return data.content || [];
     } catch (error) {
-        console.error('Error fetching data services:', error)
-        return []
+        console.error('Error fetching data services:', error);
+        return [];
     }
 }
 
@@ -543,10 +519,16 @@ export default function InternetPage() {
         setTransactionHashForModal(undefined);
         backendRequestSentRef.current = null;
     }, [txStatus]);
+    const isFormValid =
+        selectedTokenAddress &&
+        provider &&
+        plan &&
+        customerID &&
+        selectedPlan &&
+        amountNGN > 0;
 
     const providersToShow = availableProviders.length > 0 ? availableProviders : [];
 
-    const isFormValid = Boolean(selectedTokenAddress && provider && plan && customerID && requestId && cryptoNeeded > 0);
     
     const isRequestIdUsed = existingOrder && existingOrder.user && existingOrder.user !== '0x0000000000000000000000000000000000000000';
     
@@ -780,4 +762,3 @@ export default function InternetPage() {
         </AuthGuard>
     )
 }
-                            
