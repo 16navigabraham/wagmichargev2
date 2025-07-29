@@ -6,17 +6,16 @@ import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/
 import {Button} from "@/components/ui/button"
 import {Label} from "@/components/ui/label"
 import {Badge} from "@/components/ui/badge"
-import { Loader2, AlertCircle, CheckCircle } from "lucide-react"
+import { Loader2, AlertCircle } from "lucide-react"
 import BackToDashboard from "@/components/BackToDashboard"
 import AuthGuard from "@/components/AuthGuard"
 import { Input } from "@/components/ui/input"
 
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from "@/config/contract";
-import { paycryptOnchain } from "@/lib/paycryptOnchain";
 import { ERC20_ABI } from "@/config/erc20Abi";
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi';
 import { usePrivy } from '@privy-io/react-auth';
-import { parseEther, parseUnits, toBytes, toHex, Hex, fromHex, formatUnits } from 'viem';
+import { parseUnits, toBytes, toHex, Hex, fromHex, formatUnits } from 'viem';
 import { toast } from 'sonner';
 import { TransactionStatusModal } from "@/components/TransactionStatusModal";
 import { useBaseNetworkEnforcer } from '@/hooks/useBaseNetworkEnforcer';
@@ -60,10 +59,9 @@ export default function AirtimePage() {
   const [showTransactionModal, setShowTransactionModal] = useState(false);
   const [transactionHashForModal, setTransactionHashForModal] = useState<Hex | undefined>(undefined);
   const backendRequestSentRef = useRef<Hex | null>(null);
-  const [needsApproval, setNeedsApproval] = useState(false);
 
-  const { connectWallet, authenticated, user } = usePrivy();
-  const { isConnected, address } = useAccount();
+  const { connectWallet, authenticated } = usePrivy();
+  const { address } = useAccount();
   const { isOnBaseChain, isSwitchingChain, promptSwitchToBase } = useBaseNetworkEnforcer();
 
   // Load tokens and prices on initial mount
@@ -103,32 +101,14 @@ export default function AirtimePage() {
   const tokenAmountForOrder: bigint = selectedTokenObj ? parseUnits(cryptoNeeded.toFixed(selectedTokenObj.decimals), selectedTokenObj.decimals) : BigInt(0);
   const bytes32RequestId: Hex = requestId ? toHex(toBytes(requestId), { size: 32 }) : toHex(toBytes(""), { size: 32 });
 
-  // Check current allowance for ERC20 tokens
-  const { data: currentAllowance, refetch: refetchAllowance } = useReadContract({
-    address: selectedTokenObj?.address as Hex,
-    abi: ERC20_ABI,
-    functionName: 'allowance',
-    args: [address as Hex, CONTRACT_ADDRESS],
-    query: {
-      enabled: Boolean(selectedTokenObj?.address && address),
-    },
+  // Check if requestId is already used
+  const { data: existingOrder } = useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: CONTRACT_ABI,
+    functionName: 'getOrder',
+    args: [fromHex(bytes32RequestId, 'bigint')],
+    query: { enabled: Boolean(requestId && address) },
   });
-
-  // Check if approval is needed - always require approval for ERC20 tokens
-  useEffect(() => {
-    if (!selectedTokenObj || !currentAllowance || !tokenAmountForOrder) {
-      setNeedsApproval(false);
-      return;
-    }
-    const allowanceBigInt = currentAllowance as bigint;
-    const needsApprovalCheck = allowanceBigInt < tokenAmountForOrder;
-    setNeedsApproval(needsApprovalCheck);
-    console.log("Approval check:", {
-      currentAllowance: allowanceBigInt.toString(),
-      tokenAmountNeeded: tokenAmountForOrder.toString(),
-      needsApproval: needsApprovalCheck
-    });
-  }, [currentAllowance, tokenAmountForOrder, selectedTokenObj]);
 
   // Wagmi Hooks for TOKEN APPROVAL Transaction
   const { 
@@ -174,15 +154,6 @@ export default function AirtimePage() {
       enabled: Boolean(hash),
       refetchInterval: 1000,
     },
-  });
-
-  // Check if requestId is already used
-  const { data: existingOrder } = useReadContract({
-    address: CONTRACT_ADDRESS,
-    abi: CONTRACT_ABI,
-    functionName: 'getOrder',
-    args: [fromHex(bytes32RequestId, 'bigint')],
-    query: { enabled: Boolean(requestId && address) },
   });
 
   // Handle backend API call after successful transaction
@@ -263,9 +234,6 @@ export default function AirtimePage() {
       setTxStatus('approvalSuccess');
       toast.success("Token approved! Proceeding with payment...", { id: 'approval-status' });
       
-      // Refetch allowance
-      refetchAllowance();
-      
       console.log("Approval confirmed! Initiating main transaction...");
       
       // Automatically proceed with main transaction
@@ -304,7 +272,7 @@ export default function AirtimePage() {
       setTransactionError(errorMsg);
       toast.error(`Approval failed: ${errorMsg}`, { id: 'approval-status' });
     }
-  }, [isApprovePending, approveHash, isApprovalTxConfirmed, isApprovalConfirming, isApproveError, isApprovalConfirmError, approveWriteError, approveConfirmError, showTransactionModal, refetchAllowance, bytes32RequestId, selectedTokenObj?.address, tokenAmountForOrder, writeContract]);
+  }, [isApprovePending, approveHash, isApprovalTxConfirmed, isApprovalConfirming, isApproveError, isApprovalConfirmError, approveWriteError, approveConfirmError, showTransactionModal, bytes32RequestId, selectedTokenObj?.address, tokenAmountForOrder, writeContract]);
 
   // Effect to monitor main transaction status
   useEffect(() => {
@@ -429,8 +397,6 @@ export default function AirtimePage() {
     console.log("TokenAmount for Order:", tokenAmountForOrder.toString());
     console.log("Formatted amount:", formatUnits(tokenAmountForOrder, selectedTokenObj.decimals));
     console.log("Selected Crypto:", selectedTokenObj.symbol);
-    console.log("Needs Approval:", needsApproval);
-    console.log("Current Allowance:", currentAllowance?.toString());
     console.log("Crypto needed (float):", cryptoNeeded);
     console.log("Price NGN:", priceNGN);
     console.log("Amount NGN:", amountNGN);
@@ -446,62 +412,28 @@ export default function AirtimePage() {
       return;
     }
 
-    // Always start with approval for ERC20 tokens (either first approval or re-approval if insufficient)
-    if (needsApproval) {
-      toast.info("Approving token spend for this transaction...");
-      setTxStatus('waitingForApprovalSignature');
+    // COMPULSORY TOKEN APPROVAL - Always start with approval for all ERC20 tokens
+    toast.info("Approving token spend for this transaction...");
+    setTxStatus('waitingForApprovalSignature');
+    
+    try {
+      // Approve unlimited amount for convenience (standard practice)
+      const unlimitedApproval = parseUnits('115792089237316195423570985008687907853269984665640564039457584007913129639935', 0);
       
-      try {
-        // Approve a larger amount to reduce future approvals (10x the needed amount)
-        const approvalAmount = tokenAmountForOrder * BigInt(10);
-        const maxReasonableApproval = parseUnits('1000000000000', selectedTokenObj.decimals); // 1 trillion tokens
-        const finalApprovalAmount = approvalAmount > maxReasonableApproval ? maxReasonableApproval : approvalAmount;
-        
-        console.log("Approving amount:", finalApprovalAmount.toString(), "formatted:", formatUnits(finalApprovalAmount, selectedTokenObj.decimals));
-        
-        writeApprove({
-          address: selectedTokenObj.address as Hex,
-          abi: ERC20_ABI,
-          functionName: 'approve',
-          args: [CONTRACT_ADDRESS, finalApprovalAmount],
-        });
-      } catch (error: any) {
-        console.error("Error sending approval transaction:", error);
-        const errorMsg = error.message || "Failed to send approval transaction.";
-        setTransactionError(errorMsg);
-        setTxStatus('error');
-        toast.error(errorMsg);
-      }
-    } else {
-      // Sufficient allowance, proceed directly with main transaction
-      try {
-        setTxStatus('waitingForSignature');
-        console.log("Sending ERC20 transaction with params:", {
-          contractAddress: CONTRACT_ADDRESS,
-          requestId: bytes32RequestId,
-          tokenAddress: selectedTokenObj.address,
-          tokenAmount: tokenAmountForOrder.toString(),
-          formattedAmount: formatUnits(tokenAmountForOrder, selectedTokenObj.decimals)
-        });
-        
-        writeContract({
-          address: CONTRACT_ADDRESS,
-          abi: CONTRACT_ABI,
-          functionName: 'createOrder',
-          args: [
-            bytes32RequestId,
-            selectedTokenObj.address as Hex,
-            tokenAmountForOrder,
-          ],
-          value: undefined,
-        });
-      } catch (error: any) {
-        console.error("Error sending main transaction:", error);
-        const errorMsg = error.message || "Failed to send transaction.";
-        setTransactionError(errorMsg);
-        setTxStatus('error');
-        toast.error(errorMsg);
-      }
+      console.log("Approving unlimited amount for future transactions");
+      
+      writeApprove({
+        address: selectedTokenObj.address as Hex,
+        abi: ERC20_ABI,
+        functionName: 'approve',
+        args: [CONTRACT_ADDRESS, unlimitedApproval],
+      });
+    } catch (error: any) {
+      console.error("Error sending approval transaction:", error);
+      const errorMsg = error.message || "Failed to send approval transaction.";
+      setTransactionError(errorMsg);
+      setTxStatus('error');
+      toast.error(errorMsg);
     }
 
     // Regenerate requestId for next transaction
@@ -527,9 +459,9 @@ export default function AirtimePage() {
   const canPay = selectedToken && network && amount && amountNGN >= 100 && amountNGN <= 50000 && phone && phone.length >= 10 && priceNGN && requestId && tokenAmountForOrder > 0;
 
   const isButtonDisabled = loading || !canPay ||
+                           ['waitingForApprovalSignature', 'approving', 'waitingForSignature', 'sending', 'confirming', 'backendProcessing'].includes(txStatus) ||
                            isApprovePending || isApprovalConfirming || 
                            isWritePending || isConfirming || 
-                           ['backendProcessing', 'waitingForApprovalSignature', 'approving', 'waitingForSignature', 'sending', 'confirming'].includes(txStatus) ||
                            !isOnBaseChain || isSwitchingChain;
 
   if (loading) return (
@@ -660,15 +592,13 @@ export default function AirtimePage() {
               )}
             </div>
 
-            {/* Token approval info */}
+            {/* Compulsory token approval info */}
             {selectedTokenObj && (
               <div className="text-sm p-3 bg-blue-50 border border-blue-200 rounded-lg">
                 <div className="flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 text-blue-500" />
                   <span className="text-blue-700">
-                    {needsApproval 
-                      ? "Token approval required for this transaction" 
-                      : "Token approval may be required (will check before payment)"}
+                    Token approval required for all ERC20 transactions
                   </span>
                 </div>
               </div>
@@ -717,7 +647,7 @@ export default function AirtimePage() {
             <Button
               className="w-full"
               onClick={handlePurchase}
-              // disabled={isButtonDisabled}
+              disabled={isButtonDisabled}
             >
               {isSwitchingChain ? "Switching Network..." :
               !isOnBaseChain ? "Switch to Base Network" :
@@ -732,7 +662,7 @@ export default function AirtimePage() {
               txStatus === 'backendSuccess' ? "Airtime Delivered Successfully!" :
               txStatus === 'backendError' ? "Order Failed - Try Again" :
               txStatus === 'error' ? "Transaction Failed - Try Again" :
-              canPay ? (needsApproval ? "Approve & Purchase Airtime" : "Purchase Airtime") :
+              canPay ? "Approve & Purchase Airtime" :
               "Fill all details"}
             </Button>
 

@@ -10,13 +10,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import BackToDashboard from '@/components/BackToDashboard'
 import AuthGuard from "@/components/AuthGuard"
-import { Loader2, AlertCircle, CheckCircle } from "lucide-react"
+import { Loader2, AlertCircle } from "lucide-react"
 
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from "@/config/contract";
 import { ERC20_ABI } from "@/config/erc20Abi";
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi';
 import { usePrivy } from '@privy-io/react-auth';
-import { parseEther, parseUnits, toBytes, toHex, Hex, fromHex, formatUnits } from 'viem';
+import { parseUnits, toBytes, toHex, Hex, fromHex, formatUnits } from 'viem';
 import { toast } from 'sonner';
 import { TransactionStatusModal } from "@/components/TransactionStatusModal";
 import { useBaseNetworkEnforcer } from '@/hooks/useBaseNetworkEnforcer';
@@ -110,11 +110,9 @@ export default function InternetPage() {
     const [transactionHashForModal, setTransactionHashForModal] = useState<Hex | undefined>(undefined);
 
     const backendRequestSentRef = useRef<Hex | null>(null);
-    const [needsApproval, setNeedsApproval] = useState(false);
 
-    const { connectWallet, authenticated, user } = usePrivy();
-    const { isConnected, address } = useAccount();
-
+    const { connectWallet, authenticated } = usePrivy();
+    const { address } = useAccount();
     const { isOnBaseChain, isSwitchingChain, promptSwitchToBase } = useBaseNetworkEnforcer();
 
     // Load tokens and prices on initial mount
@@ -189,32 +187,7 @@ export default function InternetPage() {
     }
     const bytes32RequestId: Hex = toHex(toBytes(requestId || ""), { size: 32 });
 
-    const { data: currentAllowance, refetch: refetchAllowance } = useReadContract({
-        address: selectedCrypto?.address as Hex,
-        abi: ERC20_ABI,
-        functionName: 'allowance',
-        args: [address as Hex, CONTRACT_ADDRESS],
-        query: {
-            enabled: Boolean(selectedCrypto?.address && address),
-        },
-    });
-
-    // Check if approval is needed - always require approval for ERC20 tokens
-    useEffect(() => {
-        if (!selectedCrypto || !currentAllowance || !tokenAmountForOrder) {
-            setNeedsApproval(false);
-            return;
-        }
-        const allowanceBigInt = currentAllowance as bigint;
-        const needsApprovalCheck = allowanceBigInt < tokenAmountForOrder;
-        setNeedsApproval(needsApprovalCheck);
-        console.log("Approval check:", {
-            currentAllowance: allowanceBigInt.toString(),
-            tokenAmountNeeded: tokenAmountForOrder.toString(),
-            needsApproval: needsApprovalCheck
-        });
-    }, [currentAllowance, tokenAmountForOrder, selectedCrypto]);
-
+    // Check if requestId is already used
     const { data: existingOrder } = useReadContract({
         address: CONTRACT_ADDRESS,
         abi: CONTRACT_ABI,
@@ -225,9 +198,22 @@ export default function InternetPage() {
         },
     });
 
-    const { writeContract: writeApprove, data: approveHash, isPending: isApprovePending, isError: isApproveError, error: approveWriteError, reset: resetApprove } = useWriteContract();
+    // Wagmi Hooks for TOKEN APPROVAL Transaction
+    const { 
+        writeContract: writeApprove, 
+        data: approveHash, 
+        isPending: isApprovePending, 
+        isError: isApproveError, 
+        error: approveWriteError, 
+        reset: resetApprove 
+    } = useWriteContract();
 
-    const { isLoading: isApprovalConfirming, isSuccess: isApprovalTxConfirmed, isError: isApprovalConfirmError, error: approveConfirmError } = useWaitForTransactionReceipt({
+    const { 
+        isLoading: isApprovalConfirming, 
+        isSuccess: isApprovalTxConfirmed, 
+        isError: isApprovalConfirmError, 
+        error: approveConfirmError 
+    } = useWaitForTransactionReceipt({
         hash: approveHash as Hex,
         query: {
             enabled: Boolean(approveHash),
@@ -235,9 +221,22 @@ export default function InternetPage() {
         },
     });
 
-    const { writeContract, data: hash, isPending: isWritePending, isError: isWriteError, error: writeError, reset: resetWrite } = useWriteContract();
+    // Wagmi Hooks for MAIN PAYMENT Transaction
+    const { 
+        writeContract, 
+        data: hash, 
+        isPending: isWritePending, 
+        isError: isWriteError, 
+        error: writeError, 
+        reset: resetWrite 
+    } = useWriteContract();
 
-    const { isLoading: isConfirming, isSuccess: isConfirmed, isError: isConfirmError, error: confirmError } = useWaitForTransactionReceipt({
+    const { 
+        isLoading: isConfirming, 
+        isSuccess: isConfirmed, 
+        isError: isConfirmError, 
+        error: confirmError 
+    } = useWaitForTransactionReceipt({
         hash: hash as Hex,
         query: {
             enabled: Boolean(hash),
@@ -245,6 +244,7 @@ export default function InternetPage() {
         },
     });
 
+    // Handle backend API call after successful transaction
     const handlePostTransaction = useCallback(async (transactionHash: Hex) => {
         if (backendRequestSentRef.current === transactionHash) {
             console.log(`Backend request already sent for hash: ${transactionHash}. Skipping duplicate.`);
@@ -328,8 +328,6 @@ export default function InternetPage() {
             setTxStatus('approvalSuccess');
             toast.success("Token approved! Proceeding with payment...", { id: 'approval-status' });
             
-            refetchAllowance();
-            
             console.log("Approval: Blockchain confirmed! Initiating main transaction...");
             
             // Automatically proceed with main transaction
@@ -368,7 +366,7 @@ export default function InternetPage() {
             setTransactionError(errorMsg);
             toast.error(`Approval failed: ${errorMsg}`, { id: 'approval-status' });
         }
-    }, [isApprovePending, approveHash, isApprovalTxConfirmed, isApprovalConfirming, isApproveError, isApprovalConfirmError, approveWriteError, approveConfirmError, showTransactionModal, refetchAllowance, bytes32RequestId, selectedCrypto?.address, tokenAmountForOrder, writeContract]);
+    }, [isApprovePending, approveHash, isApprovalTxConfirmed, isApprovalConfirming, isApproveError, isApprovalConfirmError, approveWriteError, approveConfirmError, showTransactionModal, bytes32RequestId, selectedCrypto?.address, tokenAmountForOrder, writeContract]);
 
     // Effect to monitor main transaction status
     useEffect(() => {
@@ -492,8 +490,6 @@ export default function InternetPage() {
         console.log("Crypto Needed (float):", cryptoNeeded);
         console.log("Selected Crypto Decimals:", selectedCrypto.decimals);
         console.log("Existing order check:", existingOrder);
-        console.log("Needs Approval:", needsApproval);
-        console.log("Current Allowance:", currentAllowance?.toString());
         console.log("----------------------------------------");
 
         resetApprove();
@@ -505,62 +501,28 @@ export default function InternetPage() {
             return;
         }
 
-        // Always start with approval for ERC20 tokens (either first approval or re-approval if insufficient)
-        if (needsApproval) {
-            toast.info("Approving token spend for this transaction...");
-            setTxStatus('waitingForApprovalSignature');
+        // COMPULSORY TOKEN APPROVAL - Always start with approval for all ERC20 tokens
+        toast.info("Approving token spend for this transaction...");
+        setTxStatus('waitingForApprovalSignature');
+        
+        try {
+            // Approve unlimited amount for convenience (standard practice)
+            const unlimitedApproval = parseUnits('115792089237316195423570985008687907853269984665640564039457584007913129639935', 0);
             
-            try {
-                // Approve a larger amount to reduce future approvals (10x the needed amount)
-                const approvalAmount = tokenAmountForOrder * BigInt(10);
-                const maxReasonableApproval = parseUnits('1000000000000', selectedCrypto.decimals); // 1 trillion tokens
-                const finalApprovalAmount = approvalAmount > maxReasonableApproval ? maxReasonableApproval : approvalAmount;
-                
-                console.log("Approving amount:", finalApprovalAmount.toString(), "formatted:", formatUnits(finalApprovalAmount, selectedCrypto.decimals));
-                
-                writeApprove({
-                    address: selectedCrypto.address as Hex,
-                    abi: ERC20_ABI,
-                    functionName: 'approve',
-                    args: [CONTRACT_ADDRESS, finalApprovalAmount],
-                });
-            } catch (error: any) {
-                console.error("Error sending approval transaction:", error);
-                const errorMsg = error.message || "Failed to send approval transaction.";
-                setTransactionError(errorMsg);
-                setTxStatus('error');
-                toast.error(errorMsg);
-            }
-        } else {
-            // Sufficient allowance, proceed directly with main transaction
-            try {
-                setTxStatus('waitingForSignature');
-                console.log("Sending ERC20 transaction with params:", {
-                    contractAddress: CONTRACT_ADDRESS,
-                    requestId: bytes32RequestId,
-                    tokenAddress: selectedCrypto.address,
-                    tokenAmount: tokenAmountForOrder.toString(),
-                    formattedAmount: formatUnits(tokenAmountForOrder, selectedCrypto.decimals)
-                });
-                
-                writeContract({
-                    address: CONTRACT_ADDRESS,
-                    abi: CONTRACT_ABI,
-                    functionName: 'createOrder',
-                    args: [
-                        bytes32RequestId,
-                        selectedCrypto.address as Hex,
-                        tokenAmountForOrder,
-                    ],
-                    value: undefined,
-                });
-            } catch (error: any) {
-                console.error("Error sending main transaction:", error);
-                const errorMsg = error.message || "Failed to send transaction.";
-                setTransactionError(errorMsg);
-                setTxStatus('error');
-                toast.error(errorMsg);
-            }
+            console.log("Approving unlimited amount for future transactions");
+            
+            writeApprove({
+                address: selectedCrypto.address as Hex,
+                abi: ERC20_ABI,
+                functionName: 'approve',
+                args: [CONTRACT_ADDRESS, unlimitedApproval],
+            });
+        } catch (error: any) {
+            console.error("Error sending approval transaction:", error);
+            const errorMsg = error.message || "Failed to send approval transaction.";
+            setTransactionError(errorMsg);
+            setTxStatus('error');
+            toast.error(errorMsg);
         }
 
         // Regenerate requestId for next transaction
@@ -590,12 +552,12 @@ export default function InternetPage() {
     
     const isButtonDisabled = loading || 
                              loadingPlans || 
-                             isWritePending || 
-                             isConfirming || 
-                             ['backendProcessing', 'waitingForApprovalSignature', 'approving', 'waitingForSignature', 'sending', 'confirming'].includes(txStatus) ||
+                             ['waitingForApprovalSignature', 'approving', 'waitingForSignature', 'sending', 'confirming', 'backendProcessing'].includes(txStatus) ||
                              !isFormValid ||
                              isApprovePending || 
                              isApprovalConfirming || 
+                             isWritePending ||
+                             isConfirming ||
                              !isOnBaseChain || 
                              isSwitchingChain ||
                              isRequestIdUsed;
@@ -629,18 +591,85 @@ export default function InternetPage() {
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-6">
-                        <div className="space-y-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="customerID">Customer ID / Phone Number</Label>
-                                <Input
-                                    id="customerID"
-                                    type="text"
-                                    placeholder="Enter customer ID or phone number"
-                                    value={customerID}
-                                    maxLength={11}
-                                    onChange={(e) => setCustomerID(e.target.value)}
-                                />
-                            </div>
+                        {/* Pay With Token Selection */}
+                        <div className="space-y-2">
+                            <Label htmlFor="crypto">Pay With</Label>
+                            <Select value={selectedTokenAddress} onValueChange={setSelectedTokenAddress}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select ERC20 token" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {activeTokens.length === 0 ? (
+                                        <SelectItem value="" disabled>No ERC20 tokens available</SelectItem>
+                                    ) : (
+                                        activeTokens.map((c) => (
+                                            <SelectItem key={c.address} value={c.address}>
+                                                {c.symbol} - {c.name}
+                                            </SelectItem>
+                                        ))
+                                    )}
+                                </SelectContent>
+                            </Select>
+                            {activeTokens.length === 0 && !loading && (
+                                <p className="text-sm text-yellow-600">
+                                    No active ERC20 tokens found from contract.
+                                </p>
+                            )}
+                        </div>
+                        
+                        {/* Internet Provider Selection */}
+                        <div className="space-y-2">
+                            <Label htmlFor="provider">Internet Provider</Label>
+                            <Select value={provider} onValueChange={setProvider}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select provider" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {providersToShow.map((p) => (
+                                        <SelectItem key={p.serviceID || p.id} value={p.serviceID}>
+                                            {p.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        
+                        {/* Data Plan Selection */}
+                        <div className="space-y-2">
+                            <Label htmlFor="plan">Data Plan</Label>
+                            <Select value={plan} onValueChange={setPlan} disabled={!provider || loadingPlans}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder={loadingPlans ? "Loading plans..." : "Select data plan"} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {plans.length > 0 ? (
+                                        plans.map((p) => (
+                                            <SelectItem key={p.variation_code} value={p.variation_code}>
+                                                {p.name} - ₦{Number(p.variation_amount).toLocaleString()}
+                                            </SelectItem>
+                                        ))
+                                    ) : (
+                                        !loadingPlans && provider && (
+                                            <SelectItem value="no-plans" disabled>
+                                                No plans available for this provider
+                                            </SelectItem>
+                                        )
+                                    )}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        
+                        {/* Customer ID / Phone Number */}
+                        <div className="space-y-2">
+                            <Label htmlFor="customerID">Customer ID / Phone Number</Label>
+                            <Input
+                                id="customerID"
+                                type="text"
+                                placeholder="Enter customer ID or phone number"
+                                value={customerID}
+                                maxLength={11}
+                                onChange={(e) => setCustomerID(e.target.value)}
+                            />
                         </div>
                         
                         {/* Request ID status indicator */}
@@ -653,15 +682,13 @@ export default function InternetPage() {
                             </div>
                         )}
                         
-                        {/* Token approval info */}
+                        {/* Compulsory token approval info */}
                         {selectedCrypto && (
                           <div className="text-sm p-3 bg-blue-50 border border-blue-200 rounded-lg">
                             <div className="flex items-center gap-2">
                               <AlertCircle className="w-4 h-4 text-blue-500" />
                               <span className="text-blue-700">
-                                {needsApproval 
-                                  ? "Token approval required for this transaction" 
-                                  : "Token approval may be required (will check before payment)"}
+                                Token approval required for all ERC20 transactions
                               </span>
                             </div>
                           </div>
@@ -721,7 +748,7 @@ export default function InternetPage() {
                             txStatus === 'backendSuccess' ? "Data Delivered Successfully!" :
                             txStatus === 'backendError' ? "Order Failed - Try Again" :
                             txStatus === 'error' ? "Transaction Failed - Try Again" :
-                            isFormValid ? (needsApproval ? "Approve & Purchase Internet Data" : "Purchase Internet Data") :
+                            isFormValid ? "Approve & Purchase Internet Data" :
                             "Fill all details"}
                         </Button>
 
@@ -753,3 +780,4 @@ export default function InternetPage() {
         </AuthGuard>
     )
 }
+                            
