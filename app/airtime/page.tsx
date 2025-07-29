@@ -14,9 +14,9 @@ import { Input } from "@/components/ui/input"
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from "@/config/contract";
 import { paycryptOnchain } from "@/lib/paycryptOnchain";
 import { ERC20_ABI } from "@/config/erc20Abi";
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi'; // Removed useSimulateContract
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi';
 import { usePrivy } from '@privy-io/react-auth';
-import { parseEther, parseUnits, toBytes, toHex, Hex, fromHex, formatUnits } from 'viem'; // Added fromHex
+import { parseEther, parseUnits, toBytes, toHex, Hex, fromHex, formatUnits } from 'viem';
 import { toast } from 'sonner';
 import { TransactionStatusModal } from "@/components/TransactionStatusModal";
 import { useBaseNetworkEnforcer } from '@/hooks/useBaseNetworkEnforcer';
@@ -103,8 +103,6 @@ export default function AirtimePage() {
   const amountNGN = Number(amount) || 0;
   const cryptoNeeded = priceNGN && amountNGN ? amountNGN / priceNGN : 0;
   const tokenAmountForOrder: bigint = selectedTokenObj ? parseUnits(cryptoNeeded.toFixed(selectedTokenObj.decimals), selectedTokenObj.decimals) : BigInt(0);
-  // ETH is not supported, so valueForEth will always be BigInt(0)
-  const valueForEth: bigint = BigInt(0);
   const bytes32RequestId: Hex = requestId ? toHex(toBytes(requestId), { size: 32 }) : toHex(toBytes(""), { size: 32 });
 
   // Check current allowance for ERC20 tokens
@@ -182,12 +180,12 @@ export default function AirtimePage() {
     },
   });
 
-  // Check if requestId is already used
+  // Check if requestId is already used - Fixed to use proper parameter conversion
   const { data: existingOrder } = useReadContract({
     address: CONTRACT_ADDRESS,
     abi: CONTRACT_ABI,
     functionName: 'getOrder',
-    args: [fromHex(bytes32RequestId, 'bigint')], // Converted Hex to BigInt for getOrder
+    args: [fromHex(bytes32RequestId, 'bigint')], // This should work for getting order by ID
     query: { enabled: Boolean(requestId && address) },
   });
 
@@ -204,7 +202,7 @@ export default function AirtimePage() {
       setTxStatus('sending');
       await paycryptOnchain({
         userAddress: address!,
-        tokenAddress: selectedTokenObj ? selectedTokenObj.contract ?? CONTRACT_ADDRESS : CONTRACT_ADDRESS,
+        tokenAddress: selectedTokenObj ? selectedTokenObj.address : CONTRACT_ADDRESS,
         amount: tokenAmountForOrder,
         requestId: bytes32RequestId,
         walletClient: undefined, // Replace with actual walletClient for production
@@ -262,7 +260,7 @@ export default function AirtimePage() {
       setBackendMessage(fullMessage);
       toast.error(fullMessage, { id: 'backend-status' });
     }
-  }, [requestId, phone, network, amountNGN, cryptoNeeded, selectedTokenObj?.symbol, selectedTokenObj?.decimals, address, selectedTokenObj?.contract, tokenAmountForOrder, bytes32RequestId]);
+  }, [requestId, phone, network, amountNGN, cryptoNeeded, selectedTokenObj?.symbol, selectedTokenObj?.decimals, address, selectedTokenObj?.address, tokenAmountForOrder, bytes32RequestId]);
 
   // Effect to monitor approval transaction status
   useEffect(() => {
@@ -310,8 +308,8 @@ export default function AirtimePage() {
         console.log("Approval confirmed! Initiating main transaction...");
         console.log("Contract call params:", {
           requestId: bytes32RequestId,
-          tokenType: selectedTokenObj.tokenType,
-          tokenAmount: tokenAmountForOrder.toString()
+          tokenAddress: selectedTokenObj.address,
+          amount: tokenAmountForOrder.toString()
         });
         
         try {
@@ -322,7 +320,7 @@ export default function AirtimePage() {
             functionName: 'createOrder',
             args: [
               bytes32RequestId,
-              toHex(BigInt(selectedTokenObj.tokenType), { size: 32 }), // Converted number to BigInt then to Hex for bytes32
+              selectedTokenObj.address as Hex, // Use token address directly
               tokenAmountForOrder,
             ],
             value: undefined, // ERC20 transactions don't send ETH value
@@ -461,10 +459,9 @@ export default function AirtimePage() {
 
     console.log("--- Initiating Contract Call ---");
     console.log("RequestId (bytes32):", bytes32RequestId);
-    console.log("TokenType:", selectedTokenObj.tokenType);
+    console.log("Token Address:", selectedTokenObj.address);
     console.log("TokenAmount for Order:", tokenAmountForOrder.toString());
     console.log("Formatted amount:", formatUnits(tokenAmountForOrder, selectedTokenObj.decimals));
-    console.log("Value (for ETH - should be 0):", valueForEth.toString());
     console.log("Selected Crypto:", selectedTokenObj.symbol);
     console.log("Needs Approval:", needsApproval);
     console.log("Current Allowance:", currentAllowance?.toString());
@@ -478,8 +475,7 @@ export default function AirtimePage() {
     resetWrite();
 
     // Handle ERC20 tokens - Check if approval is needed
-    // Since ETH is not supported, we only handle ERC20 tokens here
-    if (!selectedTokenObj.contract) {
+    if (!selectedTokenObj.address) {
       toast.error("Selected crypto has no contract address.");
       setTxStatus('error');
       return;
@@ -499,7 +495,7 @@ export default function AirtimePage() {
         console.log("Approving amount:", finalApprovalAmount.toString(), "formatted:", formatUnits(finalApprovalAmount, selectedTokenObj.decimals));
         
         writeApprove({
-          address: selectedTokenObj.contract as Hex,
+          address: selectedTokenObj.address as Hex,
           abi: ERC20_ABI,
           functionName: 'approve',
           args: [CONTRACT_ADDRESS, finalApprovalAmount],
@@ -519,7 +515,7 @@ export default function AirtimePage() {
         console.log("Sending ERC20 transaction with params:", {
           contractAddress: CONTRACT_ADDRESS,
           requestId: bytes32RequestId,
-          tokenType: selectedTokenObj.tokenType,
+          tokenAddress: selectedTokenObj.address,
           tokenAmount: tokenAmountForOrder.toString(),
           formattedAmount: formatUnits(tokenAmountForOrder, selectedTokenObj.decimals)
         });
@@ -530,7 +526,7 @@ export default function AirtimePage() {
           functionName: 'createOrder',
           args: [
             bytes32RequestId,
-            toHex(BigInt(selectedTokenObj.tokenType), { size: 32 }), // Converted number to BigInt then to Hex for bytes32
+            selectedTokenObj.address as Hex, // Use token address directly
             tokenAmountForOrder,
           ],
           value: undefined, // ERC20 transactions don't send ETH value
@@ -559,22 +555,10 @@ export default function AirtimePage() {
   }, []);
 
   // Determine if the "Purchase Airtime" button should be enabled
-  // It should be enabled if:
-  // 1. Not currently loading tokens
-  // 2. All required fields are filled and valid (selectedToken, network, amount, phone)
-  // 3. Amount is within valid range (100-50000 NGN)
-  // 4. Phone number is valid (10-11 digits)
-  // 5. Price for the selected token is available
-  // 6. Crypto amount needed is greater than 0
-  // 7. RequestId is generated
-  // 8. Token amount for order is greater than 0
-  // 9. Not currently switching chains or not on Base chain (if enforced)
-  // 10. No pending Wagmi transactions (approve, write, confirming)
-  // 11. Not in backend processing state
   const canPay = selectedToken && network && amount && amountNGN >= 100 && amountNGN <= 50000 && phone && phone.length >= 10 && priceNGN && requestId && tokenAmountForOrder > 0;
 
   const isButtonDisabled = loading || !canPay ||
-                           isApprovePending || isApprovalConfirming || isApprovalTxConfirmed && needsApproval || // Disable if approval is pending or confirmed but still needed
+                           isApprovePending || isApprovalConfirming || isApprovalTxConfirmed && needsApproval ||
                            isWritePending || isConfirming || txStatus === 'backendProcessing' ||
                            !isOnBaseChain || isSwitchingChain;
 
@@ -768,7 +752,7 @@ export default function AirtimePage() {
             <Button
               className="w-full"
               onClick={handlePurchase}
-              // disabled={isButtonDisabled} // Use the combined disabled state
+              // disabled={isButtonDisabled}
             >
               {isSwitchingChain ? "Switching Network..." :
               !isOnBaseChain ? "Switch to Base Network" :

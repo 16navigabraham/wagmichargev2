@@ -16,7 +16,7 @@ import { CONTRACT_ADDRESS, CONTRACT_ABI } from "@/config/contract";
 import { ERC20_ABI } from "@/config/erc20Abi";
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi';
 import { usePrivy } from '@privy-io/react-auth';
-import { parseEther, parseUnits, toBytes, toHex, Hex, fromHex } from 'viem';
+import { parseEther, parseUnits, toBytes, toHex, Hex, fromHex, formatUnits } from 'viem';
 import { toast } from 'sonner';
 import { TransactionStatusModal } from "@/components/TransactionStatusModal";
 import { useBaseNetworkEnforcer } from '@/hooks/useBaseNetworkEnforcer';
@@ -187,7 +187,6 @@ export default function InternetPage() {
     const cryptoNeeded = priceNGN && amountNGN ? amountNGN / priceNGN : 0;
 
     let tokenAmountForOrder: bigint = BigInt(0);
-    let valueForEth: bigint = BigInt(0);
 
     if (selectedCrypto && cryptoNeeded > 0) {
         tokenAmountForOrder = parseUnits(cryptoNeeded.toFixed(selectedCrypto.decimals), selectedCrypto.decimals);
@@ -309,7 +308,7 @@ export default function InternetPage() {
             
             setRequestId(generateRequestId());
         }
-    }, [requestId, customerID, provider, plan, amountNGN, cryptoNeeded, selectedCrypto?.symbol, selectedCrypto?.decimals, address, selectedCrypto?.contract, tokenAmountForOrder, bytes32RequestId]);
+    }, [requestId, customerID, provider, plan, amountNGN, cryptoNeeded, selectedCrypto?.symbol, selectedCrypto?.decimals, address, selectedCrypto?.address, tokenAmountForOrder, bytes32RequestId]);
 
     useEffect(() => {
         if (!showTransactionModal) return;
@@ -355,8 +354,8 @@ export default function InternetPage() {
                 console.log("Approval confirmed! Initiating main transaction...");
                 console.log("Contract call params:", {
                   requestId: bytes32RequestId,
-                  tokenType: selectedCrypto.tokenType,
-                  tokenAmount: tokenAmountForOrder.toString()
+                  tokenAddress: selectedCrypto.address,
+                  amount: tokenAmountForOrder.toString()
                 });
                 
                 try {
@@ -367,7 +366,7 @@ export default function InternetPage() {
                         functionName: 'createOrder',
                         args: [
                             bytes32RequestId,
-                            toHex(BigInt(selectedCrypto.tokenType), { size: 32 }), // Changed to toHex(BigInt(...))
+                            selectedCrypto.address as Hex, // Use token address directly
                             tokenAmountForOrder,
                         ],
                         value: undefined,
@@ -504,9 +503,8 @@ export default function InternetPage() {
 
         console.log("--- Initiating Contract Call ---");
         console.log("RequestId (bytes32):", bytes32RequestId);
-        console.log("TokenType:", selectedCrypto.tokenType);
+        console.log("Token Address:", selectedCrypto.address);
         console.log("TokenAmount for Order (parsed):", tokenAmountForOrder.toString());
-        console.log("Value (for ETH, 0 for ERC20):", valueForEth.toString());
         console.log("Selected Crypto:", selectedCrypto.symbol);
         console.log("Crypto Needed (float):", cryptoNeeded);
         console.log("Selected Crypto Decimals:", selectedCrypto.decimals);
@@ -518,7 +516,7 @@ export default function InternetPage() {
         resetApprove();
         resetWrite();
 
-        if (!selectedCrypto.contract) {
+        if (!selectedCrypto.address) {
             toast.error("Selected crypto has no contract address.");
             setTxStatus('error');
             return;
@@ -530,7 +528,7 @@ export default function InternetPage() {
             
             try {
                 writeApprove({
-                    address: selectedCrypto.contract as Hex,
+                    address: selectedCrypto.address as Hex,
                     abi: ERC20_ABI,
                     functionName: 'approve',
                     args: [CONTRACT_ADDRESS, unlimitedApprovalAmount],
@@ -553,7 +551,7 @@ export default function InternetPage() {
                     functionName: 'createOrder',
                     args: [
                         bytes32RequestId,
-                        toHex(BigInt(selectedCrypto.tokenType), { size: 32 }), // Changed to toHex(BigInt(...))
+                        selectedCrypto.address as Hex, // Use token address directly
                         tokenAmountForOrder,
                     ],
                     value: undefined,
@@ -596,6 +594,19 @@ export default function InternetPage() {
                              !isOnBaseChain || 
                              isSwitchingChain ||
                              isRequestIdUsed;
+
+    if (loading) {
+        return (
+            <AuthGuard>
+                <div className="container py-10 max-w-xl mx-auto">
+                    <div className="flex items-center justify-center p-10">
+                        <Loader2 className="w-8 h-8 animate-spin mr-2" />
+                        <span>Loading active tokens...</span>
+                    </div>
+                </div>
+            </AuthGuard>
+        );
+    }
 
     return (
         <AuthGuard>
@@ -773,6 +784,14 @@ export default function InternetPage() {
                             isFormValid ? (needsApproval ? "Approve & Purchase Internet Data" : "Purchase Internet Data") :
                             "Fill all details"}
                         </Button>
+
+                        {/* Active tokens info */}
+                        {activeTokens.length > 0 && (
+                            <div className="text-xs text-muted-foreground p-3 bg-muted/50 rounded-lg">
+                                <p className="font-medium mb-1">Active Tokens ({activeTokens.length}):</p>
+                                <p>{activeTokens.map(t => t.symbol).join(", ")}</p>
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
             </div>
@@ -781,7 +800,7 @@ export default function InternetPage() {
                 onClose={handleCloseModal}
                 txStatus={txStatus}
                 transactionHash={transactionHashForModal}
-                errorMessage={transactionError || approvalError || backendMessage}
+                errorMessage={transactionError || approvalError}
                 backendMessage={backendMessage}
                 requestId={requestId}
             />
