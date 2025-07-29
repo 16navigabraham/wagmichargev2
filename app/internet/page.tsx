@@ -46,23 +46,53 @@ function generateRequestId(): string {
 async function fetchInternetPlans(serviceID: string) {
     console.log(`[fetchInternetPlans] Attempting to fetch plans for serviceID: ${serviceID}`);
     try {
-        const data = await getServiceVariations(serviceID);
-        console.log('[fetchInternetPlans] Fetched plans data:', data);
-        return data.content?.variations || [];
+        const response = await fetch(`/api/vtpass/service-variations?serviceID=${serviceID}`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+        })
+
+        if (!response.ok) {
+            const errorData = await response.json()
+            console.error(`HTTP error! status: ${response.status}`, errorData)
+            throw new Error(`HTTP error! status: ${response.status}`)
+        }
+
+        const data = await response.json()
+        console.log('[fetchInternetPlans] Fetched plans data:', data)
+        return data.content?.variations || []
     } catch (error) {
-        console.error('[fetchInternetPlans] Error fetching internet plans:', error);
-        return [];
+        console.error('[fetchInternetPlans] Error fetching internet plans:', error)
+        return []
     }
 }
 
 async function fetchDataServices() {
     try {
-        const data = await getServices("data");
-        console.log('Available data services:', data);
-        return data.content || [];
+        const response = await fetch('/api/vtpass/services?identifier=data', {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+        })
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`)
+        }
+
+        const data = await response.json()
+        console.log('Available data services response:', data);
+        console.log('Content array:', data.content);
+        
+        // Return the actual services array
+        const services = data.content || [];
+        console.log('Processed services:', services);
+        
+        return services;
     } catch (error) {
-        console.error('Error fetching data services:', error);
-        return [];
+        console.error('Error fetching data services:', error)
+        return []
     }
 }
 
@@ -96,12 +126,22 @@ export default function InternetPage() {
         async function loadTokensAndPricesAndProviders() {
             setLoading(true);
             try {
+                console.log("Starting to load tokens, prices, and providers...");
+                
                 const tokens = await fetchActiveTokensWithMetadata();
+                console.log("Fetched tokens:", tokens);
+                
                 // Filter out ETH (tokenType 0) - only ERC20 tokens supported
-                setActiveTokens(tokens.filter(token => token.tokenType !== 0));
+                const erc20Tokens = tokens.filter(token => token.tokenType !== 0);
+                setActiveTokens(erc20Tokens);
+                console.log("Filtered ERC20 tokens:", erc20Tokens);
+                
                 const prices = await fetchPrices(tokens);
+                console.log("Fetched prices:", prices);
                 setPrices(prices);
+                
                 const serviceData = await fetchDataServices();
+                console.log("Fetched service data:", serviceData);
                 setAvailableProviders(serviceData);
 
             } catch (error) {
@@ -519,13 +559,6 @@ export default function InternetPage() {
         setTransactionHashForModal(undefined);
         backendRequestSentRef.current = null;
     }, [txStatus]);
-    const isFormValid =
-        selectedTokenAddress &&
-        provider &&
-        plan &&
-        customerID &&
-        selectedPlan &&
-        amountNGN > 0;
 
     const providersToShow = availableProviders.length > 0 ? availableProviders : [];
 
@@ -607,13 +640,22 @@ export default function InternetPage() {
                                     <SelectValue placeholder="Select provider" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {providersToShow.map((p) => (
-                                        <SelectItem key={p.serviceID || p.id} value={p.serviceID}>
-                                            {p.name}
-                                        </SelectItem>
-                                    ))}
+                                    {providersToShow.length === 0 ? (
+                                        <SelectItem value="" disabled>No providers available</SelectItem>
+                                    ) : (
+                                        providersToShow.map((p) => (
+                                            <SelectItem key={p.serviceID} value={p.serviceID}>
+                                                {p.name}
+                                            </SelectItem>
+                                        ))
+                                    )}
                                 </SelectContent>
                             </Select>
+                            {availableProviders.length === 0 && !loading && (
+                                <p className="text-sm text-yellow-600">
+                                    No internet providers found from backend.
+                                </p>
+                            )}
                         </div>
                         
                         {/* Data Plan Selection */}

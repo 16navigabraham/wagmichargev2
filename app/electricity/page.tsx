@@ -19,7 +19,7 @@ import { toast } from 'sonner';
 import { TransactionStatusModal } from "@/components/TransactionStatusModal";
 import { useBaseNetworkEnforcer } from '@/hooks/useBaseNetworkEnforcer';
 
-import { payElectricityBill, verifyMeter, getServiceVariations } from "@/lib/api";
+import { payElectricityBill, verifyMeter } from "@/lib/api";
 import { TokenConfig } from "@/lib/tokenlist";
 import { fetchActiveTokensWithMetadata } from "@/lib/tokenUtils";
 
@@ -71,8 +71,14 @@ async function fetchPrices(tokenList: TokenConfig[]): Promise<Record<string, any
 
 async function fetchElectricityPlans(serviceID: string) {
   try {
-    const data = await getServiceVariations(serviceID);
-    return data.content?.variations || [];
+    const res = await fetch(`/api/vtpass/service-variations?serviceID=${serviceID}`)
+    if (!res.ok) {
+      console.error("Failed to fetch electricity plans:", res.status);
+      return [];
+    }
+    const data = await res.json()
+    console.log('Electricity plans response:', data);
+    return data.content?.variations || []
   } catch (error) {
     console.error("Error fetching electricity plans:", error);
     return [];

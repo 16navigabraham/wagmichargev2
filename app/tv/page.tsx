@@ -20,7 +20,7 @@ import { toast } from 'sonner';
 import { TransactionStatusModal } from "@/components/TransactionStatusModal";
 import { useBaseNetworkEnforcer } from '@/hooks/useBaseNetworkEnforcer';
 
-import { payTVSubscription, verifySmartCard, getServiceVariations, getServices } from "@/lib/api";
+import { payTVSubscription, verifySmartCard } from "@/lib/api";
 import { TokenConfig } from "@/lib/tokenlist";
 import { fetchActiveTokensWithMetadata } from "@/lib/tokenUtils";
 
@@ -58,8 +58,14 @@ async function fetchPrices(tokenList: TokenConfig[]): Promise<Record<string, any
 
 async function fetchTVProviders() {
   try {
-    const data = await getServices("tv-subscription");
-    return data.content || [];
+    const res = await fetch("/api/vtpass/services?identifier=tv-subscription")
+    if (!res.ok) {
+      console.error("Failed to fetch TV providers:", res.status);
+      return [];
+    }
+    const data = await res.json()
+    console.log('TV providers response:', data);
+    return data.content || []
   } catch (error) {
     console.error("Error fetching TV providers:", error);
     return [];
@@ -68,8 +74,14 @@ async function fetchTVProviders() {
 
 async function fetchTVPlans(serviceID: string) {
   try {
-    const data = await getServiceVariations(serviceID);
-    return data.content?.variations || [];
+    const res = await fetch(`/api/vtpass/service-variations?serviceID=${serviceID}`)
+    if (!res.ok) {
+      console.error("Failed to fetch TV plans:", res.status);
+      return [];
+    }
+    const data = await res.json()
+    console.log('TV plans response:', data);
+    return data.content?.variations || []
   } catch (error) {
     console.error("Error fetching TV plans:", error);
     return [];
