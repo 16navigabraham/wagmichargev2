@@ -14,8 +14,18 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Checkbox } from "@/components/ui/checkbox"
 import { usePrivy } from "@privy-io/react-auth"
 import { useState, useEffect } from "react"
+import Link from "next/link"
 
 const features = [
   {
@@ -38,18 +48,11 @@ const features = [
   },
 ]
 
-// const cryptos = [
-//   { name: "Bitcoin", symbol: "BTC", change: "+2.34%", color: "from-orange-500 to-yellow-600" },
-//   { name: "Ethereum", symbol: "ETH", change: "-1.23%", color: "from-blue-500 to-purple-600" },
-//   { name: "BNB", symbol: "BNB", change: "+4.56%", color: "from-yellow-500 to-orange-600" },
-//   { name: "Polygon", symbol: "MATIC", change: "+8.91%", color: "from-purple-500 to-pink-600" },
-// ]
-
 const testimonials = [
   {
     name: "From the Team",
     role: "Our Mission",
-    content: "WagmiCharge was built to make crypto useful for everyday Africans — starting with airtime.",
+    content: "Paycrypt was built to make crypto useful for everyday people — starting with utility payments.",
     rating: 5,
   },
   {
@@ -61,7 +64,7 @@ const testimonials = [
   {
     name: "Join the Movement",
     role: "Be an Early Supporter",
-    content: "We’re just getting started. The earlier you join, the more impact you make.",
+    content: "We're just getting started. The earlier you join, the more impact you make.",
     rating: 5,
   },
 ];
@@ -70,15 +73,30 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
   const router = useRouter()
   const { theme, setTheme } = useTheme()
   const { login, signUp } = usePrivy()
-  const [showModal, setShowModal] = useState(false)
+  const [showTermsModal, setShowTermsModal] = useState(false)
+  const [acceptedTerms, setAcceptedTerms] = useState(false)
+  const [acceptedPrivacy, setAcceptedPrivacy] = useState(false)
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setShowModal(false)
+      if (e.key === "Escape") setShowTermsModal(false)
     }
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [])
+
+  const handleLaunchApp = () => {
+    setShowTermsModal(true)
+  }
+
+  const handleProceedToApp = () => {
+    if (acceptedTerms && acceptedPrivacy) {
+      setShowTermsModal(false)
+      login() // Proceed with Privy login
+    }
+  }
+
+  const canProceed = acceptedTerms && acceptedPrivacy
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
@@ -89,7 +107,7 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
             <div className="flex items-center space-x-2">
               <img src="/paycrypt.png" alt="Paycrypt Logo" className="h-8 w-8 rounded-lg object-contain bg-white shadow-lg" />
               <span className="font-bold text-xl bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                aycrypt
+                Paycrypt
               </span>
             </div>
             <div className="flex items-center space-x-2">
@@ -102,16 +120,131 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
                 <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
                 <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
               </Button>
-              <Button variant="outline" onClick={login}>
+              <Button variant="outline" onClick={handleLaunchApp}>
                 Launch App
               </Button>
-              {/* <Button variant="default" onClick={signUp}>
-                Sign Up
-              </Button> */}
             </div>
           </div>
         </div>
       </header>
+
+      {/* Terms & Privacy Modal */}
+      <Dialog open={showTermsModal} onOpenChange={setShowTermsModal}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5 text-blue-600" />
+              Welcome to Paycrypt
+            </DialogTitle>
+            <DialogDescription>
+              Before you get started, please review and accept our terms and privacy policy.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6 py-4">
+            {/* Key Points Summary */}
+            <div className="bg-blue-50 dark:bg-blue-950/30 p-4 rounded-lg">
+              <h4 className="font-semibold mb-3 text-blue-900 dark:text-blue-100">
+                Key Points:
+              </h4>
+              <ul className="space-y-2 text-sm text-blue-800 dark:text-blue-200">
+                <li className="flex items-start gap-2">
+                  <CheckCircle className="h-4 w-4 mt-0.5 text-blue-600" />
+                  <span>Paycrypt is a non-custodial service - we never hold your funds</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle className="h-4 w-4 mt-0.5 text-blue-600" />
+                  <span>You maintain full control of your wallet and private keys</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle className="h-4 w-4 mt-0.5 text-blue-600" />
+                  <span>All transactions are processed on Base blockchain</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle className="h-4 w-4 mt-0.5 text-blue-600" />
+                  <span>We don't collect personal data - only wallet addresses</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle className="h-4 w-4 mt-0.5 text-blue-600" />
+                  <span>Minimum payment amounts apply per service provider</span>
+                </li>
+              </ul>
+            </div>
+
+            {/* Risk Disclaimer */}
+            <div className="bg-amber-50 dark:bg-amber-950/30 p-4 rounded-lg border border-amber-200 dark:border-amber-800">
+              <h4 className="font-semibold mb-2 text-amber-900 dark:text-amber-100 flex items-center gap-2">
+                <TrendingUp className="h-4 w-4" />
+                Important Risks:
+              </h4>
+              <ul className="space-y-1 text-sm text-amber-800 dark:text-amber-200">
+                <li>• Cryptocurrency transactions are irreversible</li>
+                <li>• You are responsible for wallet security and transaction verification</li>
+                <li>• Token prices may fluctuate during transaction processing</li>
+                <li>• Gas fees apply for all blockchain transactions</li>
+              </ul>
+            </div>
+
+            {/* Checkboxes */}
+            <div className="space-y-4">
+              <div className="flex items-start space-x-3">
+                <Checkbox 
+                  id="terms" 
+                  checked={acceptedTerms}
+                  onCheckedChange={(checked) => setAcceptedTerms(checked as boolean)}
+                />
+                <label htmlFor="terms" className="text-sm leading-relaxed cursor-pointer">
+                  I have read and agree to the{" "}
+                  <Link 
+                    href="/terms" 
+                    target="_blank"
+                    className="text-blue-600 hover:text-blue-800 underline font-medium"
+                  >
+                    Terms & Conditions
+                  </Link>
+                  . I understand that Paycrypt is non-custodial and I am responsible for my wallet security.
+                </label>
+              </div>
+
+              <div className="flex items-start space-x-3">
+                <Checkbox 
+                  id="privacy" 
+                  checked={acceptedPrivacy}
+                  onCheckedChange={(checked) => setAcceptedPrivacy(checked as boolean)}
+                />
+                <label htmlFor="privacy" className="text-sm leading-relaxed cursor-pointer">
+                  I have read and agree to the{" "}
+                  <Link 
+                    href="/privacy" 
+                    target="_blank"
+                    className="text-blue-600 hover:text-blue-800 underline font-medium"
+                  >
+                    Privacy Policy
+                  </Link>
+                  . I understand how my data is handled and processed.
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setShowTermsModal(false)}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleProceedToApp}
+              disabled={!canProceed}
+              className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+            >
+              {canProceed ? "Launch Paycrypt" : "Please Accept Terms"}
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Hero Section */}
       <section className="py-20 px-4">
@@ -137,7 +270,6 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
           <p className="text-sm text-muted-foreground">Join amazing users already using paycrypt</p>
         </div>
       </section>
-
 
       {/* Features Section */}
       <section className="py-20 px-4">
@@ -246,7 +378,7 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
         </div>
       </section>
 
-     {/* Why WagmiCharge Exists Section */}
+     {/* Why Paycrypt Exists Section */}
 <section className="py-20 px-4 bg-gradient-to-r from-blue-500 to-purple-600 text-white">
   <div className="container mx-auto">
     <h2 className="text-3xl md:text-4xl font-bold text-center mb-12">
@@ -293,7 +425,6 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
   </div>
 </section>
 
-
       {/* CTA Section */}
       <section className="py-20 px-4 bg-gradient-to-br from-gray-50 to-blue-50 dark:from-gray-900 dark:to-gray-800">
         <div className="container mx-auto text-center">
@@ -314,11 +445,11 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
       <footer className="bg-white/90 dark:bg-gray-900/90 border-t mt-12 w-full">
   <div className="container mx-auto px-4 py-8 md:py-12">
     <div className="px-3 w-full">
-      <div className="md:col-span-1 items-center justify-center grid grid-cols justify-between h-full">
+      <div className="md:col-span-1 items-center  grid grid-cols justify-between h-full">
         <div className="flex items-center space-x-2 mb-4">
           <img src="/paycrypt.png" alt="Paycrypt Logo" className="h-8 w-8 rounded-lg object-contain bg-white shadow-lg" />
           <span className="font-bold text-xl bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-            aycrypt
+            Paycrypt
           </span>
         </div>
         <p className="text-muted-foreground leading-relaxed mb-4">
@@ -348,7 +479,7 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
             </svg>
           </a>
           <a 
-            href="https://github.com/yourgithub" 
+            href="https://github.com/Team-memevibe/Paycrypt" 
             target="_blank" 
             rel="noopener noreferrer" 
             aria-label="GitHub"
@@ -370,4 +501,5 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
   </div>
       </footer>
     </div>
-  )}
+  )
+}
