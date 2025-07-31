@@ -22,7 +22,7 @@ interface HeaderProps {
 
 export function Header({ onMenuClick }: HeaderProps) {
   const { theme, setTheme } = useTheme()
-  const [notifications] = useState(3)
+  const [notifications] = useState(0)
   const router = useRouter()
 
   const { logout } = usePrivy()
@@ -64,7 +64,7 @@ export function Header({ onMenuClick }: HeaderProps) {
             variant="ghost"
             size="icon"
             className="relative"
-            onClick={() => router.push("/dashboard/recent-transactions")}
+            onClick={() => router.push("/history")}
             >
             <Bell className="h-5 w-5" />
             {notifications > 0 && (
