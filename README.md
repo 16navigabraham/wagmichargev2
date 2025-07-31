@@ -108,7 +108,7 @@ Frontend Engineer | React & Web3
 [GitHub](https://github.com/Qasim-Rokeeb)
 
 **Abraham Navigator**  
-Frontend Engineer | React & Solidity  
+Blockchain Developer | React & Solidity  
 [GitHub](https://github.com/16navigabraham/)
 
 
