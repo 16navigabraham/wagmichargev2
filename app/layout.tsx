@@ -7,7 +7,7 @@ import { ClientProviders } from "@/components/ClientProviders"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "wagmi charge v2 - Crypto to Utilities",
+  title: "wa - Crypto to Utilities",
   description: "Convert cryptocurrency to pay for airtime, TV subscriptions, electricity bills, and more",
   generator: 'TEAM MEMEVIBE'
 }
@@ -19,6 +19,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={inter.className}>
+      <head>
+        <link rel="icon" href="/paycrypt.png" type="image/png" sizes="32x32" />
+        <link rel="shortcut icon" href="/paycrypt.png" type="image/png" />
+      </head>
       <body>
         <ClientProviders>
           {children}

@@ -87,11 +87,9 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
-              <div className="h-8 w-8 rounded-lg bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center shadow-lg">
-                <span className="text-white font-bold text-sm">W</span>
-              </div>
+              <img src="/paycrypt.png" alt="Paycrypt Logo" className="h-8 w-8 rounded-lg object-contain bg-white shadow-lg" />
               <span className="font-bold text-xl bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                wagmi charge v2
+                aycrypt
               </span>
             </div>
             <div className="flex items-center space-x-2">
@@ -136,7 +134,7 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
             electricity, and internet bills instantly.
           </p>
 
-          <p className="text-sm text-muted-foreground">Join 10,000+ users already using wagmi charge</p>
+          <p className="text-sm text-muted-foreground">Join amazing users already using paycrypt</p>
         </div>
       </section>
 
@@ -252,7 +250,7 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
 <section className="py-20 px-4 bg-gradient-to-r from-blue-500 to-purple-600 text-white">
   <div className="container mx-auto">
     <h2 className="text-3xl md:text-4xl font-bold text-center mb-12">
-      Why WagmiCharge Exists
+      Why Paycrypt Exists
     </h2>
     <div className="grid md:grid-cols-4 gap-8 text-center">
       <div className="group">
@@ -315,20 +313,18 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
        {/* Footer Section */}
       <footer className="bg-white/90 dark:bg-gray-900/90 border-t mt-12 w-full">
   <div className="container mx-auto px-4 py-8 md:py-12">
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-      <div className="md:col-span-1">
+    <div className="px-3 w-full">
+      <div className="md:col-span-1 items-center justify-center grid grid-cols justify-between h-full">
         <div className="flex items-center space-x-2 mb-4">
-          <div className="h-8 w-8 rounded-lg bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center shadow-lg">
-            <span className="text-white font-bold text-sm">W</span>
-          </div>
+          <img src="/paycrypt.png" alt="Paycrypt Logo" className="h-8 w-8 rounded-lg object-contain bg-white shadow-lg" />
           <span className="font-bold text-xl bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-            wagmi charge v2
+            aycrypt
           </span>
         </div>
         <p className="text-muted-foreground leading-relaxed mb-4">
           The easiest way to pay for everyday utilities with cryptocurrency.
         </p>
-        <div className="flex space-x-4">
+        <div className="flex space-x-4 mt-2">
           <a 
             href="https://x.com/yourproject" 
             target="_blank" 
@@ -364,44 +360,13 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
           </a>
         </div>
       </div>
-
-      {/* Uncomment and adjust these sections if you want to add more footer links */}
-      {/* 
-      <div>
-        <h3 className="font-semibold mb-4 text-foreground">Services</h3>
-        <ul className="space-y-2 text-muted-foreground">
-          <li className="hover:text-foreground transition-colors cursor-pointer">Airtime Top-up</li>
-          <li className="hover:text-foreground transition-colors cursor-pointer">TV Subscriptions</li>
-          <li className="hover:text-foreground transition-colors cursor-pointer">Electricity Bills</li>
-          <li className="hover:text-foreground transition-colors cursor-pointer">Internet Services</li>
-        </ul>
-      </div>
-
-      <div>
-        <h3 className="font-semibold mb-4 text-foreground">Support</h3>
-        <ul className="space-y-2 text-muted-foreground">
-          <li className="hover:text-foreground transition-colors cursor-pointer">Help Center</li>
-          <li className="hover:text-foreground transition-colors cursor-pointer">Contact Us</li>
-          <li className="hover:text-foreground transition-colors cursor-pointer">API Documentation</li>
-          <li className="hover:text-foreground transition-colors cursor-pointer">Status Page</li>
-        </ul>
-      </div>
-
-      <div>
-        <h3 className="font-semibold mb-4 text-foreground">Legal</h3>
-        <ul className="space-y-2 text-muted-foreground">
-          <li className="hover:text-foreground transition-colors cursor-pointer">Privacy Policy</li>
-          <li className="hover:text-foreground transition-colors cursor-pointer">Terms of Service</li>
-          <li className="hover:text-foreground transition-colors cursor-pointer">Cookie Policy</li>
-          <li className="hover:text-foreground transition-colors cursor-pointer">Compliance</li>
-        </ul>
-      </div>
-      */}
+      <div className="hidden md:block" />
+      <div className="hidden md:block" />
+      <div className="hidden md:block" />
     </div>
-
-    <div className="border-t mt-8 pt-6 text-center text-muted-foreground">
- <p className="text-sm">© {new Date().getFullYear()} wagmi charge v2. All rights reserved.</p>
- </div>
+    <div className="border-t mt-8 pt-6 text-center text-muted-foreground w-full">
+      <p className="text-sm">© {new Date().getFullYear()} Paycrypt. All rights reserved.</p>
+    </div>
   </div>
       </footer>
     </div>
