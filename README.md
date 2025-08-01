@@ -24,7 +24,7 @@ This application bridges the gap between decentralized finance and everyday util
 - **Authentication Service**: JWT, 2FA, KYC/AML
 - **Crypto Payment Engine**: Multi-chain, smart contracts, real-time rates
 - **Utility Gateway**: MTN, Airtel, Glo, 9mobile + DSTV, Startimes, etc.
-- **Database Stack**: PostgreSQL + Redis + MongoDB
+- **Database Stack**: MongoDB
 - **Security**: PCI DSS, encryption, audit logs
 
 ### 🖥️ Frontend Stack
