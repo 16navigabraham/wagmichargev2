@@ -16,11 +16,13 @@ import {
   X,
   TrendingUp,
   Wallet,
+  Menu,
 } from "lucide-react"
 
 interface SidebarProps {
   isOpen: boolean
   onClose: () => void
+  onToggle: () => void
 }
 
 const navigation = [
@@ -43,9 +45,19 @@ const other = [
   { name: "Help & Support", href: "/help", icon: HelpCircle },
 ]
 
-export function Sidebar({ isOpen, onClose }: SidebarProps) {
+export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
   return (
     <>
+      {/* Toggle Button - Always visible */}
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={onToggle}
+        className="fixed left-4 top-20 z-50 bg-background border shadow-md hover:bg-accent"
+      >
+        <Menu className="h-5 w-5" />
+      </Button>
+
       {/* Mobile overlay */}
       {isOpen && <div className="fixed inset-0 z-40 bg-black/50 lg:hidden" onClick={onClose} />}
 

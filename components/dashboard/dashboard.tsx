@@ -31,7 +31,7 @@ export function Dashboard() {
           {/* Left Column - Portfolio Overview (Takes 3/4 width on xl screens) */}
           <div className="xl:col-span-3 space-y-8">
             {/* Portfolio Overview Card */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="bg-lightblue rounded-xl shadow-sm border border-lightblue-200 p-6">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-2xl font-semibold text-gray-900">
                   Portfolio Overview
@@ -44,20 +44,17 @@ export function Dashboard() {
             </div>
 
             {/* Recent Transactions Card */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="bg-lightblue rounded-xl shadow-sm border border-lightblue-200 p-6">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-2xl font-semibold text-gray-900">
                   Recent Transactions
                 </h2>
-                <button className="text-sm text-blue-600 hover:text-blue-800 font-medium">
-                  View All →
-                </button>
               </div>
               <RecentTransactions wallet={connectedWallet} />
             </div>
 
             {/* Market Data Card */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="bg-lightblue rounded-xl shadow-sm border border-lightblue-200 p-6">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-2xl font-semibold text-gray-900">
                   Market Data
@@ -74,7 +71,7 @@ export function Dashboard() {
           <div className="xl:col-span-1">
             <div className="sticky top-6 space-y-6">
               {/* Quick Actions Card */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="bg-lightblue rounded-xl shadow-sm border border-lightblue-200 p-6">
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-xl font-semibold text-gray-900">
                     Quick Actions
