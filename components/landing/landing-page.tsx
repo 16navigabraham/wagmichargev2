@@ -253,11 +253,11 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
             className="mb-4 bg-gradient-to-r from-blue-500 to-purple-600 text-white border-0 shadow-lg"
             variant="secondary"
           >
-            🚀 Now Supporting 4+ Cryptocurrencies
+             Only erc20 tokens supported
           </Badge>
 
           <h1 className="text-5xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent leading-tight">
-            Convert Crypto to
+            Use Your Crypto to
             <br />
             Pay Your Bills
           </h1>
@@ -277,7 +277,7 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold mb-4">Everything You Need in One Platform</h2>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              Convert your cryptocurrency to pay for all your essential services with just a few clicks
+              Use your cryptocurrency to pay for all your essential services with just a few clicks
             </p>
           </div>
 
@@ -391,7 +391,7 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
           <span className="text-3xl font-bold">Built for Everyone</span>
         </div>
         <p className="text-blue-100">
-          Anyone can sign up with just an email and get started — no crypto background required.
+          Anyone can get started with just a wallet.
         </p>
       </div>
       <div className="group">
@@ -409,7 +409,7 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
           <span className="text-3xl font-bold">Secure Access</span>
         </div>
         <p className="text-blue-100">
-          Your wallet, your data — protected with Privy's encrypted email-based authentication.
+          Your wallet, your data — protected with Privy's encrypted authentication.
         </p>
       </div>
       <div className="group">

@@ -15,6 +15,7 @@ export function Dashboard() {
   return (
     <MainLayout>
       <div className="space-y-6">
+        {/* Header Section */}
         <div className="flex flex-col space-y-2">
           <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
           <p className="text-muted-foreground">
@@ -23,23 +24,69 @@ export function Dashboard() {
               : "Connect your wallet to get started."}
           </p>
         </div>
+        
 
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-          <div className="lg:col-span-3">
-            <PortfolioOverview wallet={connectedWallet} />
+        {/* Main Content Grid */}
+        <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
+          {/* Left Column - Portfolio Overview (Takes 3/4 width on xl screens) */}
+          <div className="xl:col-span-3 space-y-8">
+            {/* Portfolio Overview Card */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-semibold text-gray-900">
+                  Portfolio Overview
+                </h2>
+                <div className="text-sm text-gray-500">
+                  Last updated: {new Date().toLocaleTimeString()}
+                </div>
+              </div>
+              <PortfolioOverview wallet={connectedWallet} />
+            </div>
+
+            {/* Recent Transactions Card */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-semibold text-gray-900">
+                  Recent Transactions
+                </h2>
+                <button className="text-sm text-blue-600 hover:text-blue-800 font-medium">
+                  View All →
+                </button>
+              </div>
+              <RecentTransactions wallet={connectedWallet} />
+            </div>
+
+            {/* Market Data Card */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-semibold text-gray-900">
+                  Market Data
+                </h2>
+                <div className="text-sm text-gray-500">
+                  Real-time data
+                </div>
+              </div>
+              <MarketData />
+            </div>
+          </div>
+
+          {/* Right Sidebar - Quick Actions */}
+          <div className="xl:col-span-1">
+            <div className="sticky top-6 space-y-6">
+              {/* Quick Actions Card */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-xl font-semibold text-gray-900">
+                    Quick Actions
+                  </h2>
+                </div>
+                <QuickActions wallet={connectedWallet} />
+              </div>
+
+
+            </div>
           </div>
         </div>
-
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          <div className="lg:col-span-2">
-            <RecentTransactions wallet={connectedWallet} />
-          </div>
-          <div>
-            <QuickActions wallet={connectedWallet} />
-          </div>
-        </div>
-
-        <MarketData />
       </div>
     </MainLayout>
   )
