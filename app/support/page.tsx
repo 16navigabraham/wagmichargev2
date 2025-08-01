@@ -1,12 +1,13 @@
 "use client"
 
-import { useEffect } from "react"
 import { MainLayout } from "@/components/layout/main-layout"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { usePrivy, useWallets } from "@privy-io/react-auth"
 import {
   HelpCircle,
   AlertCircle,
+  ExternalLink,
 } from "lucide-react"
 
 export function SupportPage() {
@@ -14,18 +15,9 @@ export function SupportPage() {
   const { wallets } = useWallets()
   const connectedWallet = wallets?.[0]
 
-  useEffect(() => {
-    // Load Typeform embed script
-    const script = document.createElement('script')
-    script.src = '//embed.typeform.com/next/embed.js'
-    script.async = true
-    document.body.appendChild(script)
-
-    return () => {
-      // Cleanup script when component unmounts
-      document.body.removeChild(script)
-    }
-  }, [])
+  const openTypeform = () => {
+    window.open('https://form.typeform.com/to/VmRP0ZHH', '_blank')
+  }
 
   return (
     <MainLayout>
@@ -67,7 +59,7 @@ export function SupportPage() {
                 <div>
                   <p className="font-medium text-orange-800">Wallet Not Connected</p>
                   <p className="text-sm text-orange-600">
-                    Please include your wallet address in the support form below
+                    Please include your wallet address in the support form
                   </p>
                 </div>
               </div>
@@ -75,12 +67,36 @@ export function SupportPage() {
           </Card>
         )}
 
-        {/* Embedded Typeform */}
+        {/* Support Form Button */}
+        <div className="max-w-2xl mx-auto">
+          <Card className="text-center">
+            <CardContent className="pt-6 pb-8">
+              <h2 className="text-2xl font-bold mb-4">Submit Support Request</h2>
+              <p className="text-muted-foreground mb-6">
+                Click the button below to open our support form
+              </p>
+              <Button size="lg" onClick={openTypeform} className="w-full max-w-sm">
+                Open Support Form
+                <ExternalLink className="h-5 w-5 ml-2" />
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Iframe Embed */}
         <div className="w-full">
-          <div 
-            data-tf-live="01K1KWQJ67JV900HW9W2AWXQWW"
-            style={{ width: '100%', height: '600px' }}
-          ></div>
+          <Card>
+            <CardContent className="p-0">
+              <iframe
+                src="https://form.typeform.com/to/VmRP0ZHH"
+                width="100%"
+                height="600"
+                frameBorder="0"
+                style={{ border: 'none' }}
+                title="Support Form"
+              />
+            </CardContent>
+          </Card>
         </div>
 
         {/* Security Instructions */}

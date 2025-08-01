@@ -33,7 +33,7 @@ export function Dashboard() {
             {/* Portfolio Overview Card */}
             <div className="bg-lightblue rounded-xl shadow-sm border border-lightblue-200 p-6">
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-semibold text-gray-900">
+                <h2 className="text-2xl font-semibold text-black-900">
                   Portfolio Overview
                 </h2>
                 <div className="text-sm text-gray-500">
@@ -46,7 +46,7 @@ export function Dashboard() {
             {/* Recent Transactions Card */}
             <div className="bg-lightblue rounded-xl shadow-sm border border-lightblue-200 p-6">
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-semibold text-gray-900">
+                <h2 className="text-2xl font-semibold text-black-900">
                   Recent Transactions
                 </h2>
               </div>
@@ -56,7 +56,7 @@ export function Dashboard() {
             {/* Market Data Card */}
             <div className="bg-lightblue rounded-xl shadow-sm border border-lightblue-200 p-6">
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-semibold text-gray-900">
+                <h2 className="text-2xl font-semibold text-black-900">
                   Market Data
                 </h2>
                 <div className="text-sm text-gray-500">
@@ -73,7 +73,7 @@ export function Dashboard() {
               {/* Quick Actions Card */}
             <div className="bg-lightblue rounded-xl shadow-sm border border-lightblue-200 p-6">
                 <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-xl font-semibold text-gray-900">
+                  <h2 className="text-xl font-semibold text-black-900">
                     Quick Actions
                   </h2>
                 </div>

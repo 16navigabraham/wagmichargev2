@@ -253,7 +253,7 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
             className="mb-4 bg-gradient-to-r from-blue-500 to-purple-600 text-white border-0 shadow-lg"
             variant="secondary"
           >
-             Only erc20 tokens supported
+             Only erc20 tokens are supported
           </Badge>
 
           <h1 className="text-5xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent leading-tight">
