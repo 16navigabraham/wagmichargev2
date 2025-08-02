@@ -35,7 +35,7 @@ export function Dashboard() {
         onClose={() => setSidebarOpen(false)} 
       />
 
-      <div className={`transition-all duration-300 ${sidebarOpen ? 'lg:ml-64' : 'ml-0'} ${sidebarOpen ? 'pl-4' : 'pl-16'}`}>
+      <div className="pl-16">
         <div className="space-y-6">
           {/* Header Section */}
           <div className="flex flex-col space-y-2">
