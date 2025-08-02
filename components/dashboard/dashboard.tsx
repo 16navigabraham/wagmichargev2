@@ -19,6 +19,14 @@ export function Dashboard() {
 
   return (
     <MainLayout>
+      {/* Desktop overlay when sidebar is open */}
+      {sidebarOpen && (
+        <div 
+          className="fixed inset-0 z-30 bg-black/50 hidden lg:block" 
+          onClick={() => setSidebarOpen(false)} 
+        />
+      )}
+
       {/* Your existing Sidebar component */}
       <Sidebar 
         isOpen={sidebarOpen} 
@@ -48,66 +56,63 @@ export function Dashboard() {
           </div>
         </div>
 
-          {/* Main Content Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            {/* Left Column - Portfolio Overview (Takes 3/4 width on lg screens) */}
-            <div className="lg:col-span-3 space-y-6">
-              {/* Portfolio Overview Card */}
-              <div className="bg-lightblue rounded-xl shadow-sm border border-lightblue-200 p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-semibold text-black-900">
-                    Portfolio Overview
-                  </h2>
-                  <div className="text-sm text-gray-500">
-                    Last updated: {new Date().toLocaleTimeString()}
-                  </div>
+        {/* Main Content Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {/* Left Column - Portfolio Overview (Takes 3/4 width on lg screens) */}
+          <div className="lg:col-span-3 space-y-6">
+            {/* Portfolio Overview Card */}
+            <div className="bg-lightblue rounded-xl shadow-sm border border-lightblue-200 p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-semibold text-black-900">
+                  Portfolio Overview
+                </h2>
+                <div className="text-sm text-gray-500">
+                  Last updated: {new Date().toLocaleTimeString()}
                 </div>
-                <PortfolioOverview wallet={connectedWallet} />
               </div>
-
-              {/* Recent Transactions Card */}
-              <div className="bg-lightblue rounded-xl shadow-sm border border-lightblue-200 p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-semibold text-black-900">
-                    Recent Transactions
-                  </h2>
-                </div>
-                <RecentTransactions wallet={connectedWallet} />
-              </div>
-
-              {/* Market Data Card */}
-              <div className="bg-lightblue rounded-xl shadow-sm border border-lightblue-200 p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-semibold text-black-900">
-                    Market Data
-                  </h2>
-                  <div className="text-sm text-gray-500">
-                    Real-time data
-                  </div>
-                </div>
-                <MarketData />
-              </div>
+              <PortfolioOverview wallet={connectedWallet} />
             </div>
 
-            {/* Right Sidebar - Quick Actions */}
-            <div className="lg:col-span-1">
-              <div className="space-y-6">
-                {/* Quick Actions Card */}
-                <div className="bg-lightblue rounded-xl shadow-sm border border-lightblue-200 p-6">
-                  <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-xl font-semibold text-black-900">
-                      Quick Actions
-                    </h2>
-                  </div>
-                  <QuickActions wallet={connectedWallet} />
+            {/* Recent Transactions Card */}
+            <div className="bg-lightblue rounded-xl shadow-sm border border-lightblue-200 p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-semibold text-black-900">
+                  Recent Transactions
+                </h2>
+              </div>
+              <RecentTransactions wallet={connectedWallet} />
+            </div>
+
+            {/* Market Data Card */}
+            <div className="bg-lightblue rounded-xl shadow-sm border border-lightblue-200 p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-semibold text-black-900">
+                  Market Data
+                </h2>
+                <div className="text-sm text-gray-500">
+                  Real-time data
                 </div>
+              </div>
+              <MarketData />
+            </div>
+          </div>
+
+          {/* Right Sidebar - Quick Actions */}
+          <div className="lg:col-span-1">
+            <div className="space-y-6">
+              {/* Quick Actions Card */}
+              <div className="bg-lightblue rounded-xl shadow-sm border border-lightblue-200 p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-xl font-semibold text-black-900">
+                    Quick Actions
+                  </h2>
+                </div>
+                <QuickActions wallet={connectedWallet} />
               </div>
             </div>
           </div>
         </div>
-      
+      </div>
     </MainLayout>
   )
 }
-
-  

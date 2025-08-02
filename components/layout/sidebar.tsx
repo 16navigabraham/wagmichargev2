@@ -16,7 +16,6 @@ import {
   X,
   TrendingUp,
   Wallet,
-  PlusIcon,
 } from "lucide-react"
 
 interface SidebarProps {
@@ -36,7 +35,6 @@ const utilities = [
   { name: "TV Subscription", href: "/tv", icon: Tv },
   { name: "Electricity", href: "/electricity", icon: Zap },
   { name: "Internet", href: "/internet", icon: Wifi },
-  { name: "Other Services", href: "/services", icon: PlusIcon },
 ]
 
 const other = [
@@ -48,13 +46,13 @@ const other = [
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   return (
     <>
-      {/* Mobile overlay */}
+      {/* Mobile overlay only */}
       {isOpen && <div className="fixed inset-0 z-40 bg-black/50 lg:hidden" onClick={onClose} />}
 
       {/* Sidebar */}
       <div
         className={cn(
-          "fixed left-0 top-16 z-40 h-[calc(100vh-4rem)] w-64 transform bg-background border-r transition-transform duration-300 ease-in-out",
+          "fixed left-0 top-0 z-50 h-screen w-64 transform bg-background border-r transition-transform duration-300 ease-in-out",
           isOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
