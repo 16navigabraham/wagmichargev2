@@ -400,8 +400,9 @@ export default function TVPage() {
         setVerificationSuccess(false);
         setRequestId(undefined);
         backendRequestSentRef.current = null;
-      }, 3000); // 3 second delay to allow user to see success
-
+      // Clear requestId slightly later to prevent immediate re-generation
+       setTimeout(() => setRequestId(undefined), 100);
+          }, 3000); 
     } catch (error: any) {
       console.error("Backend API call failed:", error);
       setTxStatus('backendError');

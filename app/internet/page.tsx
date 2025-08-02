@@ -282,6 +282,8 @@ export default function InternetPage() {
                 setCustomerID("");
                 setRequestId(undefined);
                 backendRequestSentRef.current = null;
+          // Clear requestId slightly later to prevent immediate re-generation
+              setTimeout(() => setRequestId(undefined), 100);
             }, 3000); // 3 second delay to allow user to see success
 
         } catch (error: unknown) {

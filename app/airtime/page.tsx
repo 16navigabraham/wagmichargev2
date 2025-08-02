@@ -185,15 +185,17 @@ export default function AirtimePage() {
       setBackendMessage("Airtime delivered successfully!");
       toast.success("Airtime delivered successfully!", { id: 'backend-status' });
 
-      // Reset form for next transaction after a delay
-      setTimeout(() => {
-        setSelectedToken("");
-        setNetwork("");
-        setAmount("");
-        setPhone("");
-        setRequestId(undefined);
-        backendRequestSentRef.current = null;
-      }, 3000); // 3 second delay to allow user to see success
+    // Reset form for next transaction after a delay
+setTimeout(() => {
+  setSelectedToken("");
+  setNetwork("");
+  setAmount("");
+  setPhone("");
+  backendRequestSentRef.current = null;
+  
+  // Clear requestId slightly later to prevent immediate re-generation
+  setTimeout(() => setRequestId(undefined), 100);
+}, 3000); // 3 second delay to allow user to see success
 
     } catch (error: any) {
       setTxStatus('backendError');
