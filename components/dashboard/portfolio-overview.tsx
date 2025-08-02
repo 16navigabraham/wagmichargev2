@@ -43,7 +43,7 @@ async function fetchErc20Balance(address: string, contract: string, decimals: nu
 async function fetchPrices() {
 	const ids = supportedTokens.map((t) => t.coingeckoId).join(",")
 	const res = await fetch(
-		`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd,ngn`
+		`https://paycrypt-margin-price.onrender.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd,ngn`
 	)
 	return await res.json()
 }

@@ -39,7 +39,7 @@ function generateRequestId() {
 async function fetchPrices(tokenList: TokenConfig[]) {
   if (!tokenList || tokenList.length === 0) return {};
   const ids = tokenList.map(c => c.coingeckoId).join(",");
-  const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=ngn`);
+  const res = await fetch(`https://paycrypt-margin-price.onrender.com/api/v3/simple/price?ids=${ids}&vs_currencies=ngn`);
   return res.ok ? await res.json() : {};
 }
 

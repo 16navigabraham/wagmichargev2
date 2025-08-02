@@ -16,24 +16,21 @@ export function MarketData() {
 	const [rates, setRates] = useState<any>(null)
 	const [loading, setLoading] = useState(false)
 
-	const fetchRates = async () => {
-		setLoading(true)
-		try {
-			const ids = pairs.map((p) => p.id).join(",")
-			const res = await fetch(
-				`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=ngn,usd`
-			)
-			const data = await res.json()
-			setRates(data)
-		} catch {
-			setRates(null)
-		}
-		setLoading(false)
+	// Your existing code works perfectly - just update the URL:
+const fetchRates = async () => {
+	setLoading(true)
+	try {
+		const ids = pairs.map((p) => p.id).join(",")
+		const res = await fetch(
+			`https://paycrypt-margin-price.onrender.com/api/v3/simple/price?ids=${ids}&vs_currencies=ngn,usd`
+		)
+		const data = await res.json()
+		setRates(data) //  data now has your +10 NGN margin!
+	} catch {
+		setRates(null)
 	}
-
-	useEffect(() => {
-		fetchRates()
-	}, [])
+	setLoading(false)
+}
 
 	return (
 		<Card className="shadow-lg border-2 hover:shadow-xl transition-shadow">

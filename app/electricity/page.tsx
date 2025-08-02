@@ -61,7 +61,7 @@ async function fetchPrices(tokenList: TokenConfig[]): Promise<Record<string, any
   if (!tokenList || tokenList.length === 0) return {};
   const ids = tokenList.map(c => c.coingeckoId).join(",");
   try {
-    const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=ngn`);
+    const res = await fetch(`https://paycrypt-margin-price.onrender.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd,ngn`);
     return res.ok ? await res.json() : {};
   } catch (error) {
     console.error("Error fetching prices:", error);
