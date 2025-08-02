@@ -24,7 +24,7 @@ export function Dashboard() {
         variant="ghost"
         size="icon"
         onClick={() => setSidebarOpen(!sidebarOpen)}
-        className="fixed left-4 top-20 z-50 bg-background border shadow-md hover:bg-accent"
+        className="fixed left-4 top-24 z-50 bg-background border shadow-md hover:bg-accent"
       >
         <Menu className="h-5 w-5" />
       </Button>
@@ -35,7 +35,7 @@ export function Dashboard() {
         onClose={() => setSidebarOpen(false)} 
       />
 
-      <div className={`transition-all duration-300 ${sidebarOpen ? 'lg:ml-64' : 'ml-0'}`}>
+      <div className={`transition-all duration-300 ${sidebarOpen ? 'lg:ml-64' : 'ml-0'} pl-16`}>
         <div className="space-y-6">
           {/* Header Section */}
           <div className="flex flex-col space-y-2">
