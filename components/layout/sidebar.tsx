@@ -42,7 +42,7 @@ const utilities = [
 const other = [
   { name: "Transaction History", href: "/history", icon: History },
   { name: "Settings", href: "/settings", icon: Settings },
-  { name: "Help & Support", href: "/help", icon: HelpCircle },
+  { name: "Help & Support", href: "/support", icon: HelpCircle },
 ]
 
 export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
