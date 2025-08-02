@@ -257,9 +257,9 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
           </Badge>
 
           <h1 className="text-5xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent leading-tight">
-            Use Your Crypto to
+           Pay Your Bills
             <br />
-            Pay Your Bills
+            With Cryptocurrency
           </h1>
 
           <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto leading-relaxed">
