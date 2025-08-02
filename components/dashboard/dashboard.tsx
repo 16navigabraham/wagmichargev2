@@ -19,25 +19,25 @@ export function Dashboard() {
 
   return (
     <MainLayout>
-      {/* Toggle Button - Always visible */}
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={() => setSidebarOpen(!sidebarOpen)}
-        className="fixed left-4 top-24 z-50 bg-background border shadow-md hover:bg-accent"
-      >
-        <Menu className="h-5 w-5" />
-      </Button>
-
       {/* Your existing Sidebar component */}
       <Sidebar 
         isOpen={sidebarOpen} 
         onClose={() => setSidebarOpen(false)} 
       />
 
-      <div className="ml-16">
-        <div className="space-y-6">
-          {/* Header Section */}
+      <div className="space-y-6">
+        {/* Header Section */}
+        <div className="flex items-center space-x-4">
+          {/* Toggle Button - Inline with header */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="bg-background border shadow-md hover:bg-accent"
+          >
+            <Menu className="h-5 w-5" />
+          </Button>
+          
           <div className="flex flex-col space-y-2">
             <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
             <p className="text-muted-foreground">
@@ -46,6 +46,7 @@ export function Dashboard() {
                 : "Connect your wallet to get started."}
             </p>
           </div>
+        </div>
 
           {/* Main Content Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
@@ -104,7 +105,9 @@ export function Dashboard() {
             </div>
           </div>
         </div>
-      </div>
+      
     </MainLayout>
   )
 }
+
+  
