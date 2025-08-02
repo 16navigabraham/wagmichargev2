@@ -9,6 +9,7 @@ import { MarketData } from "./market-data"
 import { usePrivy, useWallets } from "@privy-io/react-auth"
 import { Button } from "@/components/ui/button"
 import { Menu } from "lucide-react"
+import { Sidebar } from "@/components/layout/sidebar"
 
 export function Dashboard() {
   const { ready, authenticated, user } = usePrivy()
@@ -28,13 +29,11 @@ export function Dashboard() {
         <Menu className="h-5 w-5" />
       </Button>
 
-      {/* Mobile overlay */}
-      {sidebarOpen && (
-        <div 
-          className="fixed inset-0 z-40 bg-black/50 lg:hidden" 
-          onClick={() => setSidebarOpen(false)} 
-        />
-      )}
+      {/* Your existing Sidebar component */}
+      <Sidebar 
+        isOpen={sidebarOpen} 
+        onClose={() => setSidebarOpen(false)} 
+      />
 
       <div className={`transition-all duration-300 ${sidebarOpen ? 'lg:ml-64' : 'ml-0'}`}>
         <div className="space-y-6">
