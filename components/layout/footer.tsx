@@ -15,7 +15,7 @@ export function Footer() {
             </a>
           </div>
           <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-            <span>Version 2.0.0</span>
+            <span>Version 1.0.0</span>
             <span>•</span>
             <a href="/support" className="hover:text-foreground">
               Support
