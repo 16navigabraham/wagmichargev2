@@ -457,7 +457,7 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
         </p>
         <div className="flex space-x-4 mt-2">
           <a 
-            href="https://x.com/yourproject" 
+            href="https://x.com/paycrypt_org" 
             target="_blank" 
             rel="noopener noreferrer" 
             aria-label="X (Twitter)"
@@ -468,10 +468,10 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
             </svg>
           </a>
           <a 
-            href="https://discord.gg/yourdiscord" 
+            href="https://t.me/+qUJnX6kqladmOWVk" 
             target="_blank" 
             rel="noopener noreferrer" 
-            aria-label="Discord"
+            aria-label="Telegram"
             className="text-muted-foreground hover:text-foreground transition-colors"
           >
             <svg width="24" height="24" fill="none" viewBox="0 0 24 24">
