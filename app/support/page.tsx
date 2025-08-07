@@ -10,6 +10,7 @@ import {
   ExternalLink,
 } from "lucide-react"
 
+import BackToDashboard from "@/components/BackToDashboard"
 export default function SupportPage() {
   const { authenticated } = usePrivy()
   const { wallets } = useWallets()
@@ -22,6 +23,7 @@ export default function SupportPage() {
   return (
     <MainLayout>
       <div className="space-y-6">
+        <BackToDashboard />
         {/* Header */}
         <div className="flex flex-col space-y-2">
           <h1 className="text-3xl font-bold tracking-tight">Help & Support</h1>

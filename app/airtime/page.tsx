@@ -239,6 +239,12 @@ export default function AirtimePage() {
       setTransactionHashForModal(approveHash);
       toast.loading("Token approval confirming on blockchain...", { id: 'approval-status' });
     } else if (isApprovalTxConfirmed) {
+      // CRITICAL FIX: Don't proceed if we're already in final states
+      if (['success', 'backendProcessing', 'backendSuccess', 'backendError', 'error'].includes(txStatus)) {
+        console.log("Approval confirmed but transaction already completed. Skipping main transaction.");
+        return;
+      }
+      
       setTxStatus('approvalSuccess');
       toast.success("Token approved! Proceeding with payment...", { id: 'approval-status' });
       
@@ -246,6 +252,12 @@ export default function AirtimePage() {
       
       // Automatically proceed with main transaction
       setTimeout(() => {
+        // Double-check status hasn't changed to final state during timeout
+        if (['success', 'backendProcessing', 'backendSuccess', 'backendError', 'error'].includes(txStatus)) {
+          console.log("Status changed to final state during timeout. Aborting main transaction.");
+          return;
+        }
+        
         console.log("Contract call params:", {
           requestId: bytes32RequestId,
           tokenAddress: selectedTokenObj?.address,
@@ -286,7 +298,7 @@ export default function AirtimePage() {
       // END FLOW: Approval failed
       return;
     }
-  }, [isApprovePending, approveHash, isApprovalTxConfirmed, isApprovalConfirming, isApproveError, isApprovalConfirmError, approveWriteError, approveConfirmError, showTransactionModal, bytes32RequestId, selectedTokenObj?.address, tokenAmountForOrder, writeContract]);
+  }, [isApprovePending, approveHash, isApprovalTxConfirmed, isApprovalConfirming, isApproveError, isApprovalConfirmError, approveWriteError, approveConfirmError, showTransactionModal, bytes32RequestId, selectedTokenObj?.address, tokenAmountForOrder, writeContract, txStatus]);
 
   // Effect to monitor main transaction status
   useEffect(() => {
