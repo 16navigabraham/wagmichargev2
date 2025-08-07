@@ -20,6 +20,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={inter.className}>
       <head>
+        <meta name="google-site-verification" content="pCijtRPRcIw7lEvQNXnUtUE4WReAEAgiFl2FURDGrz0" />
         <link rel="icon" href="/paycrypt.png" type="image/png" sizes="32x32" />
         <link rel="shortcut icon" href="/paycrypt.png" type="image/png" />
       </head>
