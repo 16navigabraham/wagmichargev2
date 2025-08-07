@@ -286,9 +286,6 @@ export default function InternetPage() {
               setTimeout(() => setRequestId(undefined), 100);
             }, 3000); // 3 second delay to allow user to see success
 
-            // END FLOW: Backend processing successful - FINAL STATE
-            return;
-
         } catch (error: unknown) {
             console.error("Backend API call failed:", error);
             setTxStatus('backendError');
@@ -307,9 +304,6 @@ export default function InternetPage() {
             const fullMessage = `${userFriendlyMessage}. Request ID: ${requestId}`;
             setBackendMessage(fullMessage);
             toast.error(fullMessage, { id: 'backend-status' });
-            
-            // END FLOW: Backend processing failed - FINAL STATE
-            return;
         }
     }, [requestId, customerID, provider, plan, amountNGN, cryptoNeeded, selectedCrypto?.symbol, selectedCrypto?.decimals, address]);
 
@@ -333,12 +327,6 @@ export default function InternetPage() {
             setTransactionHashForModal(approveHash);
             toast.loading("Token approval confirming on blockchain...", { id: 'approval-status' });
         } else if (isApprovalTxConfirmed) {
-            // CRITICAL FIX: Don't proceed if we're already in final states
-            if (['success', 'backendProcessing', 'backendSuccess', 'backendError', 'error'].includes(txStatus)) {
-                console.log("Approval confirmed but transaction already completed. Skipping main transaction.");
-                return;
-            }
-            
             setTxStatus('approvalSuccess');
             toast.success("Token approved! Proceeding with payment...", { id: 'approval-status' });
             
@@ -346,12 +334,6 @@ export default function InternetPage() {
             
             // Automatically proceed with main transaction
             setTimeout(() => {
-                // Double-check status hasn't changed to final state during timeout
-                if (['success', 'backendProcessing', 'backendSuccess', 'backendError', 'error'].includes(txStatus)) {
-                    console.log("Status changed to final state during timeout. Aborting main transaction.");
-                    return;
-                }
-                
                 console.log("Contract call params:", {
                   requestId: bytes32RequestId,
                   tokenAddress: selectedCrypto?.address,
@@ -380,19 +362,13 @@ export default function InternetPage() {
                 }
             }, 2000);
             
-            // END FLOW: Approval successful, moving to main transaction
-            return;
-            
         } else if (isApproveError || isApprovalConfirmError) {
             setTxStatus('error');
             const errorMsg = (approveWriteError?.message || approveConfirmError?.message || "Token approval failed").split('\n')[0];
             setTransactionError(errorMsg);
             toast.error(`Approval failed: ${errorMsg}`, { id: 'approval-status' });
-            
-            // END FLOW: Approval failed
-            return;
         }
-    }, [isApprovePending, approveHash, isApprovalTxConfirmed, isApprovalConfirming, isApproveError, isApprovalConfirmError, approveWriteError, approveConfirmError, showTransactionModal, bytes32RequestId, selectedCrypto?.address, tokenAmountForOrder, writeContract, txStatus]);
+    }, [isApprovePending, approveHash, isApprovalTxConfirmed, isApprovalConfirming, isApproveError, isApprovalConfirmError, approveWriteError, approveConfirmError, showTransactionModal, bytes32RequestId, selectedCrypto?.address, tokenAmountForOrder, writeContract]);
 
     // Effect to monitor main transaction status
     useEffect(() => {
@@ -419,8 +395,7 @@ export default function InternetPage() {
             setTransactionHashForModal(hash);
             toast.loading("Payment transaction confirming on blockchain...", { id: 'tx-status' });
         } else if (isConfirmed) {
-            // Only process if not already in backend phase
-            if (!['backendProcessing', 'backendSuccess', 'backendError'].includes(txStatus)) {
+            if (txStatus !== 'backendProcessing' && txStatus !== 'backendSuccess' && txStatus !== 'backendError') {
                 setTxStatus('success');
                 setTransactionHashForModal(hash);
                 toast.success("Blockchain transaction confirmed! Processing order...", { id: 'tx-status' });
@@ -430,19 +405,12 @@ export default function InternetPage() {
                     handlePostTransaction(hash);
                 }
             }
-            
-            // END FLOW: Main transaction confirmed, backend processing initiated
-            return;
-            
         } else if (isWriteError || isConfirmError) {
             setTxStatus('error');
             const errorMsg = (writeError?.message?.split('\n')[0] || confirmError?.message?.split('\n')[0] || "Wallet transaction failed or was rejected.").split('\n')[0];
             setTransactionError(errorMsg);
             setTransactionHashForModal(hash);
             toast.error(`Transaction failed: ${errorMsg}`, { id: 'tx-status' });
-            
-            // END FLOW: Main transaction failed
-            return;
         }
     }, [isWritePending, hash, isConfirming, isConfirmed, isWriteError, isConfirmError, writeError, confirmError, txStatus, handlePostTransaction, showTransactionModal]);
 
@@ -766,7 +734,7 @@ export default function InternetPage() {
                         <Button
                             className="w-full"
                             onClick={handlePurchase}
-                            disabled={isButtonDisabled}
+                            // disabled={isButtonDisabled}
                         >
                             {isSwitchingChain ? "Switching Network..." :
                             !isOnBaseChain ? "Switch to Base Network" :

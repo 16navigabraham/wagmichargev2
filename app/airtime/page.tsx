@@ -185,20 +185,17 @@ export default function AirtimePage() {
       setBackendMessage("Airtime delivered successfully!");
       toast.success("Airtime delivered successfully!", { id: 'backend-status' });
 
-      // Reset form for next transaction after a delay
-      setTimeout(() => {
-        setSelectedToken("");
-        setNetwork("");
-        setAmount("");
-        setPhone("");
-        backendRequestSentRef.current = null;
-        
-        // Clear requestId slightly later to prevent immediate re-generation
-        setTimeout(() => setRequestId(undefined), 100);
-      }, 3000); // 3 second delay to allow user to see success
-
-      // END FLOW: Backend processing successful - FINAL STATE
-      return;
+    // Reset form for next transaction after a delay
+setTimeout(() => {
+  setSelectedToken("");
+  setNetwork("");
+  setAmount("");
+  setPhone("");
+  backendRequestSentRef.current = null;
+  
+  // Clear requestId slightly later to prevent immediate re-generation
+  setTimeout(() => setRequestId(undefined), 100);
+}, 3000); // 3 second delay to allow user to see success
 
     } catch (error: any) {
       setTxStatus('backendError');
@@ -213,9 +210,6 @@ export default function AirtimePage() {
       const fullMessage = `${errorMessage}. Request ID: ${requestId}`;
       setBackendMessage(fullMessage);
       toast.error(fullMessage, { id: 'backend-status' });
-      
-      // END FLOW: Backend processing failed - FINAL STATE
-      return;
     }
   }, [requestId, phone, network, amountNGN, cryptoNeeded, selectedTokenObj?.symbol, selectedTokenObj?.decimals, address]);
 
@@ -239,12 +233,6 @@ export default function AirtimePage() {
       setTransactionHashForModal(approveHash);
       toast.loading("Token approval confirming on blockchain...", { id: 'approval-status' });
     } else if (isApprovalTxConfirmed) {
-      // CRITICAL FIX: Don't proceed if we're already in final states
-      if (['success', 'backendProcessing', 'backendSuccess', 'backendError', 'error'].includes(txStatus)) {
-        console.log("Approval confirmed but transaction already completed. Skipping main transaction.");
-        return;
-      }
-      
       setTxStatus('approvalSuccess');
       toast.success("Token approved! Proceeding with payment...", { id: 'approval-status' });
       
@@ -252,12 +240,6 @@ export default function AirtimePage() {
       
       // Automatically proceed with main transaction
       setTimeout(() => {
-        // Double-check status hasn't changed to final state during timeout
-        if (['success', 'backendProcessing', 'backendSuccess', 'backendError', 'error'].includes(txStatus)) {
-          console.log("Status changed to final state during timeout. Aborting main transaction.");
-          return;
-        }
-        
         console.log("Contract call params:", {
           requestId: bytes32RequestId,
           tokenAddress: selectedTokenObj?.address,
@@ -286,19 +268,13 @@ export default function AirtimePage() {
         }
       }, 2000); // 2 second delay
       
-      // END FLOW: Approval successful, moving to main transaction
-      return;
-      
     } else if (isApproveError || isApprovalConfirmError) {
       setTxStatus('error');
       const errorMsg = (approveWriteError?.message || approveConfirmError?.message || "Token approval failed").split('\n')[0];
       setTransactionError(errorMsg);
       toast.error(`Approval failed: ${errorMsg}`, { id: 'approval-status' });
-      
-      // END FLOW: Approval failed
-      return;
     }
-  }, [isApprovePending, approveHash, isApprovalTxConfirmed, isApprovalConfirming, isApproveError, isApprovalConfirmError, approveWriteError, approveConfirmError, showTransactionModal, bytes32RequestId, selectedTokenObj?.address, tokenAmountForOrder, writeContract, txStatus]);
+  }, [isApprovePending, approveHash, isApprovalTxConfirmed, isApprovalConfirming, isApproveError, isApprovalConfirmError, approveWriteError, approveConfirmError, showTransactionModal, bytes32RequestId, selectedTokenObj?.address, tokenAmountForOrder, writeContract]);
 
   // Effect to monitor main transaction status
   useEffect(() => {
@@ -325,8 +301,7 @@ export default function AirtimePage() {
       setTransactionHashForModal(hash);
       toast.loading("Payment transaction confirming on blockchain...", { id: 'tx-status' });
     } else if (isConfirmed) {
-      // Only process if not already in backend phase
-      if (!['backendProcessing', 'backendSuccess', 'backendError'].includes(txStatus)) {
+      if (txStatus !== 'backendProcessing' && txStatus !== 'backendSuccess' && txStatus !== 'backendError') {
         setTxStatus('success');
         setTransactionHashForModal(hash);
         toast.success("Blockchain transaction confirmed! Processing order...", { id: 'tx-status' });
@@ -336,19 +311,12 @@ export default function AirtimePage() {
           handlePostTransaction(hash);
         }
       }
-      
-      // END FLOW: Main transaction confirmed, backend processing initiated
-      return;
-      
     } else if (isWriteError || isConfirmError) {
       setTxStatus('error');
       const errorMsg = (writeError?.message?.split('\n')[0] || confirmError?.message?.split('\n')[0] || "Transaction failed").split('\n')[0];
       setTransactionError(errorMsg);
       setTransactionHashForModal(hash);
       toast.error(`Transaction failed: ${errorMsg}`, { id: 'tx-status' });
-      
-      // END FLOW: Main transaction failed
-      return;
     }
   }, [isWritePending, hash, isConfirming, isConfirmed, isWriteError, isConfirmError, writeError, confirmError, txStatus, handlePostTransaction, showTransactionModal]);
 
