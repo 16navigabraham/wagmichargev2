@@ -1,8 +1,9 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Loader2, CheckCircle, XCircle, Clock, KeyRound, Printer } from "lucide-react";
+import { Loader2, CheckCircle, XCircle, Clock, KeyRound, Printer, Copy, Check } from "lucide-react";
 import Link from "next/link";
 import { Hex } from 'viem';
+import { useState } from 'react';
 
 interface TransactionStatusModalProps {
   isOpen: boolean;
@@ -27,6 +28,9 @@ export function TransactionStatusModal({
   backendMessage,
   requestId
 }: TransactionStatusModalProps) {
+  const [copiedHash, setCopiedHash] = useState(false);
+  const [copiedRequestId, setCopiedRequestId] = useState(false);
+
   const isPendingBlockchain = txStatus === 'waitingForSignature' || txStatus === 'sending' || txStatus === 'confirming';
   const isSuccessBlockchainConfirmed = txStatus === 'success';
   const isErrorBlockchain = txStatus === 'error';
@@ -37,6 +41,9 @@ export function TransactionStatusModal({
   const isApproving = txStatus === 'approving';
   const isApprovalSuccess = txStatus === 'approvalSuccess';
   const isApprovalError = txStatus === 'approvalError';
+
+  // Show copy buttons for failed states or when transaction is completed
+  const showCopyButtons = isErrorBlockchain || isBackendError || isApprovalError || isBackendSuccess;
 
   let title = "Transaction Status";
   let description = "";
@@ -100,12 +107,27 @@ export function TransactionStatusModal({
     iconColor = "text-green-600";
   } else if (isBackendError) {
     title = "Payment Failed";
-    description = backendMessage || errorMessage || "The payment could not be completed by the service provider.";
+    description = backendMessage || errorMessage || "The payment could not be completed by the service provider. Contact support with your transaction hash.";
     icon = <XCircle className="w-12 h-12 text-red-600" />;
     iconColor = "text-red-600";
   }
 
   const explorerLink = transactionHash ? `${explorerUrl}/tx/${transactionHash}` : '#';
+
+  const copyToClipboard = async (text: string, type: 'hash' | 'requestId') => {
+    try {
+      await navigator.clipboard.writeText(text);
+      if (type === 'hash') {
+        setCopiedHash(true);
+        setTimeout(() => setCopiedHash(false), 2000);
+      } else {
+        setCopiedRequestId(true);
+        setTimeout(() => setCopiedRequestId(false), 2000);
+      }
+    } catch (err) {
+      console.error('Failed to copy text: ', err);
+    }
+  };
 
   const printReceipt = () => {
     const content = document.getElementById("printable-receipt");
@@ -132,15 +154,47 @@ export function TransactionStatusModal({
         {transactionHash && (
           <div className="mt-4 text-sm break-words">
             <p className="font-medium">Transaction Hash:</p>
-            <Link href={explorerLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-              {transactionHash.substring(0, 6)}...{transactionHash.substring(transactionHash.length - 4)}
-            </Link>
+            <div className="flex items-center justify-center gap-2 mt-1">
+              <Link href={explorerLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                {transactionHash.substring(0, 6)}...{transactionHash.substring(transactionHash.length - 4)}
+              </Link>
+              {showCopyButtons && (
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-6 w-6 p-0"
+                  onClick={() => copyToClipboard(transactionHash, 'hash')}
+                >
+                  {copiedHash ? (
+                    <Check className="w-3 h-3 text-green-500" />
+                  ) : (
+                    <Copy className="w-3 h-3" />
+                  )}
+                </Button>
+              )}
+            </div>
           </div>
         )}
         {requestId && (txStatus !== 'idle' && txStatus !== 'waitingForSignature' && !isWaitingForApprovalSignature) && (
           <div className="mt-4 text-sm break-words">
             <p className="font-medium">Request ID:</p>
-            <span className="text-muted-foreground font-mono text-xs">{requestId}</span>
+            <div className="flex items-center justify-center gap-2 mt-1">
+              <span className="text-muted-foreground font-mono text-xs">{requestId}</span>
+              {showCopyButtons && (
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-6 w-6 p-0"
+                  onClick={() => copyToClipboard(requestId, 'requestId')}
+                >
+                  {copiedRequestId ? (
+                    <Check className="w-3 h-3 text-green-500" />
+                  ) : (
+                    <Copy className="w-3 h-3" />
+                  )}
+                </Button>
+              )}
+            </div>
           </div>
         )}
 
