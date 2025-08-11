@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Loader2, CheckCircle, XCircle, Clock, KeyRound, Printer, Copy, Check, MessageSquare } from "lucide-react";
 import Link from "next/link";
 import { Hex } from 'viem';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 interface TransactionStatusModalProps {
   isOpen: boolean;
@@ -30,17 +30,33 @@ export function TransactionStatusModal({
 }: TransactionStatusModalProps) {
   const [copiedHash, setCopiedHash] = useState(false);
   const [copiedRequestId, setCopiedRequestId] = useState(false);
+  const [lockedStatus, setLockedStatus] = useState<string | null>(null);
 
-  const isPendingBlockchain = txStatus === 'waitingForSignature' || txStatus === 'sending' || txStatus === 'confirming';
-  const isSuccessBlockchainConfirmed = txStatus === 'success';
-  const isErrorBlockchain = txStatus === 'error';
-  const isBackendProcessing = txStatus === 'backendProcessing';
-  const isBackendSuccess = txStatus === 'backendSuccess';
-  const isBackendError = txStatus === 'backendError';
-  const isWaitingForApprovalSignature = txStatus === 'waitingForApprovalSignature';
-  const isApproving = txStatus === 'approving';
-  const isApprovalSuccess = txStatus === 'approvalSuccess';
-  const isApprovalError = txStatus === 'approvalError';
+  // Lock the status once we reach a final state to prevent regression
+  useEffect(() => {
+    const isFinalState = txStatus === 'backendSuccess' || 
+                        txStatus === 'backendError' || 
+                        txStatus === 'error' || 
+                        txStatus === 'approvalError';
+    
+    if (isFinalState && !lockedStatus) {
+      setLockedStatus(txStatus);
+    }
+  }, [txStatus, lockedStatus]);
+
+  // Use locked status if available, otherwise use current status
+  const displayStatus = lockedStatus || txStatus;
+
+  const isPendingBlockchain = displayStatus === 'waitingForSignature' || displayStatus === 'sending' || displayStatus === 'confirming';
+  const isSuccessBlockchainConfirmed = displayStatus === 'success';
+  const isErrorBlockchain = displayStatus === 'error';
+  const isBackendProcessing = displayStatus === 'backendProcessing';
+  const isBackendSuccess = displayStatus === 'backendSuccess';
+  const isBackendError = displayStatus === 'backendError';
+  const isWaitingForApprovalSignature = displayStatus === 'waitingForApprovalSignature';
+  const isApproving = displayStatus === 'approving';
+  const isApprovalSuccess = displayStatus === 'approvalSuccess';
+  const isApprovalError = displayStatus === 'approvalError';
 
   // Show copy buttons for failed states or when transaction is completed
   const showCopyButtons = isErrorBlockchain || isBackendError || isApprovalError || isBackendSuccess;
@@ -70,17 +86,17 @@ export function TransactionStatusModal({
     description = errorMessage || "The token approval transaction could not be completed.";
     icon = <XCircle className="w-12 h-12 text-red-500" />;
     iconColor = "text-red-500";
-  } else if (txStatus === 'waitingForSignature') {
+  } else if (displayStatus === 'waitingForSignature') {
     title = "Awaiting Wallet Signature";
     description = "Please confirm the transaction in your wallet.";
     icon = <Loader2 className="w-12 h-12 animate-spin text-blue-500" />;
     iconColor = "text-blue-500";
-  } else if (txStatus === 'sending') {
+  } else if (displayStatus === 'sending') {
     title = "Transaction Sent";
     description = "Your transaction is being processed on the blockchain. Waiting for confirmation...";
     icon = <Loader2 className="w-12 h-12 animate-spin text-yellow-500" />;
     iconColor = "text-yellow-500";
-  } else if (txStatus === 'confirming') {
+  } else if (displayStatus === 'confirming') {
     title = "Confirming Transaction";
     description = "Your transaction is on the blockchain and awaiting final confirmation.";
     icon = <Loader2 className="w-12 h-12 animate-spin text-purple-500" />;
@@ -129,6 +145,14 @@ export function TransactionStatusModal({
     }
   };
 
+  const handleClose = () => {
+    // Reset internal state when modal closes
+    setLockedStatus(null);
+    setCopiedHash(false);
+    setCopiedRequestId(false);
+    onClose();
+  };
+
   const printReceipt = () => {
     const content = document.getElementById("printable-receipt");
     if (!content) return;
@@ -143,7 +167,7 @@ export function TransactionStatusModal({
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[425px] p-6 text-center">
         <DialogHeader className="flex flex-col items-center">
           <div className={`mb-4 ${iconColor}`}>{icon}</div>
@@ -175,7 +199,7 @@ export function TransactionStatusModal({
             </div>
           </div>
         )}
-        {requestId && (txStatus !== 'idle' && txStatus !== 'waitingForSignature' && !isWaitingForApprovalSignature) && (
+        {requestId && (displayStatus !== 'idle' && displayStatus !== 'waitingForSignature' && !isWaitingForApprovalSignature) && (
           <div className="mt-4 text-sm break-words">
             <p className="font-medium">Request ID:</p>
             <div className="flex items-center justify-center gap-2 mt-1">
@@ -200,7 +224,7 @@ export function TransactionStatusModal({
 
         <div id="printable-receipt" style={{ display: 'none' }}>
           <h2 style={{ fontWeight: 'bold', fontSize: '1.2rem' }}>Transaction Receipt</h2>
-          <p><strong>Status:</strong> {txStatus}</p>
+          <p><strong>Status:</strong> {displayStatus}</p>
           <p><strong>Request ID:</strong> {requestId}</p>
           <p><strong>Transaction Hash:</strong> {transactionHash}</p>
           <p><strong>Explorer:</strong> {explorerLink}</p>
@@ -220,7 +244,7 @@ export function TransactionStatusModal({
               </Button>
             </>
           )}
-          <Button onClick={onClose}>
+          <Button onClick={handleClose}>
             {isBackendSuccess || isBackendError || isErrorBlockchain || isApprovalError ? "Done" : "Close"}
           </Button>
         </DialogFooter>
