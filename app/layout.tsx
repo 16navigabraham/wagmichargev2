@@ -10,8 +10,27 @@ const inter = Inter({ subsets: ["latin"] })
 export const metadata: Metadata = {
   title: "Crypto to Utilities",
   description: "Convert cryptocurrency to pay for airtime, TV subscriptions, electricity bills, and more",
-  generator: 'TEAM MEMEVIBE'
+  generator: 'TEAM MEMEVIBE',
+  applicationName: 'Paycrypt',
+  openGraph: {
+    title: 'Paycrypt - Crypto to Utilities',
+    description: 'Convert cryptocurrency to pay for airtime, TV subscriptions, electricity bills, and more',
+    url: 'https://www.paycrypt.org',
+    siteName: 'Paycrypt',
+    locale: 'en_US',
+    type: 'website',
+    images: [
+      {
+        url: '/Og-image.png',
+        width: 1200,
+        height: 630,
+        alt: 'paycrypt',
+        type: 'image/png',
+      },
+    ],
+  },
 }
+
 
 export default function RootLayout({
   children,
