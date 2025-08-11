@@ -433,10 +433,10 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
             Join thousands of users who are already converting their cryptocurrency to pay for everyday services
           </p>
           <Button
-            onClick={() => window.open("https://docs.google.com/forms/d/e/1FAIpQLSfJwqjdrbTqc6utB9R9ZtRhcpkuBD2AP_S8U_forsFFb1s1Yw/viewform", "_blank")}
+            onClick={() => window.open("https://forms.gle/voDtR5vBsJtisDEL7", "_blank")}
             variant="default"
           >
-            Join the Waitlist
+            Drop your feedback
           </Button>
         </div>
       </section>

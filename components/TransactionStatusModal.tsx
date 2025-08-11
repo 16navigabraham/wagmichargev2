@@ -1,6 +1,6 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Loader2, CheckCircle, XCircle, Clock, KeyRound, Printer, Copy, Check } from "lucide-react";
+import { Loader2, CheckCircle, XCircle, Clock, KeyRound, Printer, Copy, Check, MessageSquare } from "lucide-react";
 import Link from "next/link";
 import { Hex } from 'viem';
 import { useState } from 'react';
@@ -209,9 +209,16 @@ export function TransactionStatusModal({
 
         <DialogFooter className="mt-6 flex justify-center gap-4">
           {isBackendSuccess && (
-            <Button variant="secondary" onClick={printReceipt}>
-              <Printer className="w-4 h-4 mr-2" /> Print Receipt
-            </Button>
+            <>
+              <Button variant="secondary" onClick={printReceipt}>
+                <Printer className="w-4 h-4 mr-2" /> Print Receipt
+              </Button>
+              <Button variant="outline" asChild>
+                <Link href="https://forms.gle/voDtR5vBsJtisDEL7" target="_blank" rel="noopener noreferrer">
+                  <MessageSquare className="w-4 h-4 mr-2" /> Give Feedback
+                </Link>
+              </Button>
+            </>
           )}
           <Button onClick={onClose}>
             {isBackendSuccess || isBackendError || isErrorBlockchain || isApprovalError ? "Done" : "Close"}
