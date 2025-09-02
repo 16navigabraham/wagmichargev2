@@ -186,7 +186,7 @@ export default function PrivacyPage() {
               </p>
               <div className="mt-3 space-y-1">
                 <p className="font-medium">
-                  Email: <a href="mailto:support@paycrypt.xyz" className="text-primary hover:underline">support@paycrypt.xyz</a>
+                  Email: <a href="mailto:support@paycrypt.org" className="text-primary hover:underline">support@paycrypt.org</a>
                 </p>
                 <p className="text-sm text-muted-foreground">
                   We aim to respond to all privacy inquiries within 48 hours.

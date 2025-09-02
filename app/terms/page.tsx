@@ -151,7 +151,7 @@ export default function TermsPage() {
               <p>Last updated: July 31, 2025</p>
               <p className="mt-2">
                 For questions about these terms, contact us at{" "}
-                <a href="mailto:support@paycrypt.xyz" className="text-primary hover:underline">
+                <a href="mailto:support@paycrypt.org" className="text-primary hover:underline">
                   support@paycrypt.org
                 </a>
               </p>
