@@ -152,7 +152,7 @@ export default function TermsPage() {
               <p className="mt-2">
                 For questions about these terms, contact us at{" "}
                 <a href="mailto:support@paycrypt.xyz" className="text-primary hover:underline">
-                  support@paycrypt.xyz
+                  support@paycrypt.org
                 </a>
               </p>
             </div>
