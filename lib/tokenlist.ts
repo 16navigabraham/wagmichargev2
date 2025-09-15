@@ -29,6 +29,15 @@ export const TOKEN_LIST: TokenConfig[] = [
     tokenType: 2,
     contract: "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2",
   },
+  {
+    address: "0xeab49138ba2ea6dd776220fe26b7b8e446638956", // SEND on Base
+    symbol: "SEND",
+    name: "SEND",
+    decimals: 18,
+    coingeckoId: "send-token-2",
+    tokenType: 2,
+    contract: "0xeab49138ba2ea6dd776220fe26b7b8e446638956",
+  },
 ];
 
 // Helper function to get token by address
