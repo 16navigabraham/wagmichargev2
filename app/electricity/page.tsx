@@ -322,7 +322,7 @@ export default function ElectricityPage() {
         serviceID: provider,
         variation_code: plan,
         amount: amountNGN,
-        phone,
+        phone: phone,
         cryptoUsed: parseFloat(cryptoNeeded.toFixed(selectedTokenObj?.decimals || 6)),
         cryptoSymbol: selectedTokenObj?.symbol!,
         transactionHash,

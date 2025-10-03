@@ -30,6 +30,7 @@ interface ReceiptProps {
     onChainStatus: string;
     vtpassStatus: string;
     createdAt: string;
+     Token: number;
   } | null;
 }
 
