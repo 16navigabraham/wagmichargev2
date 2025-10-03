@@ -47,7 +47,7 @@ interface ElectricityPlan {
 }
 
 const METER_LENGTHS: Record<string, number[]> = {
-  prepaid: [11],
+  prepaid: [10,11,12,13],
   postpaid: [10, 11, 13],
   default: [10, 11, 12, 13],
 }
