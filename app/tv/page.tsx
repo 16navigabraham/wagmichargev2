@@ -628,16 +628,16 @@ export default function TVPage() {
     setTxStatus('waitingForApprovalSignature');
     
     try {
-      // Approve unlimited amount for convenience (standard practice)
-      const unlimitedApproval = parseUnits('115792089237316195423570985008687907853269984665640564039457584007913129639935', 0);
+      // Approve only the required amount for the transaction
+      const requiredApproval = tokenAmountForOrder; // Use the exact amount needed for the transaction
       
-      console.log("Approving unlimited amount for future transactions");
+      console.log("Approving the required amount for this transaction:", requiredApproval.toString());
       
       writeApprove({
         address: selectedCrypto.address as Hex,
         abi: ERC20_ABI,
         functionName: 'approve',
-        args: [CONTRACT_ADDRESS, unlimitedApproval],
+        args: [CONTRACT_ADDRESS, requiredApproval],
       });
     } catch (error: any) {
       console.error("Error sending approval transaction:", error);
