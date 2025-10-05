@@ -143,6 +143,12 @@ export default function ElectricityPage() {
   const [transactionHashForModal, setTransactionHashForModal] = useState<Hex | undefined>(undefined);
 
   const [approvalError, setApprovalError] = useState<string | null>(null);
+  const [prepaidTokenInfo, setPrepaidTokenInfo] = useState<{
+    token?: string;
+    units?: string;
+    kct1?: string;
+    kct2?: string;
+  } | null>(null);
   const backendRequestSentRef = useRef<Hex | null>(null);
 
   const { connectWallet, authenticated, user } = usePrivy();
@@ -330,6 +336,22 @@ export default function ElectricityPage() {
       setBackendMessage("Electricity bill paid successfully!");
       toast.success("Electricity bill paid successfully!", { id: 'backend-status' });
 
+      // Extract prepaid token information if available from backend response
+      if (response?.vtpassData || response?.details) {
+        const vtpassData = response.vtpassData || {};
+        const details = response.details || {};
+        
+        // Check for prepaid token info (backend uses different field names)
+        if (vtpassData.token || details.token || vtpassData.units || details.units) {
+          setPrepaidTokenInfo({
+            token: vtpassData.token || details.token,
+            units: vtpassData.units || details.units,
+            kct1: vtpassData.kct1,
+            kct2: vtpassData.kct2
+          });
+        }
+      }
+
       // Reset form after successful payment with delay
       setTimeout(() => {
         setSelectedToken("");
@@ -342,6 +364,7 @@ export default function ElectricityPage() {
         setVerificationSuccess(false);
         setRequestId(undefined);
         setPhone("");
+        setPrepaidTokenInfo(null);
         backendRequestSentRef.current = null;
    // Clear requestId slightly later to prevent immediate re-generation
   setTimeout(() => setRequestId(undefined), 100);
@@ -596,6 +619,7 @@ export default function ElectricityPage() {
     setBackendMessage(null);
     setTransactionHashForModal(undefined);
     setApprovalError(null);
+    setPrepaidTokenInfo(null);
     backendRequestSentRef.current = null;
   }, [txStatus]);
 
@@ -867,6 +891,7 @@ export default function ElectricityPage() {
         errorMessage={transactionError || approvalError}
         backendMessage={backendMessage}
         requestId={requestId}
+        prepaidTokenInfo={prepaidTokenInfo}
       />
     </AuthGuard>
   )
