@@ -16,6 +16,12 @@ interface TransactionStatusModalProps {
   explorerUrl?: string;
   backendMessage?: string | null;
   requestId?: string;
+  prepaidTokenInfo?: {
+    token?: string;
+    units?: string;
+    kct1?: string;
+    kct2?: string;
+  } | null;
 }
 
 export function TransactionStatusModal({
@@ -26,7 +32,8 @@ export function TransactionStatusModal({
   errorMessage,
   explorerUrl = "https://basescan.org",
   backendMessage,
-  requestId
+  requestId,
+  prepaidTokenInfo
 }: TransactionStatusModalProps) {
   const [copiedHash, setCopiedHash] = useState(false);
   const [copiedRequestId, setCopiedRequestId] = useState(false);
@@ -221,6 +228,53 @@ export function TransactionStatusModal({
             </div>
           </div>
         )}
+        {prepaidTokenInfo && isBackendSuccess && (
+          <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+            <p className="font-medium text-green-800 dark:text-green-200 mb-2">Prepaid Meter Token</p>
+            <div className="space-y-2 text-sm">
+              {prepaidTokenInfo.token && (
+                <div className="flex items-center justify-between">
+                  <span className="text-green-700 dark:text-green-300 font-medium">Token:</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-green-800 dark:text-green-200 bg-green-100 dark:bg-green-900/40 px-2 py-1 rounded text-xs">
+                      {prepaidTokenInfo.token}
+                    </span>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-6 w-6 p-0"
+                      onClick={() => copyToClipboard(prepaidTokenInfo.token!, 'hash')}
+                    >
+                      {copiedHash ? (
+                        <Check className="w-3 h-3 text-green-500" />
+                      ) : (
+                        <Copy className="w-3 h-3" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              )}
+              {prepaidTokenInfo.units && (
+                <div className="flex items-center justify-between">
+                  <span className="text-green-700 dark:text-green-300 font-medium">Units:</span>
+                  <span className="text-green-800 dark:text-green-200 font-medium">{prepaidTokenInfo.units}</span>
+                </div>
+              )}
+              {prepaidTokenInfo.kct1 && (
+                <div className="flex items-center justify-between">
+                  <span className="text-green-700 dark:text-green-300 font-medium">KCT1:</span>
+                  <span className="font-mono text-green-800 dark:text-green-200 text-xs">{prepaidTokenInfo.kct1}</span>
+                </div>
+              )}
+              {prepaidTokenInfo.kct2 && (
+                <div className="flex items-center justify-between">
+                  <span className="text-green-700 dark:text-green-300 font-medium">KCT2:</span>
+                  <span className="font-mono text-green-800 dark:text-green-200 text-xs">{prepaidTokenInfo.kct2}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         <div id="printable-receipt" style={{ display: 'none' }}>
           <h2 style={{ fontWeight: 'bold', fontSize: '1.2rem' }}>Transaction Receipt</h2>
@@ -229,6 +283,15 @@ export function TransactionStatusModal({
           <p><strong>Transaction Hash:</strong> {transactionHash}</p>
           <p><strong>Explorer:</strong> {explorerLink}</p>
           <p><strong>Message:</strong> {backendMessage || errorMessage || "N/A"}</p>
+          {prepaidTokenInfo && (
+            <div style={{ marginTop: '16px', padding: '12px', border: '1px solid #22c55e', borderRadius: '8px' }}>
+              <h3 style={{ fontWeight: 'bold', marginBottom: '8px' }}>Prepaid Meter Information</h3>
+              {prepaidTokenInfo.token && <p><strong>Token:</strong> {prepaidTokenInfo.token}</p>}
+              {prepaidTokenInfo.units && <p><strong>Units:</strong> {prepaidTokenInfo.units}</p>}
+              {prepaidTokenInfo.kct1 && <p><strong>KCT1:</strong> {prepaidTokenInfo.kct1}</p>}
+              {prepaidTokenInfo.kct2 && <p><strong>KCT2:</strong> {prepaidTokenInfo.kct2}</p>}
+            </div>
+          )}
         </div>
 
         <DialogFooter className="mt-6 flex justify-center gap-4">
