@@ -286,9 +286,6 @@ export default function ElectricityPage() {
   const tokenAmountForOrder: bigint = selectedTokenObj ? parseUnits(cryptoNeeded.toFixed(selectedTokenObj.decimals), selectedTokenObj.decimals) : BigInt(0);
   const bytes32RequestId: Hex = toHex(toBytes(requestId || ""), { size: 32 });
   
-  // COMPULSORY UNLIMITED APPROVAL - No allowance checking
-  const unlimitedApprovalAmount: bigint = parseUnits('115792089237316195423570985008687907853269984665640564039457584007913129639935', 0);
-
   // Wagmi Hooks for TOKEN APPROVAL Transaction
   const { writeContract: writeApprove, data: approveHash, isPending: isApprovePending, isError: isApproveError, error: approveWriteError, reset: resetApprove } = useWriteContract();
   const { isLoading: isApprovalConfirming, isSuccess: isApprovalTxConfirmed, isError: isApprovalConfirmError, error: approveConfirmError } = useWaitForTransactionReceipt({
@@ -561,11 +558,16 @@ export default function ElectricityPage() {
     setTxStatus('waitingForApprovalSignature');
     
     try {
+      // Approve only the required amount for the transaction
+      const requiredApproval = tokenAmountForOrder; // Use the exact amount needed for the transaction
+      
+      console.log("Approving the required amount for this transaction:", requiredApproval.toString());
+      
       writeApprove({
         address: selectedTokenObj.address as Hex,
         abi: ERC20_ABI,
         functionName: 'approve',
-        args: [CONTRACT_ADDRESS, unlimitedApprovalAmount],
+        args: [CONTRACT_ADDRESS, requiredApproval],
       });
     } catch (error: any) {
       console.error("Error sending approval transaction:", error);

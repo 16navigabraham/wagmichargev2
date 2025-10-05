@@ -37,6 +37,11 @@ interface ReceiptProps {
 export function TransactionReceiptModal({ isOpen, onClose, order }: ReceiptProps) {
   const printRef = useRef<HTMLDivElement>(null);
 
+  // Check if transaction is complete
+  const isTransactionComplete = order && 
+    (order.onChainStatus === 'success' || order.onChainStatus === 'confirmed') && 
+    (order.vtpassStatus === 'success' || order.vtpassStatus === 'delivered' || order.vtpassStatus === 'successful');
+
   const handlePrint = () => {
     if (printRef.current) {
       const printContents = printRef.current.innerHTML;
@@ -59,7 +64,7 @@ export function TransactionReceiptModal({ isOpen, onClose, order }: ReceiptProps
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={isTransactionComplete ? onClose : undefined}>
       <DialogContent className="max-w-xl">
         <DialogHeader>
           <DialogTitle>Transaction Receipt</DialogTitle>
@@ -90,7 +95,9 @@ export function TransactionReceiptModal({ isOpen, onClose, order }: ReceiptProps
           <Button variant="outline" onClick={handlePrint}>
             <Printer className="w-4 h-4 mr-2" /> Print Receipt
           </Button>
-          <Button onClick={onClose}>Close</Button>
+          {isTransactionComplete && (
+            <Button onClick={onClose}>Close</Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
