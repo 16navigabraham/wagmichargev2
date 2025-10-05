@@ -25,6 +25,10 @@ interface Transaction {
   vtpassStatus: string
   vtpassResponse?: any
   createdAt: string
+  prepaid_token: string
+  units: string
+  customer_name: string
+  customer_address: string
 }
 
 export default function HistoryPage() {
