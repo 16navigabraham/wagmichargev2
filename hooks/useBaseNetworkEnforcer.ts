@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { CONTRACTS } from '@/config/contract';
 
 // Supported chain IDs
-const SUPPORTED_CHAINS = [base.id, lisk.id, celo.id];
+const SUPPORTED_CHAINS = [base.id, lisk.id, celo.id] as const;
 
 /**
  * Custom hook to ensure the user's wallet is connected to a supported network.
@@ -26,7 +26,7 @@ export function useBaseNetworkEnforcer() {
   const currentChainId = useChainId();
   const { switchChain, isPending: isSwitchingChain } = useSwitchChain();
 
-  const isOnSupportedChain = SUPPORTED_CHAINS.includes(currentChainId);
+  const isOnSupportedChain = (SUPPORTED_CHAINS as readonly number[]).includes(currentChainId);
   const isOnBaseChain = currentChainId === base.id;
   
   // Get current chain details
