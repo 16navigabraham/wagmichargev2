@@ -34,12 +34,12 @@ function ChainChecker() {
   const currentChainId = useChainId();
   const { authenticated, ready } = usePrivy();
 
-  const supportedChains = [wagmiBase.id, wagmiLisk.id, wagmiCelo.id];
+  const supportedChains: number[] = [wagmiBase.id, wagmiLisk.id, wagmiCelo.id];
   const isOnSupportedChain = supportedChains.includes(currentChainId);
 
   useEffect(() => {
     if (ready && authenticated && isConnected && address && !isOnSupportedChain) {
-      const chainNames = { [wagmiBase.id]: 'Base', [wagmiLisk.id]: 'Lisk', [wagmiCelo.id]: 'Celo' };
+      const chainNames: Record<number, string> = { [wagmiBase.id]: 'Base', [wagmiLisk.id]: 'Lisk', [wagmiCelo.id]: 'Celo' };
       const currentChainName = chainNames[currentChainId] || `Chain ${currentChainId}`;
       console.log(`[ChainChecker] Connected to ${currentChainName}. Supported chains: Base, Lisk, Celo`);
       toast.warning(
