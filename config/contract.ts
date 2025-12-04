@@ -2,7 +2,43 @@
 
 import { Abi } from 'viem';
 
-export const CONTRACT_ADDRESS = "0x0574A0941Ca659D01CF7370E37492bd2DF43128d";
+// Multi-chain contract configuration
+export const CONTRACTS = {
+  base: {
+    chainId: 8453,
+    name: 'Base',
+    address: '0x0574A0941Ca659D01CF7370E37492bd2DF43128d' as const,
+    explorer: 'https://basescan.org',
+  },
+  lisk: {
+    chainId: 1135,
+    name: 'Lisk',
+    address: '0x7Ca0a469164655AF07d27cf4bdA5e77F36Ab820A' as const,
+    explorer: 'https://blockscout.lisk.com',
+  },
+  celo: {
+    chainId: 42220,
+    name: 'Celo',
+    address: '0xBC955DC38a13c2Cd8736DA1bC791514504202F9D' as const,
+    explorer: 'https://celoscan.io',
+  },
+} as const;
+
+// Default to Base for backward compatibility
+export const CONTRACT_ADDRESS = CONTRACTS.base.address;
+
+// Helper function to get contract address by chain ID
+export function getContractAddress(chainId: number): string {
+  const chain = Object.values(CONTRACTS).find(c => c.chainId === chainId);
+  return chain?.address || CONTRACTS.base.address;
+}
+
+// Helper function to get explorer URL by chain ID
+export function getExplorerUrl(chainId: number): string {
+  const chain = Object.values(CONTRACTS).find(c => c.chainId === chainId);
+  return chain?.explorer || CONTRACTS.base.explorer;
+}
+
 export const CONTRACT_ABI = [
   {
     "inputs": [
