@@ -12,7 +12,7 @@ import AuthGuard from "@/components/AuthGuard"
 import { Input } from "@/components/ui/input"
 
 import { ERC20_ABI } from "@/config/erc20Abi";
-import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, useChainId } from 'wagmi';
 import { usePrivy } from '@privy-io/react-auth';
 import { parseUnits, toBytes, toHex, Hex, fromHex } from 'viem';
 import { toast } from 'sonner';
@@ -23,7 +23,7 @@ import { payElectricityBill, verifyMeter } from "@/lib/api";
 import { TokenConfig } from "@/lib/tokenlist";
 import { fetchActiveTokensWithMetadata } from "@/lib/tokenUtils";
 
-import { CONTRACT_ADDRESS, CONTRACT_ABI } from "@/config/contract";
+import { CONTRACT_ABI, getContractAddress } from "@/config/contract";
 
 // Dynamic ERC20 token list from contract
 const ELECTRICITY_PROVIDERS = [
@@ -153,15 +153,17 @@ export default function ElectricityPage() {
 
   const { connectWallet, authenticated, user } = usePrivy();
   const { isConnected, address } = useAccount();
+  const chainId = useChainId();
+  const CONTRACT_ADDRESS = getContractAddress(chainId);
 
-  const { isOnBaseChain, isSwitchingChain, promptSwitchToBase } = useBaseNetworkEnforcer();
+  const { isOnBaseChain, isOnSupportedChain, currentChain, isSwitchingChain, promptSwitchToBase } = useBaseNetworkEnforcer();
 
-  // Initial load: fetch active tokens and prices
+  // Initial load: fetch active tokens and prices, reload when chain changes
   useEffect(() => {
     async function loadTokensAndPrices() {
       setLoading(true);
       try {
-        const tokens = await fetchActiveTokensWithMetadata();
+        const tokens = await fetchActiveTokensWithMetadata(chainId);
         // Filter out ETH (tokenType 0) as per requirement - ERC20 only
         const erc20Tokens = tokens.filter(token => token.tokenType !== 0);
         setActiveTokens(erc20Tokens);
@@ -175,7 +177,7 @@ export default function ElectricityPage() {
       }
     }
     loadTokensAndPrices();
-  }, []);
+  }, [chainId]);
 
   /* plans when provider changes */
   useEffect(() => {
@@ -512,8 +514,8 @@ export default function ElectricityPage() {
       await connectWallet();
       return false;
     }
-    if (!isOnBaseChain) {
-        promptSwitchToBase();
+    if (!isOnSupportedChain) {
+        toast.error("Please switch to a supported network (Base, Lisk, or Celo).");
         return false;
     }
     return true;
@@ -639,7 +641,7 @@ export default function ElectricityPage() {
   const isButtonDisabled = loading || loadingPlans || verifyingMeter ||
                            isWritePending || isConfirming || txStatus === 'backendProcessing' || !canPay ||
                            isApprovePending || isApprovalConfirming ||
-                           !isOnBaseChain || isSwitchingChain;
+                           !isOnSupportedChain || isSwitchingChain;
 
   if (loading) return (
     <AuthGuard>
@@ -866,7 +868,7 @@ export default function ElectricityPage() {
                 // disabled={isButtonDisabled}
             >
                 {isSwitchingChain ? "Switching Network..." :
-                !isOnBaseChain ? "Switch to Base Network" :
+                !isOnSupportedChain ? `Switch to Supported Network (${currentChain?.name || 'Unsupported'})` :
                 isApprovePending ? "Awaiting Approval Signature..." :
                 isApprovalConfirming ? "Approving Token..." :
                 txStatus === 'waitingForSignature' ? "Awaiting Payment Signature..." :

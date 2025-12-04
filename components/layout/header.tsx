@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Bell, Menu, Search, User, Wallet, Moon, Sun } from "lucide-react"
+import { Bell, Menu, Search, User, Wallet, Moon, Sun, ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -15,6 +15,9 @@ import { Badge } from "@/components/ui/badge"
 import { useTheme } from "next-themes"
 import { useRouter } from "next/navigation"
 import { usePrivy } from "@privy-io/react-auth"
+import { useChainId, useSwitchChain } from "wagmi"
+import { base, lisk, celo } from "wagmi/chains"
+import { toast } from "sonner"
 
 interface HeaderProps {
   onMenuClick: () => void
@@ -26,6 +29,23 @@ export function Header({ onMenuClick }: HeaderProps) {
   const router = useRouter()
 
   const { logout } = usePrivy()
+  const chainId = useChainId()
+  const { switchChain, isPending: isSwitchingChain } = useSwitchChain()
+
+  const chains = [
+    { id: base.id, name: "Base", icon: "🔵" },
+    { id: lisk.id, name: "Lisk", icon: "🟢" },
+    { id: celo.id, name: "Celo", icon: "🟡" },
+  ]
+
+  const currentChain = chains.find(chain => chain.id === chainId) || chains[0]
+
+  const handleChainSwitch = (targetChainId: number) => {
+    if (targetChainId === chainId) return
+    
+    toast.info(`Switching to ${chains.find(c => c.id === targetChainId)?.name}...`)
+    switchChain({ chainId: targetChainId })
+  }
 
   const handleSignOut = async () => {
     localStorage.removeItem("userEmail")
@@ -55,6 +75,29 @@ export function Header({ onMenuClick }: HeaderProps) {
         </div>
 
         <div className="flex items-center space-x-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" disabled={isSwitchingChain} className="hidden sm:flex">
+                <span className="mr-1">{currentChain.icon}</span>
+                {currentChain.name}
+                <ChevronDown className="ml-1 h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-40">
+              {chains.map((chain) => (
+                <DropdownMenuItem
+                  key={chain.id}
+                  onClick={() => handleChainSwitch(chain.id)}
+                  className={chainId === chain.id ? "bg-accent" : ""}
+                >
+                  <span className="mr-2">{chain.icon}</span>
+                  {chain.name}
+                  {chainId === chain.id && <span className="ml-auto">✓</span>}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           <Button variant="ghost" size="icon" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
             <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
             <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />

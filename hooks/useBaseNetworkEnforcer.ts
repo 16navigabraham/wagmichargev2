@@ -1,18 +1,24 @@
 // hooks/useBaseNetworkEnforcer.ts
 import { useEffect } from 'react';
 import { useAccount, useChainId, useSwitchChain } from 'wagmi';
-import { base } from 'wagmi/chains'; // Import the Base chain
+import { base, lisk, celo } from 'wagmi/chains';
 import { usePrivy } from '@privy-io/react-auth';
 import { toast } from 'sonner';
+import { CONTRACTS } from '@/config/contract';
+
+// Supported chain IDs
+const SUPPORTED_CHAINS = [base.id, lisk.id, celo.id];
 
 /**
- * Custom hook to ensure the user's wallet is connected to the Base network.
- * Prompts the user to switch if they are authenticated, connected, and on a different chain.
+ * Custom hook to ensure the user's wallet is connected to a supported network.
+ * Supports Base, Lisk, and Celo chains.
  *
  * @returns {object} An object containing:
- * - `isOnBaseChain`: boolean indicating if the wallet is currently on the Base chain.
- * - `isSwitchingChain`: boolean indicating if a chain switch is currently in progress.
+ * - `isOnSupportedChain`: boolean indicating if the wallet is on a supported chain.
+ * - `currentChain`: object with chain details (name, id, contractAddress, explorer).
+ * - `isSwitchingChain`: boolean indicating if a chain switch is in progress.
  * - `promptSwitchToBase`: A function to manually prompt the user to switch to Base.
+ * - `supportedChains`: array of supported chain names.
  */
 export function useBaseNetworkEnforcer() {
   const { authenticated, user } = usePrivy();
@@ -20,21 +26,40 @@ export function useBaseNetworkEnforcer() {
   const currentChainId = useChainId();
   const { switchChain, isPending: isSwitchingChain } = useSwitchChain();
 
+  const isOnSupportedChain = SUPPORTED_CHAINS.includes(currentChainId);
   const isOnBaseChain = currentChainId === base.id;
+  
+  // Get current chain details
+  const getCurrentChain = () => {
+    const chainConfig = Object.values(CONTRACTS).find(c => c.chainId === currentChainId);
+    if (chainConfig) {
+      return {
+        name: chainConfig.name,
+        id: chainConfig.chainId,
+        contractAddress: chainConfig.address,
+        explorer: chainConfig.explorer,
+      };
+    }
+    return null;
+  };
 
-  // Effect to automatically prompt for chain switch
+  const currentChain = getCurrentChain();
+
+  // Effect to notify if on unsupported chain (but don't auto-switch)
   useEffect(() => {
-    if (authenticated && address && !isOnBaseChain && !isSwitchingChain) {
-      toast.info("Please switch your wallet to the Base network.", { id: 'switch-chain', duration: 5000 });
-      switchChain({ chainId: base.id });
+    if (authenticated && address && !isOnSupportedChain && !isSwitchingChain) {
+      toast.warning("Please switch to a supported network (Base, Lisk, or Celo).", { 
+        id: 'switch-chain', 
+        duration: 8000 
+      });
     }
-    // If user logs out or disconnects wallet, dismiss any lingering toast about switching
-    if (authenticated === false || isConnected === false) { // Check for explicit false or disconnected
-        toast.dismiss('switch-chain');
+    // Dismiss toast on logout/disconnect
+    if (authenticated === false || isConnected === false) {
+      toast.dismiss('switch-chain');
     }
-  }, [authenticated, address, isOnBaseChain, isSwitchingChain, switchChain, isConnected]); // Added isConnected to dependencies
+  }, [authenticated, address, isOnSupportedChain, isSwitchingChain, isConnected]);
 
-  // Function to manually trigger a switch (useful for button actions)
+  // Function to manually trigger a switch to Base (useful for button actions)
   const promptSwitchToBase = () => {
     if (!authenticated) {
       toast.error("Please log in to proceed.");
@@ -47,14 +72,17 @@ export function useBaseNetworkEnforcer() {
     if (!isOnBaseChain && !isSwitchingChain) {
       toast.info("Switching to Base network...", { id: 'switch-chain-manual' });
       switchChain({ chainId: base.id });
-      return false; // Indicate that a switch was prompted
+      return false;
     }
-    return isOnBaseChain; // Indicate if already on Base
+    return isOnBaseChain;
   };
 
   return {
     isOnBaseChain,
+    isOnSupportedChain,
+    currentChain,
     isSwitchingChain,
     promptSwitchToBase,
+    supportedChains: ['Base', 'Lisk', 'Celo'],
   };
 }

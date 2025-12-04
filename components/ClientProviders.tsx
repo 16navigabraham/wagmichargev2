@@ -4,51 +4,55 @@
 import { ThemeProvider } from "@/components/theme-provider"
 import { PrivyProvider } from "@privy-io/react-auth"
 import { WagmiConfig, createConfig, http } from 'wagmi';
-import { base as wagmiBase } from 'wagmi/chains'; // Import Base Mainnet chain from wagmi/chains
-import { base as viemBase } from 'viem/chains'; // Import Base Mainnet chain from viem/chains for Privy config
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'; // For Wagmi's internal use
-import { Toaster, toast } from 'sonner'; // For toast notifications, import toast explicitly
+import { base as wagmiBase, lisk as wagmiLisk, celo as wagmiCelo } from 'wagmi/chains';
+import { base as viemBase, lisk as viemLisk, celo as viemCelo } from 'viem/chains';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Toaster, toast } from 'sonner';
 
 // Import hooks needed for the chain checker component
 import { useAccount, useChainId, useSwitchChain } from 'wagmi';
 import { useEffect } from 'react';
-import { usePrivy } from '@privy-io/react-auth'; // Import usePrivy here for ChainChecker
+import { usePrivy } from '@privy-io/react-auth';
 
-// 1. Create Wagmi config for Base Mainnet
+// 1. Create Wagmi config for multiple chains (Base, Lisk, Celo)
 const wagmiConfig = createConfig({
-  chains: [wagmiBase], // Specify the chains for Wagmi
+  chains: [wagmiBase, wagmiLisk, wagmiCelo],
   transports: {
-    [wagmiBase.id]: http(), // Use http() for public RPC for Base
+    [wagmiBase.id]: http(),
+    [wagmiLisk.id]: http(),
+    [wagmiCelo.id]: http(),
   },
-  syncConnectedChain: true, // Keep track of the connected chain
+  syncConnectedChain: true,
 });
 
 // 2. Create a react-query client instance (Wagmi uses this internally)
 const queryClient = new QueryClient();
 
-// NEW COMPONENT: This component will check the connected chain and prompt the user
-// if they are not on Base. It renders nothing visually.
+// Chain Checker: Notifies users if they're on an unsupported chain
 function ChainChecker() {
-  const { isConnected, address } = useAccount(); // Wagmi hook to get account info
-  const currentChainId = useChainId(); // Wagmi hook to get current chain ID
-  const { switchChain, isPending: isSwitchingChain } = useSwitchChain(); // Wagmi hook to switch chain
-  const { authenticated, ready } = usePrivy(); // Privy hook to check authentication and readiness
+  const { isConnected, address } = useAccount();
+  const currentChainId = useChainId();
+  const { authenticated, ready } = usePrivy();
+
+  const supportedChains = [wagmiBase.id, wagmiLisk.id, wagmiCelo.id];
+  const isOnSupportedChain = supportedChains.includes(currentChainId);
 
   useEffect(() => {
-    // Only proceed if Privy is ready, user is authenticated, wallet is connected,
-    // and they are not currently on Base chain, and a switch is not already pending.
-    if (ready && authenticated && isConnected && address && currentChainId !== wagmiBase.id && !isSwitchingChain) {
-      console.log(`[ChainChecker] Detected wrong chain (ID: ${currentChainId}). Attempting to switch to Base (ID: ${wagmiBase.id}).`);
-      toast.info("Please switch your wallet to the Base network.", { id: 'switch-chain', duration: 5000 });
-      switchChain({ chainId: wagmiBase.id });
+    if (ready && authenticated && isConnected && address && !isOnSupportedChain) {
+      const chainNames = { [wagmiBase.id]: 'Base', [wagmiLisk.id]: 'Lisk', [wagmiCelo.id]: 'Celo' };
+      const currentChainName = chainNames[currentChainId] || `Chain ${currentChainId}`;
+      console.log(`[ChainChecker] Connected to ${currentChainName}. Supported chains: Base, Lisk, Celo`);
+      toast.warning(
+        "You're connected to an unsupported network. Please switch to Base, Lisk, or Celo.",
+        { id: 'switch-chain', duration: 8000 }
+      );
     }
-    // If user logs out or disconnects wallet, dismiss any lingering toast about switching
     if (ready && (!authenticated || !isConnected)) {
-        toast.dismiss('switch-chain');
+      toast.dismiss('switch-chain');
     }
-  }, [ready, authenticated, isConnected, address, currentChainId, isSwitchingChain, switchChain]);
+  }, [ready, authenticated, isConnected, address, currentChainId, isOnSupportedChain]);
 
-  return null; // This component does not render any UI elements itself
+  return null;
 }
 
 export function ClientProviders({ children }: { children: React.ReactNode }) {
@@ -56,11 +60,8 @@ export function ClientProviders({ children }: { children: React.ReactNode }) {
     <PrivyProvider
       appId={process.env.NEXT_PUBLIC_PRIVY_APP_ID!}
       config={{
-        supportedChains: [viemBase], // Specify supported chains for Privy (using viem's base)
-        defaultChain: viemBase,      // Set Base as the default chain for Privy (using viem's base)
-        // You can add other Privy configurations here if needed, e.g.:
-        // loginMethods: ['email', 'wallet', 'google'],
-        // appearance: { theme: 'light' },
+        supportedChains: [viemBase, viemLisk, viemCelo],
+        defaultChain: viemBase,
       }}
     >
       {/* WagmiConfig makes the Wagmi client available to all child components */}

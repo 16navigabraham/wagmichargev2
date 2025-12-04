@@ -12,9 +12,9 @@ import BackToDashboard from '@/components/BackToDashboard'
 import AuthGuard from "@/components/AuthGuard"
 import { Loader2, AlertCircle } from "lucide-react"
 
-import { CONTRACT_ADDRESS, CONTRACT_ABI } from "@/config/contract";
+import { CONTRACT_ABI, getContractAddress } from "@/config/contract";
 import { ERC20_ABI } from "@/config/erc20Abi";
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi';
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract, useChainId } from 'wagmi';
 import { usePrivy } from '@privy-io/react-auth';
 import { parseUnits, toBytes, toHex, Hex, fromHex, formatUnits } from 'viem';
 import { toast } from 'sonner';
@@ -113,14 +113,16 @@ export default function InternetPage() {
 
     const { connectWallet, authenticated } = usePrivy();
     const { address } = useAccount();
-    const { isOnBaseChain, isSwitchingChain, promptSwitchToBase } = useBaseNetworkEnforcer();
+    const chainId = useChainId();
+    const CONTRACT_ADDRESS = getContractAddress(chainId);
+    const { isOnBaseChain, isOnSupportedChain, currentChain, isSwitchingChain, promptSwitchToBase } = useBaseNetworkEnforcer();
 
-    // Load tokens and prices on initial mount
+    // Load tokens and prices on initial mount and when chain changes
     useEffect(() => {
         async function loadTokensAndPricesAndProviders() {
             setLoading(true);
             try {
-                const tokens = await fetchActiveTokensWithMetadata();
+                const tokens = await fetchActiveTokensWithMetadata(chainId);
                 // Filter out ETH (tokenType 0) - only ERC20 tokens supported
                 setActiveTokens(tokens.filter(token => token.tokenType !== 0));
                 const prices = await fetchPrices(tokens);
@@ -136,7 +138,7 @@ export default function InternetPage() {
             }
         }
         loadTokensAndPricesAndProviders();
-    }, []);
+    }, [chainId]);
 
     // Effect to fetch plans when provider changes
     useEffect(() => {
@@ -425,8 +427,8 @@ export default function InternetPage() {
             await connectWallet();
             return false;
         }
-        if (!isOnBaseChain) {
-            promptSwitchToBase();
+        if (!isOnSupportedChain) {
+            toast.error("Please switch to a supported network (Base, Lisk, or Celo).");
             return false;
         }
         return true;
@@ -560,7 +562,7 @@ export default function InternetPage() {
                              isApprovalConfirming || 
                              isWritePending ||
                              isConfirming ||
-                             !isOnBaseChain || 
+                             !isOnSupportedChain || 
                              isSwitchingChain ||
                              isRequestIdUsed;
 
@@ -737,7 +739,7 @@ export default function InternetPage() {
                             // disabled={isButtonDisabled}
                         >
                             {isSwitchingChain ? "Switching Network..." :
-                            !isOnBaseChain ? "Switch to Base Network" :
+                            !isOnSupportedChain ? `Switch to Supported Network (${currentChain?.name || 'Unsupported'})` :
                             isRequestIdUsed ? "Generating New Request ID..." :
                             txStatus === 'waitingForApprovalSignature' ? "Awaiting Approval Signature..." :
                             txStatus === 'approving' ? "Approving Token..." :
