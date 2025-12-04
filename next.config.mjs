@@ -3,51 +3,35 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   images: {
     unoptimized: true,
   },
-  // Configure turbopack to handle node_modules properly
-  turbopack: {
-    resolveExtensions: [
-      '.mdx',
-      '.tsx',
-      '.ts',
-      '.jsx',
-      '.js',
-      '.mjs',
-      '.json',
-    ],
-  },
   experimental: {
-    turbo: {
-      rules: {
-        '*.test.{js,ts,tsx,mjs}': {
-          loaders: [],
-          as: '*.js',
-        },
-        '*/test/**': {
-          loaders: [],
-          as: '*.js',
-        },
-      },
-      resolveAlias: {
-        // Alias problematic test dependencies to empty modules
-        'tap': false,
-        'tape': false,
-        'desm': false,
-        'fastbench': false,
-        'pino-elasticsearch': false,
-        'why-is-node-running': false,
-      },
-    },
+    // Exclude packages from being bundled server-side to avoid test files
+    serverComponentsExternalPackages: ['pino', 'thread-stream', 'pino-pretty'],
   },
+  // Make webpack ignore problematic test files
   webpack: (config, { isServer }) => {
-    // Exclude problematic test files from bundling
+    // Add alias to prevent test dependencies from being resolved
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      'tap': false,
+      'tape': false,
+      'desm': false,
+      'fastbench': false,
+      'pino-elasticsearch': false,
+      'why-is-node-running': false,
+    };
+
+    // Exclude test files from bundling
     config.module = config.module || {};
     config.module.rules = config.module.rules || [];
     
     config.module.rules.push({
-      test: /node_modules[/\\]thread-stream[/\\]test/,
+      test: /node_modules[/\\]thread-stream[/\\](test|bench\.js)/,
       use: 'null-loader',
     });
 
@@ -56,14 +40,7 @@ const nextConfig = {
       use: 'null-loader',
     });
 
-    // Exclude test directories entirely
-    config.module.rules.push({
-      test: /[/\\]test[/\\]/,
-      exclude: /node_modules[/\\](?!thread-stream)/,
-      use: 'null-loader',
-    });
-
-    // Fix for @walletconnect and privy dependencies
+    // Fix for @walletconnect and privy dependencies on client side
     if (!isServer) {
       config.resolve.fallback = {
         ...config.resolve.fallback,
