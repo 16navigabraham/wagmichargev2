@@ -9,10 +9,8 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  experimental: {
-    // Exclude packages from being bundled server-side to avoid test files
-    serverComponentsExternalPackages: ['pino', 'thread-stream', 'pino-pretty'],
-  },
+  // Exclude packages from being bundled server-side to avoid test files
+  serverExternalPackages: ['pino', 'thread-stream', 'pino-pretty'],
   // Make webpack ignore problematic test files
   webpack: (config, { isServer }) => {
     // Add alias to prevent test dependencies from being resolved
