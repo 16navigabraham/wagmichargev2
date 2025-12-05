@@ -27,6 +27,7 @@ interface ReceiptProps {
     amountNaira: number;
     cryptoUsed: number;
     cryptoSymbol: string;
+    chainName: string;
     onChainStatus: string;
     vtpassStatus: string;
     createdAt: string;
@@ -87,6 +88,7 @@ export function TransactionReceiptModal({ isOpen, onClose, order }: ReceiptProps
             <div className="border rounded-md p-4">
               <p><strong>Request ID:</strong> {order.requestId}</p>
               <p><strong>Wallet Address:</strong> {order.userAddress}</p>
+              <p><strong>Chain:</strong> {order.chainName}</p>
               <p><strong>Service:</strong> {order.serviceType.toUpperCase()} - {order.serviceID}</p>
               {order.variationCode && <p><strong>Plan Code:</strong> {order.variationCode}</p>}
               <p><strong>Customer Identifier:</strong> {order.customerIdentifier}</p>
