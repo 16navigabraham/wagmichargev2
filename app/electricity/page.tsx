@@ -19,7 +19,7 @@ import { toast } from 'sonner';
 import { TransactionStatusModal } from "@/components/TransactionStatusModal";
 import { useBaseNetworkEnforcer } from '@/hooks/useBaseNetworkEnforcer';
 
-import { payElectricityBill, verifyMeter } from "@/lib/api";
+import { payElectricityBill, verifyMeter, getChainName } from "@/lib/api";
 import { TokenConfig } from "@/lib/tokenlist";
 import { fetchActiveTokensWithMetadata } from "@/lib/tokenUtils";
 
@@ -331,7 +331,9 @@ export default function ElectricityPage() {
         cryptoUsed: parseFloat(cryptoNeeded.toFixed(selectedTokenObj?.decimals || 6)),
         cryptoSymbol: selectedTokenObj?.symbol!,
         transactionHash,
-        userAddress: address!
+        userAddress: address!,
+        chainId,
+        chainName: getChainName(chainId)
       });
 
       setTxStatus('backendSuccess');

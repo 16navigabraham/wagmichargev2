@@ -20,7 +20,7 @@ import { toast } from 'sonner';
 import { TransactionStatusModal } from "@/components/TransactionStatusModal";
 import { useBaseNetworkEnforcer } from '@/hooks/useBaseNetworkEnforcer';
 
-import { buyAirtime } from "@/lib/api";
+import { buyAirtime, getChainName } from "@/lib/api";
 import { TokenConfig } from "@/lib/tokenlist";
 import { fetchActiveTokensWithMetadata } from "@/lib/tokenUtils";
 
@@ -105,7 +105,7 @@ export default function AirtimePage() {
 
   // Check if requestId is already used
   const { data: existingOrder } = useReadContract({
-    address: CONTRACT_ADDRESS,
+    address: CONTRACT_ADDRESS as Hex,
     abi: CONTRACT_ABI,
     functionName: 'getOrder',
     args: [fromHex(bytes32RequestId, 'bigint')],
@@ -180,7 +180,9 @@ export default function AirtimePage() {
         cryptoUsed: parseFloat(cryptoNeeded.toFixed(selectedTokenObj?.decimals || 6)),
         cryptoSymbol: selectedTokenObj?.symbol ?? "",
         transactionHash,
-        userAddress: address!
+        userAddress: address!,
+        chainId,
+        chainName: getChainName(chainId)
       });
 
       setTxStatus('backendSuccess');
@@ -251,7 +253,7 @@ setTimeout(() => {
         try {
           setTxStatus('waitingForSignature');
           writeContract({
-            address: CONTRACT_ADDRESS,
+            address: CONTRACT_ADDRESS as Hex,
             abi: CONTRACT_ABI,
             functionName: 'createOrder',
             args: [
@@ -430,7 +432,7 @@ setTimeout(() => {
         address: selectedTokenObj.address as Hex,
         abi: ERC20_ABI,
         functionName: 'approve',
-        args: [CONTRACT_ADDRESS, requiredApproval],
+        args: [CONTRACT_ADDRESS as Hex, requiredApproval],
       });
     } catch (error: any) {
       console.error("Error sending approval transaction:", error);
