@@ -21,7 +21,7 @@ import { toast } from 'sonner';
 import { TransactionStatusModal } from "@/components/TransactionStatusModal";
 import { useBaseNetworkEnforcer } from '@/hooks/useBaseNetworkEnforcer';
 
-import { buyinternet } from "@/lib/api";
+import { buyinternet, getChainName } from "@/lib/api";
 import { TokenConfig } from "@/lib/tokenlist";
 import { fetchActiveTokensWithMetadata } from "@/lib/tokenUtils";
 
@@ -268,7 +268,9 @@ export default function InternetPage() {
                 cryptoUsed: parseFloat(cryptoNeeded.toFixed(selectedCrypto?.decimals || 6)),
                 cryptoSymbol: selectedCrypto?.symbol!,
                 transactionHash,
-                userAddress: address!
+                userAddress: address!,
+                chainId,
+                chainName: getChainName(chainId)
             });
 
             console.log('Backend success response:', response);

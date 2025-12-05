@@ -1,5 +1,16 @@
 const BASE_URL = "https://wagmicharge-backend.onrender.com"; // your deployed backend URL
 
+// Chain ID to name mapping
+export const CHAIN_NAMES: Record<number, string> = {
+  8453: "Base",
+  1135: "Lisk",
+  42220: "Celo",
+};
+
+export function getChainName(chainId: number): string {
+  return CHAIN_NAMES[chainId] || "Unknown";
+}
+
 export const buyAirtime = async (data: {
   requestId: string;
   phone: string;
@@ -9,6 +20,8 @@ export const buyAirtime = async (data: {
   cryptoSymbol: string;
   transactionHash: string;
   userAddress: string;
+  chainId: number;
+  chainName: string;
 }) => {
   const res = await fetch(`${BASE_URL}/api/airtime`, {
     method: "POST",
@@ -31,6 +44,8 @@ export const buyinternet = async (data: {
   cryptoSymbol: string;
   transactionHash: string;
   userAddress: string;
+  chainId: number;
+  chainName: string;
 }) => {
   const res = await fetch(`${BASE_URL}/api/internet`, {
     method: "POST",
@@ -54,6 +69,8 @@ export const payElectricityBill = async (data: {
   cryptoSymbol: string;
   transactionHash: string;
   userAddress: string;
+  chainId: number;
+  chainName: string;
 }) => {
   const res = await fetch(`${BASE_URL}/api/electricity`, {
     method: "POST",
@@ -77,6 +94,8 @@ export const payTVSubscription = async (data: {
   cryptoSymbol: string;
   transactionHash: string;
   userAddress: string;
+  chainId: number;
+  chainName: string;
 }) => {
   const res = await fetch(`${BASE_URL}/api/tv`, {
     method: "POST",
@@ -104,6 +123,8 @@ export const submitOrder = async (data: {
   smartcard_number?: string;
   variation_code?: string;
   serviceID?: string;
+  chainId: number;
+  chainName: string;
 }) => {
   const res = await fetch(`${BASE_URL}/api/orders`, {
     method: "POST",
