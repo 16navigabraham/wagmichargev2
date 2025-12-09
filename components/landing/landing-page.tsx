@@ -50,21 +50,21 @@ const features = [
 
 const testimonials = [
   {
-    name: "From the Team",
-    role: "Our Mission",
-    content: "Paycrypt was built to make crypto useful for everyday people — starting with utility payments.",
+    name: "Bernard O.",
+    role: "Akure, Nigeria",
+    content: "Finally, I can use my crypto for everyday bills! Paid my electricity in minutes using USDC on the app. No more waiting or complicated processes.",
     rating: 5,
   },
   {
-    name: "Looking Ahead",
-    role: "Our Vision",
-    content: "We're building the future of decentralized payments for real-world use cases — one bill at a time.",
+    name: "Tunde O.",
+    role: "Kano, Nigeria",
+    content: "Buying airtime is now instant. I just connect my wallet with supported tokens and boom — my airtime is activated immediately. Best experience so far.",
     rating: 5,
   },
   {
-    name: "Join the Movement",
-    role: "Be an Early Supporter",
-    content: "We're just getting started. The earlier you join, the more impact you make.",
+    name: "Ade K.",
+    role: "Ibadan, Nigeria",
+    content: "The rates are fair, transactions are fast, and the platform is simple to use. This is exactly what we needed in Africa. Already told all my friends!",
     rating: 5,
   },
 ];
