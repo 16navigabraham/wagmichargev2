@@ -82,7 +82,7 @@ pnpm dev
 pnpm build
 \`\`\`
 
-The application will be available at `https://www.paycrypt.org/`
+The application will be available at `http://localhost:3000/`
 
 ---
 
