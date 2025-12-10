@@ -1,7 +1,8 @@
 import { getReferralTag, submitReferral } from '@divvi/referral-sdk'
+import { Hex } from 'viem'
 
 // Your Divvi Identifier - this tracks your app's on-chain impact
-const DIVVI_CONSUMER_ADDRESS = '0x70C3a7d891a984a9C7cA7a514c3B7A5A93E4b572'
+const DIVVI_CONSUMER_ADDRESS = '0x70C3a7d891a984a9C7cA7a514c3B7A5A93E4b572' as Hex
 
 /**
  * Generates a referral tag for a user transaction
@@ -10,7 +11,7 @@ const DIVVI_CONSUMER_ADDRESS = '0x70C3a7d891a984a9C7cA7a514c3B7A5A93E4b572'
 export function generateDivviReferralTag(userAddress: string): string {
   try {
     const referralTag = getReferralTag({
-      user: userAddress,
+      user: userAddress as Hex,
       consumer: DIVVI_CONSUMER_ADDRESS,
     })
     return referralTag
@@ -25,7 +26,7 @@ export function generateDivviReferralTag(userAddress: string): string {
  * Call this after the transaction is confirmed on-chain
  */
 export async function registerDivviReferral(
-  txHash: string,
+  txHash: string | Hex,
   chainId: number
 ): Promise<void> {
   try {
