@@ -24,6 +24,7 @@ import { TokenConfig } from "@/lib/tokenlist";
 import { fetchActiveTokensWithMetadata } from "@/lib/tokenUtils";
 
 import { CONTRACT_ABI, getContractAddress } from "@/config/contract";
+import { registerDivviReferral } from "@/lib/divvi";
 
 // Dynamic ERC20 token list from contract
 const ELECTRICITY_PROVIDERS = [
@@ -486,6 +487,11 @@ export default function ElectricityPage() {
             setTransactionHashForModal(hash);
             toast.success("Blockchain transaction confirmed! Processing order...", { id: 'tx-status' });
             if (hash) {
+                // Register transaction with Divvi for rewards tracking
+                registerDivviReferral(hash, chainId).catch(err => {
+                  console.error('Divvi registration failed (non-critical):', err);
+                });
+                
                 handlePostTransaction(hash);
             }
         }

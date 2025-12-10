@@ -24,6 +24,7 @@ import { useBaseNetworkEnforcer } from '@/hooks/useBaseNetworkEnforcer';
 import { buyinternet, getChainName } from "@/lib/api";
 import { TokenConfig } from "@/lib/tokenlist";
 import { fetchActiveTokensWithMetadata } from "@/lib/tokenUtils";
+import { registerDivviReferral } from "@/lib/divvi";
 
 async function fetchPrices(tokenList: TokenConfig[]): Promise<Record<string, any>> {
   const ids = tokenList.map((c: TokenConfig) => c.coingeckoId).join(",");
@@ -406,6 +407,11 @@ export default function InternetPage() {
                 
                 // Process backend transaction
                 if (hash) {
+                    // Register transaction with Divvi for rewards tracking
+                    registerDivviReferral(hash, chainId).catch(err => {
+                      console.error('Divvi registration failed (non-critical):', err);
+                    });
+                    
                     handlePostTransaction(hash);
                 }
             }

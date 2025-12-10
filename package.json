@@ -9,6 +9,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "@divvi/referral-sdk": "^2.3.0",
     "@hookform/resolvers": "^3.9.1",
     "@privy-io/react-auth": "^2.18.1",
     "@privy-io/wagmi-connector": "^0.1.13",

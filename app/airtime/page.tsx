@@ -23,6 +23,7 @@ import { useBaseNetworkEnforcer } from '@/hooks/useBaseNetworkEnforcer';
 import { buyAirtime, getChainName } from "@/lib/api";
 import { TokenConfig } from "@/lib/tokenlist";
 import { fetchActiveTokensWithMetadata } from "@/lib/tokenUtils";
+import { generateDivviReferralTag, registerDivviReferral, appendReferralTag } from "@/lib/divvi";
 
 const NETWORKS = [
   { serviceID: "mtn", name: "MTN" },
@@ -310,8 +311,14 @@ setTimeout(() => {
         setTransactionHashForModal(hash);
         toast.success("Blockchain transaction confirmed! Processing order...", { id: 'tx-status' });
         
-        // Process backend transaction
+        // Register transaction with Divvi for rewards tracking
         if (hash) {
+          registerDivviReferral(hash, chainId).catch(err => {
+            console.error('Divvi registration failed (non-critical):', err);
+            // Don't interrupt the user flow if Divvi registration fails
+          });
+          
+          // Process backend transaction
           handlePostTransaction(hash);
         }
       }

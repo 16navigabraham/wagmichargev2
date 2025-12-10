@@ -23,6 +23,7 @@ import { useBaseNetworkEnforcer } from '@/hooks/useBaseNetworkEnforcer';
 import { payTVSubscription, verifySmartCard, getChainName } from "@/lib/api";
 import { TokenConfig } from "@/lib/tokenlist";
 import { fetchActiveTokensWithMetadata } from "@/lib/tokenUtils";
+import { registerDivviReferral } from "@/lib/divvi";
 
 interface TVProvider {
   serviceID: string
@@ -521,6 +522,11 @@ export default function TVPage() {
         
         // Process backend transaction
         if (hash) {
+          // Register transaction with Divvi for rewards tracking
+          registerDivviReferral(hash, chainId).catch(err => {
+            console.error('Divvi registration failed (non-critical):', err);
+          });
+          
           handlePostTransaction(hash);
         }
       }
