@@ -1,4 +1,5 @@
-const BASE_URL = "https://wagmicharge-backend.onrender.com"; // your deployed backend URL
+const BASE_URL = process.env.NEXT_PUBLIC_PAYCRYPT_API_URL || "https://wagmicharge-backend.onrender.com";
+const API_KEY = process.env.NEXT_PUBLIC_PAYCRYPT_API_KEY;
 
 // Chain ID to name mapping
 export const CHAIN_NAMES: Record<number, string> = {
@@ -25,7 +26,10 @@ export const buyAirtime = async (data: {
 }) => {
   const res = await fetch(`${BASE_URL}/api/airtime`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { 
+      "Content-Type": "application/json",
+      "x-api-key": API_KEY || "",
+    },
     body: JSON.stringify(data),
   });
 
@@ -49,7 +53,10 @@ export const buyinternet = async (data: {
 }) => {
   const res = await fetch(`${BASE_URL}/api/internet`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { 
+      "Content-Type": "application/json",
+      "x-api-key": API_KEY || "",
+    },
     body: JSON.stringify(data),
   });
 
@@ -74,7 +81,10 @@ export const payElectricityBill = async (data: {
 }) => {
   const res = await fetch(`${BASE_URL}/api/electricity`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { 
+      "Content-Type": "application/json",
+      "x-api-key": API_KEY || "",
+    },
     body: JSON.stringify(data),
   });
 
@@ -99,7 +109,10 @@ export const payTVSubscription = async (data: {
 }) => {
   const res = await fetch(`${BASE_URL}/api/tv`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { 
+      "Content-Type": "application/json",
+      "x-api-key": API_KEY || "",
+    },
     body: JSON.stringify(data),
   });
 
@@ -128,7 +141,10 @@ export const submitOrder = async (data: {
 }) => {
   const res = await fetch(`${BASE_URL}/api/orders`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { 
+      "Content-Type": "application/json",
+      "x-api-key": API_KEY || "",
+    },
     body: JSON.stringify(data),
   });
 
@@ -138,7 +154,11 @@ export const submitOrder = async (data: {
 };
 
 export async function getUserHistory(userAddress: string) {
-  const res = await fetch(`${BASE_URL}/api/history?userAddress=${userAddress}`);
+  const res = await fetch(`${BASE_URL}/api/history?userAddress=${userAddress}`, {
+    headers: {
+      "x-api-key": API_KEY || "",
+    },
+  });
   if (!res.ok) throw new Error("Failed to fetch history");
   return await res.json();
 }
@@ -152,7 +172,10 @@ export const verifyMeter = async (data: {
 }) => {
   const res = await fetch(`${BASE_URL}/api/vtpass/verify`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { 
+      "Content-Type": "application/json",
+      "x-api-key": API_KEY || "",
+    },
     body: JSON.stringify(data),
   });
 
@@ -168,7 +191,10 @@ export const verifySmartCard = async (data: {
 }) => {
   const res = await fetch(`${BASE_URL}/api/vtpass/verify`, {
     method: "POST",  
-    headers: { "Content-Type": "application/json" },
+    headers: { 
+      "Content-Type": "application/json",
+      "x-api-key": API_KEY || "",
+    },
     body: JSON.stringify({ ...data, type: data.type || "smartcard" }),
   });
 
@@ -178,7 +204,11 @@ export const verifySmartCard = async (data: {
 };
 
 export const getServiceVariations = async (serviceID: string) => {
-  const res = await fetch(`${BASE_URL}/api/vtpass/service-variations?serviceID=${serviceID}`);
+  const res = await fetch(`${BASE_URL}/api/vtpass/service-variations?serviceID=${serviceID}`, {
+    headers: {
+      "x-api-key": API_KEY || "",
+    },
+  });
   
   if (!res.ok) throw new Error("Failed to fetch service variations");
 
@@ -190,7 +220,11 @@ export const getServices = async (identifier?: string) => {
     ? `${BASE_URL}/api/vtpass/services?identifier=${identifier}`
     : `${BASE_URL}/api/vtpass/services`;
     
-  const res = await fetch(url);
+  const res = await fetch(url, {
+    headers: {
+      "x-api-key": API_KEY || "",
+    },
+  });
   
   if (!res.ok) throw new Error("Failed to fetch services");
 
