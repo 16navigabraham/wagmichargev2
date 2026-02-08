@@ -507,7 +507,7 @@ export function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
       <div className="hidden md:block" />
     </div>
     <div className="border-t mt-8 pt-6 text-center text-muted-foreground w-full">
-      <p className="text-sm">© {new Date().getFullYear()} Paycrypt. All rights reserved.</p>
+      <p className="text-sm">© {new Date().getFullYear()} WEB3 LAB CONCEPT (RC: 9189189) • Operating Paycrypt • All rights reserved.</p>
     </div>
   </div>
       </footer>

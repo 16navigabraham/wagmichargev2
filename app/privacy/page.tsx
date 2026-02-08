@@ -16,7 +16,7 @@ export default function PrivacyPage() {
           </div>
           <h1 className="text-4xl font-bold tracking-tight">Privacy Policy</h1>
           <p className="text-xl text-muted-foreground">
-            Last Updated: July 31, 2025
+            Last Updated: February 1, 2026
           </p>
         </div>
 
@@ -25,9 +25,17 @@ export default function PrivacyPage() {
             <CardTitle className="text-2xl">Your Privacy Matters</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
+            <div className="bg-muted/50 p-4 rounded-lg space-y-2">
+              <p className="font-semibold">Data Controller</p>
+              <p className="text-sm text-muted-foreground">WEB3 LAB CONCEPT</p>
+              <p className="text-sm text-muted-foreground">RC: 9189189</p>
+              <p className="text-sm text-muted-foreground">Operating Paycrypt</p>
+              <p className="text-sm text-muted-foreground">Email: support@paycrypt.org</p>
+            </div>
             <p className="text-muted-foreground">
-              This Privacy Policy explains how Paycrypt handles your information. We are committed to 
-              protecting your privacy while providing a seamless decentralized payment experience.
+              This Privacy Policy explains how Paycrypt ("we", "us", "our"), operated by WEB3 LAB CONCEPT, handles your information. 
+              We are committed to protecting your privacy while providing a seamless decentralized payment experience. 
+              By using our service, you consent to the data practices described in this policy.
             </p>
 
             <Separator />
@@ -165,10 +173,38 @@ export default function PrivacyPage() {
                   <h3 className="text-xl font-semibold">10. Policy Updates</h3>
                 </div>
                 <ul className="list-disc list-inside space-y-2 text-muted-foreground ml-9">
-                  <li>This policy may be updated for transparency or regulatory compliance</li>
+                  <li>This policy may be updated at any time for transparency, security, or regulatory compliance</li>
                   <li>Changes will be published on our platform with version and date information</li>
-                  <li>Continued use after updates implies acceptance of new terms</li>
-                  <li>Significant changes will be highlighted in our interface</li>
+                  <li>Continued use after updates constitutes acceptance of new terms</li>
+                  <li>We are not obligated to provide individual notice of changes</li>
+                  <li>It is your responsibility to review this policy periodically</li>
+                </ul>
+              </section>
+
+              <section className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <Shield className="h-6 w-6 text-primary" />
+                  <h3 className="text-xl font-semibold">11. Limitation of Liability</h3>
+                </div>
+                <div className="bg-destructive/10 border-l-4 border-destructive p-4 ml-9">
+                  <p className="text-muted-foreground">
+                    TO THE MAXIMUM EXTENT PERMITTED BY LAW, WEB3 LAB CONCEPT SHALL NOT BE LIABLE FOR ANY DAMAGES ARISING 
+                    FROM DATA BREACHES, UNAUTHORIZED ACCESS, SERVICE INTERRUPTIONS, OR ANY OTHER PRIVACY-RELATED 
+                    ISSUES. WE MAKE NO GUARANTEES ABOUT THE SECURITY OF DATA TRANSMITTED THROUGH BLOCKCHAIN NETWORKS.
+                  </p>
+                </div>
+              </section>
+
+              <section className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <Lock className="h-6 w-6 text-primary" />
+                  <h3 className="text-xl font-semibold">12. Compliance & Jurisdiction</h3>
+                </div>
+                <ul className="list-disc list-inside space-y-2 text-muted-foreground ml-9">
+                  <li>This policy is governed by applicable data protection laws</li>
+                  <li>Users are responsible for complying with their local privacy regulations</li>
+                  <li>We reserve the right to restrict access from certain jurisdictions</li>
+                  <li>Blockchain data is publicly accessible and cannot be deleted or modified</li>
                 </ul>
               </section>
             </div>
@@ -194,8 +230,18 @@ export default function PrivacyPage() {
               </div>
             </div>
 
+            <div className="bg-muted/30 p-6 rounded-lg">
+              <p className="font-semibold mb-3">Consent</p>
+              <p className="text-sm text-muted-foreground">
+                By using Paycrypt, you consent to this Privacy Policy and our Terms & Conditions. 
+                If you do not agree with this policy, you must discontinue use of the service immediately.
+              </p>
+            </div>
+
             <div className="text-center text-sm text-muted-foreground">
-              <p>Last updated: July 31, 2025 • Version 1.0</p>
+              <p className="font-semibold">WEB3 LAB CONCEPT (RC: 9189189)</p>
+              <p className="text-xs mt-1">Operating Paycrypt</p>
+              <p className="mt-2">Last updated: February 1, 2026 • Version 2.0</p>
             </div>
           </CardContent>
         </Card>

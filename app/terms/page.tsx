@@ -12,7 +12,7 @@ export default function TermsPage() {
         <div className="text-center space-y-4">
           <h1 className="text-4xl font-bold tracking-tight">Terms & Conditions</h1>
           <p className="text-xl text-muted-foreground">
-            Effective Date: July 31, 2025
+            Effective Date: February 1, 2026
           </p>
         </div>
 
@@ -21,9 +21,15 @@ export default function TermsPage() {
             <CardTitle className="text-2xl">Welcome to Paycrypt</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
+            <div className="bg-muted/50 p-4 rounded-lg space-y-2">
+              <p className="font-semibold">WEB3 LAB CONCEPT</p>
+              <p className="text-sm text-muted-foreground">RC: 9189189</p>
+              <p className="text-sm text-muted-foreground">Operating Paycrypt - A decentralized utility payment solution</p>
+            </div>
             <p className="text-muted-foreground">
               Paycrypt is a decentralized crypto payment solution built for transparency, security, and on-chain commerce. 
-              By accessing or using Paycrypt, you agree to the following terms and conditions.
+              By accessing or using Paycrypt, you agree to be legally bound by the following terms and conditions. 
+              If you do not agree to these terms, you must immediately cease using the service.
             </p>
 
             <Separator />
@@ -116,39 +122,122 @@ export default function TermsPage() {
               </section>
 
               <section className="space-y-4">
-                <h3 className="text-xl font-semibold">10. Risks & Disclaimers</h3>
+                <h3 className="text-xl font-semibold">10. Limitation of Liability</h3>
+                <div className="bg-destructive/10 border-l-4 border-destructive p-4 space-y-3">
+                  <p className="font-semibold text-destructive">IMPORTANT LEGAL NOTICE</p>
+                  <ul className="list-disc list-inside space-y-2 text-muted-foreground">
+                    <li>TO THE MAXIMUM EXTENT PERMITTED BY LAW, PAYCRYPT SHALL NOT BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR EXEMPLARY DAMAGES</li>
+                    <li>This includes but is not limited to: loss of funds, loss of profits, loss of data, service interruptions, or any other commercial damages</li>
+                    <li>Our total liability shall not exceed the amount of fees paid to us (if any) in the 30 days preceding the claim</li>
+                    <li>We provide the service "AS IS" and "AS AVAILABLE" without warranties of any kind, express or implied</li>
+                  </ul>
+                </div>
+              </section>
+
+              <section className="space-y-4">
+                <h3 className="text-xl font-semibold">11. Risks & Disclaimers</h3>
                 <ul className="list-disc list-inside space-y-2 text-muted-foreground">
-                  <li>Use Paycrypt at your own risk. Blockchain transactions are irreversible</li>
-                  <li>Paycrypt is not liable for incorrect token transfers or user errors</li>
-                  <li>Service downtime, smart contract upgrades, or third-party service issues</li>
-                  <li>Cryptocurrency market volatility affecting token values</li>
-                  <li>Regulatory changes that may impact service availability</li>
+                  <li>Use Paycrypt entirely at your own risk. Blockchain transactions are irreversible</li>
+                  <li>Paycrypt is not liable for incorrect token transfers, user errors, or wallet compromises</li>
+                  <li>We are not responsible for service downtime, smart contract bugs, or third-party service failures</li>
+                  <li>Cryptocurrency market volatility may affect token values significantly</li>
+                  <li>Regulatory changes may impact service availability without notice</li>
+                  <li>Network congestion may delay or prevent transaction processing</li>
+                  <li>We do not guarantee uninterrupted, timely, secure, or error-free service</li>
                 </ul>
               </section>
 
               <section className="space-y-4">
-                <h3 className="text-xl font-semibold">11. Changes & Termination</h3>
-                <ul className="list-disc list-inside space-y-2 text-muted-foreground">
-                  <li>We may update terms or discontinue services with reasonable notice</li>
-                  <li>Continued use after changes implies acceptance of new terms</li>
-                  <li>Users may stop using the service at any time</li>
-                </ul>
-              </section>
-
-              <section className="space-y-4">
-                <h3 className="text-xl font-semibold">12. Governing Law</h3>
+                <h3 className="text-xl font-semibold">12. Indemnification</h3>
                 <p className="text-muted-foreground">
-                  These terms are governed by international cryptocurrency usage standards and 
-                  relevant smart contract jurisdiction models. Disputes will be resolved through 
-                  arbitration where applicable.
+                  You agree to indemnify, defend, and hold harmless WEB3 LAB CONCEPT (operating as Paycrypt), its officers, directors, employees, 
+                  agents, and affiliates from any claims, liabilities, damages, losses, costs, or expenses (including 
+                  reasonable legal fees) arising from:
+                </p>
+                <ul className="list-disc list-inside space-y-2 text-muted-foreground">
+                  <li>Your use or misuse of the service</li>
+                  <li>Your violation of these terms</li>
+                  <li>Your violation of any applicable laws or regulations</li>
+                  <li>Your violation of any third-party rights</li>
+                  <li>Any unauthorized access to your wallet or private keys</li>
+                </ul>
+              </section>
+
+              <section className="space-y-4">
+                <h3 className="text-xl font-semibold">13. Changes & Termination</h3>
+                <ul className="list-disc list-inside space-y-2 text-muted-foreground">
+                  <li>We reserve the right to modify, suspend, or discontinue any part of the service at any time without liability</li>
+                  <li>We may update these terms without prior notice. Changes become effective immediately upon posting</li>
+                  <li>Continued use after changes implies acceptance of new terms</li>
+                  <li>We may terminate or suspend your access immediately for any reason, including breach of terms</li>
+                  <li>Users may stop using the service at any time without notice</li>
+                </ul>
+              </section>
+
+              <section className="space-y-4">
+                <h3 className="text-xl font-semibold">14. Governing Law & Jurisdiction</h3>
+                <ul className="list-disc list-inside space-y-2 text-muted-foreground">
+                  <li>These terms shall be governed by and construed in accordance with applicable laws</li>
+                  <li>Any disputes arising from these terms or use of the service shall be subject to the exclusive jurisdiction of competent courts</li>
+                  <li>You agree to submit to the personal jurisdiction of such courts</li>
+                  <li>Where arbitration is required, it shall be conducted in accordance with recognized arbitration rules</li>
+                  <li>The prevailing party in any legal action shall be entitled to recover reasonable attorney fees and costs</li>
+                </ul>
+              </section>
+
+              <section className="space-y-4">
+                <h3 className="text-xl font-semibold">15. Force Majeure</h3>
+                <p className="text-muted-foreground">
+                  WEB3 LAB CONCEPT shall not be liable for any failure or delay in performance due to circumstances beyond 
+                  our reasonable control, including but not limited to acts of God, war, terrorism, riots, embargoes, 
+                  acts of civil or military authorities, fire, floods, accidents, network infrastructure failures, 
+                  strikes, or shortages of transportation facilities, fuel, energy, labor, or materials.
+                </p>
+              </section>
+
+              <section className="space-y-4">
+                <h3 className="text-xl font-semibold">16. Severability</h3>
+                <p className="text-muted-foreground">
+                  If any provision of these terms is found to be invalid, illegal, or unenforceable, the remaining 
+                  provisions shall continue in full force and effect. The invalid provision shall be modified to the 
+                  minimum extent necessary to make it valid and enforceable.
+                </p>
+              </section>
+
+              <section className="space-y-4">
+                <h3 className="text-xl font-semibold">17. Entire Agreement</h3>
+                <p className="text-muted-foreground">
+                  These terms, together with our Privacy Policy, constitute the entire agreement between you and 
+                  WEB3 LAB CONCEPT regarding the use of the service and supersede all prior agreements, understandings, 
+                  and communications, whether written or oral.
+                </p>
+              </section>
+
+              <section className="space-y-4">
+                <h3 className="text-xl font-semibold">18. No Waiver</h3>
+                <p className="text-muted-foreground">
+                  No waiver of any term or condition of these terms shall be deemed a further or continuing waiver 
+                  of such term or any other term. Our failure to assert any right or provision under these terms 
+                  shall not constitute a waiver of such right or provision.
                 </p>
               </section>
             </div>
 
             <Separator />
 
+            <div className="bg-muted/30 p-6 rounded-lg space-y-3">
+              <p className="font-semibold">Acknowledgment</p>
+              <p className="text-sm text-muted-foreground">
+                BY ACCESSING OR USING PAYCRYPT, YOU ACKNOWLEDGE THAT YOU HAVE READ, UNDERSTOOD, AND AGREE 
+                TO BE BOUND BY THESE TERMS AND CONDITIONS. YOU ALSO ACKNOWLEDGE THAT YOU UNDERSTAND THE RISKS 
+                ASSOCIATED WITH CRYPTOCURRENCY TRANSACTIONS AND BLOCKCHAIN TECHNOLOGY.
+              </p>
+            </div>
+
             <div className="text-center text-sm text-muted-foreground">
-              <p>Last updated: July 31, 2025</p>
+              <p className="font-semibold">WEB3 LAB CONCEPT (RC: 9189189)</p>
+              <p className="text-xs mt-1">Operating Paycrypt</p>
+              <p className="mt-2">Last updated: February 1, 2026</p>
               <p className="mt-2">
                 For questions about these terms, contact us at{" "}
                 <a href="mailto:support@paycrypt.org" className="text-primary hover:underline">
