@@ -76,17 +76,18 @@ export default function PrivacyPage() {
                   <h3 className="text-xl font-semibold">3. Third-Party Service Providers</h3>
                 </div>
                 <p className="text-muted-foreground ml-9">
-                  We interact with the following third-party services:
+                  We integrate with authorized third-party service providers to deliver our services:
                 </p>
                 <ul className="list-disc list-inside space-y-2 text-muted-foreground ml-9">
-                  <li><strong>Blockchain Providers:</strong> Base network for transaction processing</li>
-                  <li><strong>Price APIs:</strong> CoinGecko for real-time token pricing</li>
-                  <li><strong>Utility APIs:</strong> VTPass for electricity, TV, internet, and airtime services</li>
-                  <li><strong>Wallet Providers:</strong> Privy for wallet connection and authentication</li>
+                  <li><strong>Blockchain Networks:</strong> Public blockchain networks for transaction processing and validation</li>
+                  <li><strong>Market Data Providers:</strong> External APIs for real-time cryptocurrency pricing and market data</li>
+                  <li><strong>Utility Service Partners:</strong> Licensed third-party providers for electricity, TV, internet, and airtime services</li>
+                  <li><strong>Wallet Infrastructure:</strong> Third-party wallet connection and authentication services</li>
                 </ul>
                 <p className="text-sm text-muted-foreground ml-9 bg-muted/50 p-3 rounded-lg">
-                  <strong>Note:</strong> These services may access wallet metadata but not personal data. 
-                  They operate under their own privacy policies.
+                  <strong>Important:</strong> Third-party services may access blockchain wallet metadata but not personal identity data. 
+                  Each service operates under its own privacy policy and terms. We are not responsible for their data practices 
+                  or service availability. Service providers may be changed or updated without notice.
                 </p>
               </section>
 

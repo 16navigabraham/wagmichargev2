@@ -84,12 +84,15 @@ export default function TermsPage() {
               </section>
 
               <section className="space-y-4">
-                <h3 className="text-xl font-semibold">6. Payment Processing</h3>
+                <h3 className="text-xl font-semibold">6. Service Delivery</h3>
                 <ul className="list-disc list-inside space-y-2 text-muted-foreground">
-                  <li>Payments are processed through VTPass API for utility services</li>
-                  <li>Minimum payment amounts apply as per service provider requirements</li>
-                  <li>Processing times may vary depending on service provider response</li>
-                  <li>Failed payments will be automatically flagged for refund</li>
+                  <li>Payments are processed on-chain via blockchain smart contracts</li>
+                  <li>Service fulfillment (electricity, TV, internet, airtime) is handled by authorized third-party utility providers</li>
+                  <li>We reserve the right to change service providers at any time without prior notice</li>
+                  <li>Minimum purchase amounts apply as per service provider requirements</li>
+                  <li>Service delivery times may vary depending on provider response and network conditions</li>
+                  <li>Failed service deliveries will be automatically flagged for refund processing</li>
+                  <li>WEB3 LAB CONCEPT is not responsible for third-party service provider failures, delays, or service quality</li>
                 </ul>
               </section>
 
