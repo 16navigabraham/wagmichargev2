@@ -97,7 +97,7 @@ export default function PrivacyPage() {
                   <h3 className="text-xl font-semibold">4. Transaction Data</h3>
                 </div>
                 <ul className="list-disc list-inside space-y-2 text-muted-foreground ml-9">
-                  <li>All transactions are recorded on the Base blockchain (publicly viewable)</li>
+                  <li>All transactions are recorded on the  blockchain (publicly viewable)</li>
                   <li>Order details are stored temporarily for processing and support purposes</li>
                   <li>Transaction hashes provide permanent, immutable proof of payment</li>
                   <li>Failed transaction data is retained for refund processing</li>
