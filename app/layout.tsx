@@ -41,6 +41,7 @@ export default function RootLayout({
     <html lang="en" className={inter.className}>
       <head>
         <meta name="google-site-verification" content="pCijtRPRcIw7lEvQNXnUtUE4WReAEAgiFl2FURDGrz0" />
+        <meta name="talentapp:project_verification" content="6996a547722d63c529a948916fee287ea2b09abe15a8021eee863d744018349d22c02440ef568e4e60f399cf3dca194b98790bdcac5b81fbb4e50d90b35ec575" />
         <link rel="icon" href="/paycrypt.png" type="image/png" sizes="32x32" />
         <link rel="shortcut icon" href="/paycrypt.png" type="image/png" />
       </head>
